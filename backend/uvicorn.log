@@ -1,0 +1,47 @@
+INFO:     Started server process [9904]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:61468 - "GET /api/assets HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61511 - "POST /api/backtests/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61578 - "GET /api/assets HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61579 - "GET /api/strategies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61591 - "POST /api/backtests/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57295 - "GET /api/assets HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /api/strategies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57303 - "GET /api/strategies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57302 - "GET /api/assets HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57304 - "POST /api/backtests/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59855 - "POST /api/backtests/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59877 - "GET /api/assets HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59879 - "GET /api/strategies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59883 - "POST /api/backtests/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57558 - "GET /api/assets HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57559 - "GET /api/strategies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57561 - "POST /api/backtests/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57664 - "POST /api/backtests/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57666 - "POST /api/backtests/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65232 - "GET /api/assets HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65233 - "GET /api/strategies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65238 - "GET /api/strategies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65237 - "GET /api/assets HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65240 - "POST /api/backtests/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59431 - "GET /api/assets HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59432 - "GET /api/strategies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59435 - "POST /api/backtests/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59454 - "POST /api/recommendations/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59496 - "GET /api/assets HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59497 - "GET /api/strategies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59498 - "POST /api/backtests/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59520 - "GET /api/assets HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59521 - "GET /api/strategies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59526 - "POST /api/backtests/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59570 - "GET /api/assets HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59571 - "GET /api/strategies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59573 - "POST /api/backtests/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59577 - "GET /api/assets HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59578 - "GET /api/strategies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59580 - "POST /api/backtests/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59582 - "POST /api/recommendations/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59584 - "POST /api/recommendations/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59586 - "POST /api/recommendations/run HTTP/1.1" 200 OK

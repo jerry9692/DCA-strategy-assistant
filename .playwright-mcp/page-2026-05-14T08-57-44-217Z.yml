@@ -1,0 +1,174 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: DCA Strategy Assistant v0.1
+      - heading "定投策略工作台" [level=1] [ref=e7]
+    - button "刷新回测" [ref=e8] [cursor=pointer]:
+      - img [ref=e9]
+  - generic [ref=e14]:
+    - generic [ref=e15]:
+      - text: 标的
+      - combobox "标的" [ref=e16]:
+        - option "QQQ · Invesco QQQ Trust" [selected]
+        - option "VOO · Vanguard S&P 500 ETF"
+        - option "SPY · SPDR S&P 500 ETF Trust"
+    - generic [ref=e17]:
+      - text: 基础金额
+      - spinbutton "基础金额" [ref=e18]: "100"
+    - generic [ref=e19]:
+      - text: 频率
+      - combobox "频率" [ref=e20]:
+        - option "每周" [selected]
+        - option "每月"
+    - generic [ref=e21]:
+      - text: 开始
+      - textbox "开始" [ref=e22]: 2021-05-14
+    - generic [ref=e23]:
+      - text: 结束
+      - textbox "结束" [ref=e24]: 2026-05-14
+  - generic [ref=e25]:
+    - complementary [ref=e26]:
+      - generic [ref=e27]:
+        - img [ref=e28]
+        - text: 策略
+      - button "固定定投 每期投入固定基础金额，用作所有策略的比较基准。" [ref=e106] [cursor=pointer]:
+        - strong [ref=e107]: 固定定投
+        - generic [ref=e108]: 每期投入固定基础金额，用作所有策略的比较基准。
+      - button "跌幅加码 相对近期高点回撤越大，投入倍率越高。" [ref=e109] [cursor=pointer]:
+        - strong [ref=e110]: 跌幅加码
+        - generic [ref=e111]: 相对近期高点回撤越大，投入倍率越高。
+      - button "均线偏离 价格低于长期均线多投，高于均线少投。" [ref=e112] [cursor=pointer]:
+        - strong [ref=e113]: 均线偏离
+        - generic [ref=e114]: 价格低于长期均线多投，高于均线少投。
+      - button "历史分位 价格处在历史低分位多投，高分位少投。" [ref=e115] [cursor=pointer]:
+        - strong [ref=e116]: 历史分位
+        - generic [ref=e117]: 价格处在历史低分位多投，高分位少投。
+      - button "RSI 情绪 RSI 超卖多投，过热少投。" [ref=e118] [cursor=pointer]:
+        - strong [ref=e119]: RSI 情绪
+        - generic [ref=e120]: RSI 超卖多投，过热少投。
+      - button "网格加权定投 按价格所在网格区间调节买入金额，只买入不卖出。" [ref=e121] [cursor=pointer]:
+        - strong [ref=e122]: 网格加权定投
+        - generic [ref=e123]: 按价格所在网格区间调节买入金额，只买入不卖出。
+      - button "组合评分 把回撤、均线、分位、RSI、网格信号按权重合成为最终投入倍率。" [ref=e124] [cursor=pointer]:
+        - strong [ref=e125]: 组合评分
+        - generic [ref=e126]: 把回撤、均线、分位、RSI、网格信号按权重合成为最终投入倍率。
+    - generic [ref=e30]:
+      - generic [ref=e31]:
+        - generic [ref=e32]:
+          - paragraph [ref=e33]: QQQ · 2026-05-12
+          - heading "$22.76" [level=2] [ref=e127]
+          - paragraph [ref=e35]: 基础 $100 · 倍率 0.23x · 当前价 $707.24
+        - generic [ref=e36]:
+          - button "刷新中" [disabled] [ref=e179]
+          - generic [ref=e38]: 评分 0.01
+      - generic [ref=e128]:
+        - generic [ref=e129]: 近窗口回撤 0.8%，回撤越深投入越高。
+        - generic [ref=e130]: 价格高于均线 16.4%，按均线偏离调整投入。
+        - generic [ref=e131]: 当前价格位于历史 100% 分位，分位越低投入越高。
+        - generic [ref=e132]: RSI 为 79.2，越接近超卖区投入越高。
+        - generic [ref=e133]: 价格处于滚动区间第 8/8 档，越靠低档投入越高。
+      - generic [ref=e39]:
+        - generic [ref=e40]:
+          - generic [ref=e41]: 总投入
+          - strong [ref=e42]: $21,824.13
+        - generic [ref=e43]:
+          - generic [ref=e44]: 期末价值
+          - strong [ref=e45]: $44,455.33
+        - generic [ref=e46]:
+          - generic [ref=e47]: 收益率
+          - strong [ref=e48]: 103.7%
+        - generic [ref=e49]:
+          - generic [ref=e50]: 年化
+          - strong [ref=e51]: 15.29%
+        - generic [ref=e52]:
+          - generic [ref=e53]: 组合最大回撤
+          - strong [ref=e54]: "-18.54%"
+        - generic [ref=e55]:
+          - generic [ref=e56]: 相对固定
+          - strong [ref=e57]: "-6.05%"
+      - generic [ref=e58]:
+        - generic [ref=e59]: 固定 DCA 基准
+        - generic [ref=e60]: 总投入 $26,100
+        - generic [ref=e61]: 期末 $47,320.3
+        - generic [ref=e62]: 收益 81.3%
+        - generic [ref=e63]: 回撤 -19.22%
+      - generic [ref=e65]:
+        - img [ref=e66]
+        - text: 价格与买入点
+      - generic [ref=e72]:
+        - img [ref=e73]
+        - text: 投入金额与组合价值
+      - generic [ref=e79]:
+        - img [ref=e80]
+        - text: 组合回撤对比
+      - generic [ref=e86]:
+        - img [ref=e87]
+        - text: 评分与投入倍率
+    - complementary [ref=e92]:
+      - generic [ref=e93]:
+        - img [ref=e94]
+        - text: 参数
+      - paragraph [ref=e134]: 把回撤、均线、分位、RSI、网格信号按权重合成为最终投入倍率。
+      - generic [ref=e95]:
+        - generic [ref=e96]:
+          - text: 最低倍率
+          - generic [ref=e97]: "0.2"
+        - slider "最低倍率 0.2" [ref=e98]: "0.2"
+      - generic [ref=e99]:
+        - generic [ref=e100]:
+          - text: 最高倍率
+          - generic [ref=e101]: "2.5"
+        - slider "最高倍率 2.5" [ref=e102]: "2.5"
+      - generic [ref=e135]:
+        - generic [ref=e136]:
+          - text: 回撤权重
+          - generic [ref=e137]: "1"
+        - slider "回撤权重 1" [ref=e138]: "1"
+      - generic [ref=e139]:
+        - generic [ref=e140]:
+          - text: 均线权重
+          - generic [ref=e141]: "1"
+        - slider "均线权重 1" [ref=e142]: "1"
+      - generic [ref=e143]:
+        - generic [ref=e144]:
+          - text: 分位权重
+          - generic [ref=e145]: "1"
+        - slider "分位权重 1" [ref=e146]: "1"
+      - generic [ref=e147]:
+        - generic [ref=e148]:
+          - text: RSI 权重
+          - generic [ref=e149]: "1"
+        - slider "RSI 权重 1" [ref=e150]: "1"
+      - generic [ref=e151]:
+        - generic [ref=e152]:
+          - text: 网格权重
+          - generic [ref=e153]: "1"
+        - slider "网格权重 1" [ref=e154]: "1"
+      - generic [ref=e103]:
+        - strong [ref=e104]: 当前信号
+        - generic [ref=e155]:
+          - generic [ref=e156]: price
+          - generic [ref=e157]: "707.24"
+        - generic [ref=e158]:
+          - generic [ref=e159]: sma
+          - generic [ref=e160]: "607.6034"
+        - generic [ref=e161]:
+          - generic [ref=e162]: smaDeviationPct
+          - generic [ref=e163]: "16.3983"
+        - generic [ref=e164]:
+          - generic [ref=e165]: drawdownPct
+          - generic [ref=e166]: "-0.8482"
+        - generic [ref=e167]:
+          - generic [ref=e168]: percentile
+          - generic [ref=e169]: "99.7354"
+        - generic [ref=e170]:
+          - generic [ref=e171]: rsi
+          - generic [ref=e172]: "79.2307"
+        - generic [ref=e173]:
+          - generic [ref=e174]: gridBucket
+          - generic [ref=e175]: "8"
+        - generic [ref=e176]:
+          - generic [ref=e177]: gridScore
+          - generic [ref=e178]: "0.0291"
+      - paragraph [ref=e180]: 正在刷新策略结果...
+      - paragraph [ref=e105]: 数据：Yahoo Finance cache · cache-hit
