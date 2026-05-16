@@ -26,6 +26,39 @@ def _simple_annualized_return(ending: float, total_invested: float, years: float
     return ((ending / total_invested) ** (1 / years) - 1) * 100
 
 
+def _risk_adjusted_ratios(events: list[ContributionEvent], risk_free_rate: float = 0.04) -> tuple[float | None, float | None]:
+    if len(events) < 3:
+        return None, None
+
+    returns: list[float] = []
+    for previous, current in zip(events, events[1:]):
+        if previous.portfolioValue <= 0:
+            continue
+        value_before_contribution = current.portfolioValue - current.shares * current.price
+        returns.append(value_before_contribution / previous.portfolioValue - 1)
+    if len(returns) < 2:
+        return None, None
+
+    gaps = [
+        max((pd.Timestamp(current.date) - pd.Timestamp(previous.date)).days, 1)
+        for previous, current in zip(events, events[1:])
+    ]
+    median_gap = float(pd.Series(gaps).median()) if gaps else 30.0
+    periods_per_year = 365.25 / max(median_gap, 1)
+    period_risk_free = (1 + risk_free_rate) ** (1 / periods_per_year) - 1
+    excess = pd.Series([item - period_risk_free for item in returns], dtype="float64")
+    std = float(excess.std(ddof=1))
+    sharpe = None if std <= 0 else float(excess.mean() / std * (periods_per_year ** 0.5))
+
+    downside = excess[excess < 0]
+    downside_std = float(downside.std(ddof=1)) if len(downside) >= 2 else 0.0
+    sortino = None if downside_std <= 0 else float(excess.mean() / downside_std * (periods_per_year ** 0.5))
+    return (
+        round(sharpe, 2) if sharpe is not None else None,
+        round(sortino, 2) if sortino is not None else None,
+    )
+
+
 def _money_weighted_annualized_return(events: list[ContributionEvent]) -> float | None:
     if len(events) < 2:
         return None
@@ -75,7 +108,7 @@ def _metrics(events: list[ContributionEvent], first_date: date, last_date: date)
             avgContribution=0,
         )
     values = [event.portfolioValue for event in events]
-    total_invested = events[-1].totalInvested
+    total_invested = max(event.totalInvested for event in events)
     ending = events[-1].portfolioValue
     peak = values[0]
     max_drawdown = 0.0
@@ -87,14 +120,18 @@ def _metrics(events: list[ContributionEvent], first_date: date, last_date: date)
     annualized = _money_weighted_annualized_return(events)
     if annualized is None:
         annualized = _simple_annualized_return(ending, total_invested, years)
+    buy_count = sum(1 for event in events if event.amount > 0)
+    sharpe, sortino = _risk_adjusted_ratios(events)
     return BacktestMetrics(
         totalInvested=round(total_invested, 2),
         endingValue=round(ending, 2),
         returnPct=round((ending / total_invested - 1) * 100, 2) if total_invested > 0 else 0,
         annualizedReturnPct=round(annualized, 2),
         maxDrawdownPct=round(max_drawdown * 100, 2),
-        buyCount=len(events),
-        avgContribution=round(total_invested / len(events), 2),
+        buyCount=buy_count,
+        avgContribution=round(total_invested / buy_count, 2) if buy_count > 0 else 0,
+        sharpeRatio=sharpe,
+        sortinoRatio=sortino,
     )
 
 
@@ -179,6 +216,52 @@ class DcaBacktester:
                     totalInvested=round(invested, 2),
                     portfolioValue=round(shares * price, 2),
                     multiplier=1,
+                    score=0.5,
+                    reasons=[],
+                )
+            )
+        return events, _metrics(events, start, end)
+
+    def run_lump_sum(
+        self,
+        total_amount: float,
+        start: date,
+        end: date,
+        frequency: str,
+        fee_rate: float = 0,
+        slippage_rate: float = 0,
+    ) -> tuple[list[ContributionEvent], BacktestMetrics]:
+        if total_amount <= 0:
+            return [], _metrics([], start, end)
+
+        events: list[ContributionEvent] = []
+        first_trade_day: pd.Timestamp | None = None
+        shares = 0.0
+        invested = round(total_amount, 2)
+        for scheduled in _schedule(start, end, frequency):
+            trade_day = _next_trading_day(self.prices, scheduled)
+            if trade_day is None or trade_day.date() > end:
+                continue
+            price = round(float(self.prices.loc[trade_day, "close"]), 4)
+            amount = 0.0
+            bought = 0.0
+            if first_trade_day is None:
+                first_trade_day = trade_day
+                amount = invested
+                execution_price = price * (1 + slippage_rate)
+                net_amount = invested * (1 - fee_rate)
+                bought = net_amount / execution_price if execution_price > 0 else 0
+                shares = bought
+            events.append(
+                ContributionEvent(
+                    date=trade_day.date().isoformat(),
+                    price=price,
+                    amount=round(amount, 2),
+                    shares=round(bought, 8),
+                    totalShares=round(shares, 8),
+                    totalInvested=invested,
+                    portfolioValue=round(shares * price, 2),
+                    multiplier=0,
                     score=0.5,
                     reasons=[],
                 )

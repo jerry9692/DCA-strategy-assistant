@@ -11,16 +11,18 @@ from app.models import (
     BacktestMetrics,
     BacktestRequest,
     BacktestResult,
+    MarketState,
     PricePoint,
     RecommendationRequest,
     SUPPORTED_ASSETS,
     StrategyConfig,
+    StrategyComparison,
 )
 from app.strategies import evaluate_prepared_strategy, evaluate_strategy, prepare_market
 from app.strategy_definitions import COMMON_PARAMETERS, STRATEGIES
 
 
-app = FastAPI(title="DCA Strategy Assistant", version="0.1.0")
+app = FastAPI(title="DCA Strategy Assistant", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -99,6 +101,81 @@ def _chart_contributions(events) -> list[dict]:
     ]
 
 
+def _with_comparison_metrics(
+    metrics: BacktestMetrics,
+    fixed_metrics: BacktestMetrics,
+    lump_sum_metrics: BacktestMetrics,
+) -> BacktestMetrics:
+    fixed_vs = None
+    lump_vs = None
+    if fixed_metrics.endingValue > 0:
+        fixed_vs = round((metrics.endingValue / fixed_metrics.endingValue - 1) * 100, 2)
+    if lump_sum_metrics.endingValue > 0:
+        lump_vs = round((metrics.endingValue / lump_sum_metrics.endingValue - 1) * 100, 2)
+    return BacktestMetrics(**{**metrics.model_dump(), "versusFixedPct": fixed_vs, "versusLumpSumPct": lump_vs})
+
+
+def _strategy_name(strategy_type: str) -> str:
+    for strategy in STRATEGIES:
+        if strategy.type == strategy_type:
+            return strategy.name
+    return strategy_type
+
+
+def _strategy_config(base_config: StrategyConfig, strategy_type: str) -> StrategyConfig:
+    if strategy_type == base_config.strategyType:
+        return base_config
+    return StrategyConfig(
+        strategyType=strategy_type,
+        baseAmount=base_config.baseAmount,
+        frequency=base_config.frequency,
+        minMultiplier=base_config.minMultiplier,
+        maxMultiplier=base_config.maxMultiplier,
+        params=dict(base_config.params),
+    )
+
+
+def _market_state(prices: pd.DataFrame, end: date) -> MarketState:
+    visible = prices.loc[prices.index <= pd.Timestamp(end)].copy()
+    if visible.empty:
+        return MarketState(label="数据不足", tone="neutral", summary="没有足够价格数据判断市场状态。")
+    close = visible["close"]
+    latest_idx = close.dropna().index[-1]
+    latest_price = float(close.loc[latest_idx])
+    sma50 = close.rolling(50, min_periods=20).mean().loc[latest_idx]
+    sma200 = close.rolling(200, min_periods=60).mean().loc[latest_idx]
+    if pd.isna(sma50) or pd.isna(sma200):
+        return MarketState(
+            label="数据预热中",
+            tone="neutral",
+            summary="均线样本不足，暂按中性市场处理。",
+            price=round(latest_price, 4),
+        )
+
+    distance = (latest_price / float(sma200) - 1) * 100 if float(sma200) > 0 else None
+    if latest_price >= float(sma50) >= float(sma200):
+        label = "上升趋势"
+        tone = "up"
+        summary = "价格位于 50 日和 200 日均线上方，市场背景偏强。"
+    elif latest_price <= float(sma50) <= float(sma200):
+        label = "下降趋势"
+        tone = "down"
+        summary = "价格位于 50 日和 200 日均线下方，市场背景偏弱。"
+    else:
+        label = "震荡区间"
+        tone = "neutral"
+        summary = "短中期均线信号不一致，市场背景偏震荡。"
+    return MarketState(
+        label=label,
+        tone=tone,
+        summary=summary,
+        price=round(latest_price, 4),
+        sma50=round(float(sma50), 4),
+        sma200=round(float(sma200), 4),
+        distanceToSma200Pct=round(distance, 2) if distance is not None else None,
+    )
+
+
 @app.post("/api/backtests/run")
 def backtest(request: BacktestRequest) -> dict:
     try:
@@ -120,19 +197,61 @@ def backtest(request: BacktestRequest) -> dict:
             prepared=prepared,
         )
         fixed_events, fixed_metrics = backtester.run("fixed_dca", _fixed_config(request.config), start, end)
-        versus = None
-        if fixed_metrics.endingValue > 0:
-            versus = round((metrics.endingValue / fixed_metrics.endingValue - 1) * 100, 2)
-        metrics = BacktestMetrics(**{**metrics.model_dump(), "versusFixedPct": versus})
+        lump_sum_events, lump_sum_metrics = backtester.run_lump_sum(
+            fixed_metrics.totalInvested,
+            start,
+            end,
+            request.config.frequency,
+            fee_rate=float(request.config.params.get("feeRate", 0)),
+            slippage_rate=float(request.config.params.get("slippageRate", 0)),
+        )
+        metrics = _with_comparison_metrics(metrics, fixed_metrics, lump_sum_metrics)
         recommendation = evaluate_prepared_strategy(request.config.strategyType, request.config, prepared)
+        comparisons: list[StrategyComparison] = []
+        seen = {request.config.strategyType}
+        for strategy_type in request.comparisonStrategyTypes:
+            if strategy_type in seen or strategy_type not in {item.type for item in STRATEGIES}:
+                continue
+            seen.add(strategy_type)
+            comparison_config = _strategy_config(request.config, strategy_type)
+            comparison_prepared = prepare_market(prices, comparison_config)
+            comparison_events, comparison_metrics = backtester.run(
+                strategy_type,
+                comparison_config,
+                start,
+                end,
+                fee_rate=float(comparison_config.params.get("feeRate", 0)),
+                slippage_rate=float(comparison_config.params.get("slippageRate", 0)),
+                prepared=comparison_prepared,
+            )
+            comparisons.append(
+                StrategyComparison(
+                    strategyType=strategy_type,
+                    name=_strategy_name(strategy_type),
+                    metrics=_with_comparison_metrics(comparison_metrics, fixed_metrics, lump_sum_metrics),
+                    contributions=comparison_events,
+                )
+            )
         return {
             "symbol": symbol,
             "strategyType": request.config.strategyType,
             "recommendation": recommendation.model_dump(),
             "metrics": metrics.model_dump(),
             "fixedMetrics": fixed_metrics.model_dump(),
+            "lumpSumMetrics": lump_sum_metrics.model_dump(),
+            "marketState": _market_state(prices, end).model_dump(),
             "contributions": _chart_contributions(events),
             "fixedContributions": _chart_contributions(fixed_events),
+            "lumpSumContributions": _chart_contributions(lump_sum_events),
+            "strategyComparisons": [
+                {
+                    "strategyType": item.strategyType,
+                    "name": item.name,
+                    "metrics": item.metrics.model_dump(),
+                    "contributions": _chart_contributions(item.contributions),
+                }
+                for item in comparisons
+            ],
             "priceSeries": _chart_prices(prices, start),
             "dataSource": data_source,
             "cacheStatus": cache_status,

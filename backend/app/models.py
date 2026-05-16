@@ -12,6 +12,7 @@ SUPPORTED_ASSETS = {
 
 
 Frequency = Literal["weekly", "monthly"]
+MarketTone = Literal["up", "down", "neutral"]
 
 
 class Asset(BaseModel):
@@ -85,11 +86,31 @@ class BacktestMetrics(BaseModel):
     buyCount: int
     avgContribution: float
     versusFixedPct: float | None = None
+    versusLumpSumPct: float | None = None
+    sharpeRatio: float | None = None
+    sortinoRatio: float | None = None
 
 
 class PricePoint(BaseModel):
     date: str
     close: float
+
+
+class MarketState(BaseModel):
+    label: str
+    tone: MarketTone
+    summary: str
+    price: float | None = None
+    sma50: float | None = None
+    sma200: float | None = None
+    distanceToSma200Pct: float | None = None
+
+
+class StrategyComparison(BaseModel):
+    strategyType: str
+    name: str
+    metrics: BacktestMetrics
+    contributions: list[ContributionEvent]
 
 
 class BacktestResult(BaseModel):
@@ -98,8 +119,12 @@ class BacktestResult(BaseModel):
     recommendation: StrategyDecision
     metrics: BacktestMetrics
     fixedMetrics: BacktestMetrics | None = None
+    lumpSumMetrics: BacktestMetrics | None = None
+    marketState: MarketState | None = None
     contributions: list[ContributionEvent]
     fixedContributions: list[ContributionEvent] = Field(default_factory=list)
+    lumpSumContributions: list[ContributionEvent] = Field(default_factory=list)
+    strategyComparisons: list[StrategyComparison] = Field(default_factory=list)
     priceSeries: list[PricePoint]
     dataSource: str
     cacheStatus: str
@@ -110,6 +135,7 @@ class BacktestRequest(BaseModel):
     config: StrategyConfig = Field(default_factory=StrategyConfig)
     startDate: date | None = None
     endDate: date | None = None
+    comparisonStrategyTypes: list[str] = Field(default_factory=list, max_length=3)
 
 
 class RecommendationRequest(BaseModel):

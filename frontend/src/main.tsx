@@ -43,6 +43,24 @@ type Metrics = {
   buyCount: number;
   avgContribution: number;
   versusFixedPct?: number | null;
+  versusLumpSumPct?: number | null;
+  sharpeRatio?: number | null;
+  sortinoRatio?: number | null;
+};
+type MarketState = {
+  label: string;
+  tone: "up" | "down" | "neutral";
+  summary: string;
+  price?: number | null;
+  sma50?: number | null;
+  sma200?: number | null;
+  distanceToSma200Pct?: number | null;
+};
+type StrategyComparison = {
+  strategyType: string;
+  name: string;
+  metrics: Metrics;
+  contributions: Contribution[];
 };
 type Backtest = {
   symbol: string;
@@ -50,8 +68,12 @@ type Backtest = {
   recommendation: Decision;
   metrics: Metrics;
   fixedMetrics?: Metrics;
+  lumpSumMetrics?: Metrics;
+  marketState?: MarketState | null;
   contributions: Contribution[];
   fixedContributions: Contribution[];
+  lumpSumContributions: Contribution[];
+  strategyComparisons: StrategyComparison[];
   priceSeries: { date: string; close: number }[];
   dataSource: string;
   cacheStatus: string;
@@ -126,7 +148,7 @@ function ErrorFallback({ onReset }: { onReset: () => void }) {
   return (
     <main className="app-shell">
       <section className="fatal-error">
-        <p className="eyebrow">DCA Strategy Assistant v0.1</p>
+        <p className="eyebrow">DCA Strategy Assistant v0.2</p>
         <h1>界面渲染遇到问题</h1>
         <p className="muted">当前数据没有丢失，可以先恢复界面再重试。</p>
         <button type="button" onClick={onReset}>
@@ -180,6 +202,7 @@ function App() {
   const [error, setError] = useState<UiError | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [showAllReasons, setShowAllReasons] = useState(false);
+  const [comparisonStrategyTypes, setComparisonStrategyTypes] = useState<string[]>(["drawdown_boost", "ma_deviation"]);
 
   const selectedStrategy = useMemo(() => strategies.find((item) => item.type === strategyType), [strategies, strategyType]);
   const config = useMemo(
@@ -207,6 +230,7 @@ function App() {
 
   useEffect(() => {
     setParams(defaultsFor(selectedStrategy));
+    setComparisonStrategyTypes((current) => current.filter((item) => item !== strategyType));
   }, [strategyType]);
 
   useEffect(() => {
@@ -221,7 +245,8 @@ function App() {
           symbol,
           startDate,
           endDate,
-          config
+          config,
+          comparisonStrategyTypes
         })
       })
         .then(async (res) => {
@@ -236,7 +261,7 @@ function App() {
         .finally(() => setLoading(false));
     }, 450);
     return () => window.clearTimeout(handle);
-  }, [symbol, startDate, endDate, config, selectedStrategy, refreshNonce]);
+  }, [symbol, startDate, endDate, config, selectedStrategy, refreshNonce, comparisonStrategyTypes]);
 
   const runRecommendationOnly = () => {
     if (!selectedStrategy) return;
@@ -310,11 +335,20 @@ function App() {
         { name: "本策略投入", type: "bar", yAxisIndex: 1, data: result?.contributions.map((event) => event.amount) ?? [], itemStyle: { color: "#0f766e" } },
         { name: "固定投入", type: "bar", yAxisIndex: 1, data: result?.fixedContributions.map((event) => event.amount) ?? [], itemStyle: { color: "#94a3b8", opacity: 0.5 } },
         { name: "本策略价值", type: "line", yAxisIndex: 0, data: result?.contributions.map((event) => event.portfolioValue) ?? [], showSymbol: false, lineStyle: { color: "#7c3aed", width: 2 } },
-        { name: "固定DCA价值", type: "line", yAxisIndex: 0, data: result?.fixedContributions.map((event) => event.portfolioValue) ?? [], showSymbol: false, lineStyle: { color: "#64748b", width: 2, type: "dashed" } }
+        { name: "固定DCA价值", type: "line", yAxisIndex: 0, data: result?.fixedContributions.map((event) => event.portfolioValue) ?? [], showSymbol: false, lineStyle: { color: "#64748b", width: 2, type: "dashed" } },
+        { name: "一次性买入", type: "line", yAxisIndex: 0, data: result?.lumpSumContributions.map((event) => event.portfolioValue) ?? [], showSymbol: false, lineStyle: { color: "#dc2626", width: 2, type: "dotted" } }
       ]
     }),
     [result]
   );
+
+  const toggleComparison = (type: string) => {
+    setComparisonStrategyTypes((current) => {
+      if (current.includes(type)) return current.filter((item) => item !== type);
+      if (current.length >= 3) return current;
+      return [...current, type];
+    });
+  };
 
   const activeAsset = assets.find((item) => item.symbol === symbol);
   const decision = quickDecision ?? result?.recommendation;
@@ -382,11 +416,61 @@ function App() {
     [result]
   );
 
+  const showdownOption = useMemo(
+    () => ({
+      tooltip: { trigger: "axis" },
+      legend: { top: 0, textStyle: { color: "#475569" } },
+      grid: { left: 46, right: 20, top: 42, bottom: 34 },
+      xAxis: { type: "category", data: result?.contributions.map((event) => event.date) ?? [], axisLabel: { color: "#64748b" } },
+      yAxis: { type: "value", name: "组合价值", axisLabel: { color: "#64748b" } },
+      series: [
+        {
+          name: selectedStrategy?.name ?? "本策略",
+          type: "line",
+          showSymbol: false,
+          data: result?.contributions.map((event) => event.portfolioValue) ?? [],
+          lineStyle: { color: "#7c3aed", width: 2 }
+        },
+        ...(result?.strategyComparisons.map((item, index) => ({
+          name: item.name,
+          type: "line",
+          showSymbol: false,
+          data: item.contributions.map((event) => event.portfolioValue),
+          lineStyle: { color: ["#0f766e", "#2563eb", "#d97706"][index % 3], width: 2 }
+        })) ?? []),
+        {
+          name: "固定DCA",
+          type: "line",
+          showSymbol: false,
+          data: result?.fixedContributions.map((event) => event.portfolioValue) ?? [],
+          lineStyle: { color: "#64748b", width: 2, type: "dashed" }
+        }
+      ]
+    }),
+    [result, selectedStrategy]
+  );
+
+  const comparisonRows = useMemo(
+    () => [
+      ...(result
+        ? [
+            {
+              strategyType: result.strategyType,
+              name: selectedStrategy?.name ?? "本策略",
+              metrics: result.metrics
+            }
+          ]
+        : []),
+      ...(result?.strategyComparisons.map((item) => ({ strategyType: item.strategyType, name: item.name, metrics: item.metrics })) ?? [])
+    ],
+    [result, selectedStrategy]
+  );
+
   return (
     <main className="app-shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">DCA Strategy Assistant v0.1</p>
+          <p className="eyebrow">DCA Strategy Assistant v0.2</p>
           <h1>定投策略工作台</h1>
         </div>
         <button className={loading ? "icon-button spinning" : "icon-button"} onClick={() => setRefreshNonce((value) => value + 1)} title="刷新回测" disabled={loading}>
@@ -453,6 +537,22 @@ function App() {
               <span>{strategy.description}</span>
             </button>
           ))}
+          <div className="showdown-picker">
+            <strong>策略对决</strong>
+            <span>最多选择 3 个策略加入同场对比。</span>
+            {strategies
+              .filter((strategy) => strategy.type !== strategyType)
+              .map((strategy) => {
+                const checked = comparisonStrategyTypes.includes(strategy.type);
+                const disabled = !checked && comparisonStrategyTypes.length >= 3;
+                return (
+                  <label key={strategy.type} className={disabled ? "compare-choice disabled" : "compare-choice"}>
+                    <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleComparison(strategy.type)} />
+                    <span>{strategy.name}</span>
+                  </label>
+                );
+              })}
+          </div>
         </aside>
 
         <section className={loading ? "center-panel is-loading" : "center-panel"}>
@@ -476,6 +576,16 @@ function App() {
             </div>
           </div>
 
+          {result?.marketState && (
+            <div className={`market-state ${result.marketState.tone}`}>
+              <strong>{result.marketState.label}</strong>
+              <span>{result.marketState.summary}</span>
+              <b>
+                SMA50 ${metric(result.marketState.sma50)} · SMA200 ${metric(result.marketState.sma200)} · 距 SMA200 {metric(result.marketState.distanceToSma200Pct, "%")}
+              </b>
+            </div>
+          )}
+
           <div className="reason-row">
             {visibleReasons.map((reason) => (
               <span key={reason}>{reason}</span>
@@ -494,6 +604,9 @@ function App() {
             <Metric label="资金年化" value={metric(result?.metrics.annualizedReturnPct, "%")} />
             <Metric label="组合最大回撤" value={metric(result?.metrics.maxDrawdownPct, "%")} />
             <Metric label="相对固定" value={metric(result?.metrics.versusFixedPct, "%")} />
+            <Metric label="相对一次性" value={metric(result?.metrics.versusLumpSumPct, "%")} />
+            <Metric label="夏普比率" value={metric(result?.metrics.sharpeRatio)} />
+            <Metric label="索提诺比率" value={metric(result?.metrics.sortinoRatio)} />
           </div>
 
           <div className="fixed-metrics">
@@ -502,6 +615,13 @@ function App() {
             <b>期末 ${metric(result?.fixedMetrics?.endingValue)}</b>
             <b>收益 {metric(result?.fixedMetrics?.returnPct, "%")}</b>
             <b>回撤 {metric(result?.fixedMetrics?.maxDrawdownPct, "%")}</b>
+          </div>
+          <div className="fixed-metrics">
+            <span>一次性买入基准</span>
+            <b>总投入 ${metric(result?.lumpSumMetrics?.totalInvested)}</b>
+            <b>期末 ${metric(result?.lumpSumMetrics?.endingValue)}</b>
+            <b>收益 {metric(result?.lumpSumMetrics?.returnPct, "%")}</b>
+            <b>回撤 {metric(result?.lumpSumMetrics?.maxDrawdownPct, "%")}</b>
           </div>
 
           <div className="chart-block">
@@ -531,6 +651,35 @@ function App() {
               评分与投入倍率
             </div>
             <ReactECharts option={signalOption} style={{ height: 260 }} />
+          </div>
+          <div className="chart-block">
+            <div className="section-title">
+              <BarChart3 size={17} />
+              策略对决
+            </div>
+            <ReactECharts option={showdownOption} style={{ height: 300 }} />
+            <div className="comparison-table">
+              <div className="comparison-head">
+                <span>策略</span>
+                <span>总投入</span>
+                <span>期末价值</span>
+                <span>收益率</span>
+                <span>最大回撤</span>
+                <span>夏普</span>
+                <span>索提诺</span>
+              </div>
+              {comparisonRows.map((item) => (
+                <div key={item.strategyType} className="comparison-row">
+                  <span>{item.name}</span>
+                  <b>${metric(item.metrics.totalInvested)}</b>
+                  <b>${metric(item.metrics.endingValue)}</b>
+                  <b>{metric(item.metrics.returnPct, "%")}</b>
+                  <b>{metric(item.metrics.maxDrawdownPct, "%")}</b>
+                  <b>{metric(item.metrics.sharpeRatio)}</b>
+                  <b>{metric(item.metrics.sortinoRatio)}</b>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 

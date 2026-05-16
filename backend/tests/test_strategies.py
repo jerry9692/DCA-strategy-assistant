@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 
 from app.backtester import DcaBacktester, _next_trading_day, _schedule
-from app.main import _chart_prices
+from app.main import _chart_prices, _market_state
 from app.models import StrategyConfig
 from app.strategies import evaluate_prepared_strategy, evaluate_strategy
 
@@ -207,3 +207,39 @@ def test_annualized_return_uses_money_weighted_dca_result():
         pd.Timestamp("2021-12-31").date(),
     )
     assert metrics.annualizedReturnPct > metrics.returnPct / 2
+
+
+def test_lump_sum_invests_total_budget_once_and_tracks_value():
+    prices = fixture_prices([100 + i for i in range(80)])
+    events, metrics = DcaBacktester(prices).run_lump_sum(
+        1000,
+        pd.Timestamp("2020-01-01").date(),
+        pd.Timestamp("2020-03-31").date(),
+        "weekly",
+    )
+    assert events[0].amount == 1000
+    assert all(event.amount == 0 for event in events[1:])
+    assert metrics.totalInvested == 1000
+    assert metrics.buyCount == 1
+    assert metrics.endingValue > 1000
+
+
+def test_metrics_include_risk_adjusted_ratios_when_series_is_long_enough():
+    prices = fixture_prices([100 + i * 0.5 for i in range(180)])
+    config = StrategyConfig(strategyType="fixed_dca", baseAmount=100, frequency="weekly")
+    _, metrics = DcaBacktester(prices).run(
+        "fixed_dca",
+        config,
+        pd.Timestamp("2020-01-01").date(),
+        pd.Timestamp("2020-06-30").date(),
+    )
+    assert metrics.sharpeRatio is not None
+    assert metrics.sortinoRatio is None or isinstance(metrics.sortinoRatio, float)
+
+
+def test_market_state_detects_uptrend():
+    prices = fixture_prices([100 + i for i in range(260)])
+    state = _market_state(prices, pd.Timestamp("2020-12-31").date())
+    assert state.tone == "up"
+    assert state.sma50 is not None
+    assert state.sma200 is not None

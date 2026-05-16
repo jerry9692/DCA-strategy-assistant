@@ -1,4 +1,4 @@
-# DCA Strategy Assistant
+# DCA Strategy Assistant v0.2
 
 A local web application for dynamic Dollar-Cost Averaging (DCA) investment research. Instead of investing the same amount every period, it uses 7 market-driven strategies to adjust your contribution based on current conditions — buy more when the market dips, less when it's overheated.
 
@@ -19,6 +19,13 @@ Currently supports **QQQ, VOO, SPY** (US-listed ETFs, USD denominated, daily dat
 | Composite Score | Weighted average of all 5 signals above |
 
 Each strategy returns a recommended amount, multiplier, score, raw signal values, and human-readable reasons.
+
+## v0.2 Highlights
+
+- Compare dynamic DCA against both fixed DCA and a lump-sum investment baseline.
+- Read the current market state from 50/200-day moving averages.
+- Evaluate strategies with Sharpe and Sortino ratios in addition to return and drawdown.
+- Run a strategy showdown by comparing up to 3 extra strategies on the same asset and date range.
 
 ## Tech Stack
 
@@ -62,8 +69,11 @@ PYTHONPATH=backend pytest backend/tests -q
 
 Each backtest returns:
 
-- **Metrics**: total invested, ending portfolio value, total return %, annualized return %, max drawdown, number of buys, and comparison against fixed-DCA
+- **Metrics**: total invested, ending portfolio value, total return %, annualized return %, max drawdown, Sharpe/Sortino ratios, number of buys, and comparisons against fixed-DCA and lump-sum baselines
 - **Contribution events**: date, price, amount, shares purchased, portfolio value, multiplier per buy
+- **Baselines**: fixed-DCA and lump-sum metrics and chart series
+- **Strategy comparisons**: optional peer strategy results for showdown charts and tables
+- **Market state**: 50/200-day moving-average trend label and summary
 - **Price series**: daily close prices for charting
 - **Recommendation**: the strategy's current signal
 
@@ -81,7 +91,7 @@ DCA-strategy-assistant/
 │   │   ├── backtester.py            # DCA backtesting engine
 │   │   └── data.py                  # yfinance data fetching + SQLite caching
 │   ├── tests/
-│   │   └── test_strategies.py       # 15 test cases
+│   │   └── test_strategies.py       # strategy and backtest tests
 │   ├── data/                        # SQLite cache & yfinance data
 │   └── requirements.txt
 ├── frontend/                        # React UI (source in progress)
@@ -95,7 +105,7 @@ DCA-strategy-assistant/
 
 ## Assumptions & Limitations
 
-- v0.1: USD only, daily data, QQQ/VOO/SPY only.
+- v0.2: USD only, daily data, QQQ/VOO/SPY only.
 - The grid strategy is "grid-weighted DCA" — it only adjusts buy amounts, no sell signals.
 - Backtesting uses a simple IRR bisection method for annualized return; no dividend reinvestment yet.
 - Fee and slippage rates are supported in the engine but not yet exposed in strategy parameters.
