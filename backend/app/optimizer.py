@@ -151,8 +151,6 @@ def _candidate_configs(base: StrategyConfig) -> tuple[list[StrategyConfig], int]
         for params, min_multiplier, max_multiplier in product(grids, COMMON_MIN_MULTIPLIERS, COMMON_MAX_MULTIPLIERS)
         if min_multiplier < max_multiplier
     ]
-    raw_configs.insert(0, base)
-
     seen = set()
     unique: list[StrategyConfig] = []
     for config in raw_configs:
@@ -231,9 +229,9 @@ def optimize_parameters(request: OptimizationRequest) -> OptimizationResult:
         for scenario in scenario_defs
     }
 
-    ranked: list[OptimizationCandidate] = []
     unavailable_scenarios = sum(1 for metrics in fixed_by_scenario.values() if metrics is None)
-    for config in candidates:
+
+    def evaluate_config(config: StrategyConfig) -> OptimizationCandidate | None:
         prepared = prepare_market(prices, config)
         scenario_results: list[OptimizationScenarioMetrics] = []
         scores: list[float] = []
@@ -260,19 +258,20 @@ def optimize_parameters(request: OptimizationRequest) -> OptimizationResult:
                 )
             )
         if not scenario_results:
-            continue
+            return None
         total_score = _robust_score(scores, metrics_for_summary) if request.objective == "robust_return" else median(scores)
-        ranked.append(
-            OptimizationCandidate(
-                rank=0,
-                score=round(total_score, 2),
-                config=config,
-                scenarios=scenario_results,
-                summary=_average_metrics(metrics_for_summary),
-            )
+        return OptimizationCandidate(
+            rank=0,
+            score=round(total_score, 2),
+            config=config,
+            scenarios=scenario_results,
+            summary=_average_metrics(metrics_for_summary),
         )
 
-    if not ranked:
+    baseline = evaluate_config(request.config)
+    ranked = [candidate for config in candidates if (candidate := evaluate_config(config)) is not None]
+
+    if not ranked or baseline is None:
         raise ValueError("所有验证场景都没有足够数据，无法生成稳健参数建议。")
 
     ranked.sort(key=lambda item: item.score, reverse=True)
@@ -280,7 +279,6 @@ def optimize_parameters(request: OptimizationRequest) -> OptimizationResult:
         OptimizationCandidate(**{**item.model_dump(), "rank": index + 1})
         for index, item in enumerate(ranked[:10])
     ]
-    baseline = next((item for item in ranked if item.config == request.config), ranked[0])
     recommended = top_candidates[0]
     scenario_rows: list[OptimizationScenarioResult] = []
     for recommended_scenario in recommended.scenarios:

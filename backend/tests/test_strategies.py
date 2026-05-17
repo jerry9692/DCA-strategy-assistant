@@ -376,6 +376,38 @@ def test_optimizer_default_search_space_stays_dca_like(monkeypatch):
     assert all(candidate.config.maxMultiplier <= 1.5 for candidate in result.candidates)
 
 
+def test_optimizer_baseline_does_not_bypass_dca_like_search_space(monkeypatch):
+    prices = long_fixture_prices()
+
+    def fake_price_history(symbol, start, end):
+        return prices, "fixture", "cache-hit"
+
+    monkeypatch.setattr("app.optimizer.get_price_history", fake_price_history)
+
+    result = optimize_parameters(
+        OptimizationRequest(
+            symbol="QQQ",
+            startDate=pd.Timestamp("2022-01-03").date(),
+            endDate=pd.Timestamp("2024-12-31").date(),
+            config=StrategyConfig(
+                strategyType="composite_score",
+                baseAmount=100,
+                frequency="weekly",
+                minMultiplier=0.2,
+                maxMultiplier=2.5,
+                params={},
+            ),
+        )
+    )
+
+    assert result.baselineConfig.minMultiplier == 0.2
+    assert result.baselineConfig.maxMultiplier == 2.5
+    assert result.recommendedConfig.minMultiplier >= 0.6
+    assert result.recommendedConfig.maxMultiplier <= 1.5
+    assert all(candidate.config.minMultiplier >= 0.6 for candidate in result.candidates)
+    assert all(candidate.config.maxMultiplier <= 1.5 for candidate in result.candidates)
+
+
 def test_robust_score_penalizes_single_scenario_blowup():
     steady = BacktestMetrics(
         totalInvested=1000,
