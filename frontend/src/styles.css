@@ -42,29 +42,13 @@ select {
   margin-bottom: 18px;
 }
 
-.topbar-actions,
-.scenario-buttons {
+.topbar-actions {
   display: flex;
 }
 
 .topbar-actions {
   align-items: center;
   gap: 10px;
-}
-
-.scenario-buttons button {
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: #475569;
-  padding: 8px 10px;
-  cursor: pointer;
-  font-weight: 700;
-}
-
-.scenario-buttons button.active {
-  color: #0f766e;
-  background: #f0fdfa;
 }
 
 .eyebrow,
@@ -162,7 +146,7 @@ h2 {
   color: #0f766e;
 }
 
-.crisis-strip {
+.pressure-strip {
   padding: 14px;
   background: #fff;
   border: 1px solid #e2e8f0;
@@ -170,35 +154,25 @@ h2 {
   margin-bottom: 16px;
 }
 
-.crisis-strip {
+.pressure-strip {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.crisis-strip div:first-child {
+.pressure-strip div:first-child {
   display: grid;
   gap: 4px;
 }
 
-.crisis-strip strong {
+.pressure-strip strong {
   color: #334155;
 }
 
-.crisis-strip span {
+.pressure-strip span {
   color: #64748b;
   font-size: 12px;
-}
-
-.scenario-buttons {
-  gap: 6px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.scenario-buttons button {
-  border: 1px solid #cbd5e1;
 }
 
 label {
@@ -824,7 +798,7 @@ input[type="range"] {
 }
 
 .app-shell[data-theme="dark"] .control-strip,
-.app-shell[data-theme="dark"] .crisis-strip,
+.app-shell[data-theme="dark"] .pressure-strip,
 .app-shell[data-theme="dark"] .strategy-list,
 .app-shell[data-theme="dark"] .param-panel,
 .app-shell[data-theme="dark"] .center-panel,
@@ -865,7 +839,7 @@ input[type="range"] {
 .app-shell[data-theme="dark"] .strategy,
 .app-shell[data-theme="dark"] .secondary-action,
 .app-shell[data-theme="dark"] .reason-toggle,
-.app-shell[data-theme="dark"] .crisis-strip strong,
+.app-shell[data-theme="dark"] .pressure-strip strong,
 .app-shell[data-theme="dark"] .showdown-picker strong,
 .app-shell[data-theme="dark"] .fixed-metrics span,
 .app-shell[data-theme="dark"] .optimizer-card strong,
@@ -887,7 +861,7 @@ input[type="range"] {
 .app-shell[data-theme="dark"] .muted,
 .app-shell[data-theme="dark"] .strategy span,
 .app-shell[data-theme="dark"] .showdown-picker > span,
-.app-shell[data-theme="dark"] .crisis-strip span,
+.app-shell[data-theme="dark"] .pressure-strip span,
 .app-shell[data-theme="dark"] .metric span,
 .app-shell[data-theme="dark"] .fixed-metrics,
 .app-shell[data-theme="dark"] .fixed-metrics b,
@@ -971,13 +945,9 @@ input[type="range"] {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .crisis-strip {
+  .pressure-strip {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .scenario-buttons {
-    justify-content: flex-start;
   }
 }
 

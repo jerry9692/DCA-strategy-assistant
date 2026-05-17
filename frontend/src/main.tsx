@@ -144,6 +144,15 @@ type OptimizationJobStatus = {
 };
 type UiError = { message: string; code?: string; retryable: boolean };
 type PresetMode = "conservative" | "balanced" | "aggressive" | "custom";
+type MarketCode = "us" | "cn";
+type PressureScenario = {
+  id: string;
+  market: MarketCode;
+  name: string;
+  startDate: string;
+  endDate: string;
+  summary: string;
+};
 
 const api = "";
 const SETTINGS_KEY = "dca-assistant-settings-v3";
@@ -157,16 +166,48 @@ const PARAMETER_PRESETS: Record<Exclude<PresetMode, "custom">, { label: string; 
   aggressive: { label: "激进", minMultiplier: 0.8, maxMultiplier: 1.2 }
 };
 
-const CRISIS_SCENARIOS = [
+const ASSET_MARKETS: Record<string, MarketCode> = {
+  QQQ: "us",
+  SPY: "us",
+  VOO: "us"
+};
+
+const PRESSURE_SCENARIOS: PressureScenario[] = [
+  {
+    id: "brexit_2016",
+    market: "us",
+    name: "2016 Brexit 冲击",
+    startDate: "2016-06-23",
+    endDate: "2016-07-15",
+    summary: "短期外部事件冲击，检验快速下跌后的恢复节奏。"
+  },
+  {
+    id: "q4_selloff_2018",
+    market: "us",
+    name: "2018 Q4 紧缩杀跌",
+    startDate: "2018-10-03",
+    endDate: "2018-12-24",
+    summary: "高波动下跌窗口，检验加码纪律和资金消耗。"
+  },
   {
     id: "covid_2020",
+    market: "us",
     name: "2020 熔断冲击",
     startDate: "2020-02-18",
     endDate: "2020-05-29",
     summary: "检验策略在急跌和快速反弹中的加码节奏。"
   },
   {
+    id: "liquidity_rally_2021",
+    market: "us",
+    name: "2021 流动性牛市",
+    startDate: "2021-01-04",
+    endDate: "2021-12-31",
+    summary: "持续上涨环境，观察策略是否过早降档。"
+  },
+  {
     id: "rate_hike_2022",
+    market: "us",
     name: "2022 加息杀估值",
     startDate: "2022-01-03",
     endDate: "2022-12-30",
@@ -174,10 +215,19 @@ const CRISIS_SCENARIOS = [
   },
   {
     id: "ai_rebound_2023",
+    market: "us",
     name: "2023 科技股修复",
     startDate: "2023-01-03",
     endDate: "2023-08-31",
     summary: "观察策略在持续修复行情中是否过早降档。"
+  },
+  {
+    id: "ai_momentum_2024",
+    market: "us",
+    name: "2024 AI 集中行情",
+    startDate: "2023-10-27",
+    endDate: "2024-07-10",
+    summary: "强趋势上涨窗口，检验策略在高位环境下的投入控制。"
   }
 ];
 
@@ -422,6 +472,15 @@ function App() {
     () => comparisonStrategyTypes.filter((item, index, source) => item !== strategyType && source.indexOf(item) === index),
     [comparisonStrategyTypes, strategyType]
   );
+  const activeMarket = ASSET_MARKETS[symbol] ?? "us";
+  const pressureScenarios = useMemo(
+    () => PRESSURE_SCENARIOS.filter((scenario) => scenario.market === activeMarket),
+    [activeMarket]
+  );
+  const activeScenario = useMemo(
+    () => pressureScenarios.find((scenario) => scenario.id === activeScenarioId) ?? null,
+    [activeScenarioId, pressureScenarios]
+  );
   const activePeriodId = useMemo(
     () => QUICK_BACKTEST_PERIODS.find((period) => yearsBefore(endDate, period.years) === startDate)?.id ?? null,
     [endDate, startDate]
@@ -473,6 +532,10 @@ function App() {
     setParams(preset.params);
     setComparisonStrategyTypes((current) => current.filter((item) => item !== strategyType));
   }, [strategyType]);
+
+  useEffect(() => {
+    if (activeScenarioId && !activeScenario) setActiveScenarioId(null);
+  }, [activeScenario, activeScenarioId]);
 
   useEffect(() => {
     if (!selectedStrategy || Object.keys(params).length === 0) return;
@@ -576,7 +639,11 @@ function App() {
   };
 
   const applyScenario = (scenarioId: string) => {
-    const scenario = CRISIS_SCENARIOS.find((item) => item.id === scenarioId);
+    if (!scenarioId) {
+      setActiveScenarioId(null);
+      return;
+    }
+    const scenario = pressureScenarios.find((item) => item.id === scenarioId);
     if (!scenario) return;
     setActiveScenarioId(scenario.id);
     setStartDate(scenario.startDate);
@@ -930,6 +997,17 @@ function App() {
             ))}
           </div>
         </div>
+        <label className="pressure-control">
+          压力测试
+          <select value={activeScenario?.id ?? ""} onChange={(event) => applyScenario(event.target.value)}>
+            <option value="">普通区间</option>
+            {pressureScenarios.map((scenario) => (
+              <option key={scenario.id} value={scenario.id}>
+                {scenario.name}
+              </option>
+            ))}
+          </select>
+        </label>
       </section>
 
       {error && (
@@ -943,19 +1021,17 @@ function App() {
         </div>
       )}
 
-      <section className="crisis-strip">
+      {activeScenario && (
+        <section className="pressure-strip">
           <div>
-            <strong>历史危机回放</strong>
-            <span>{CRISIS_SCENARIOS.find((item) => item.id === activeScenarioId)?.summary ?? "选择一个场景，快速切换到对应行情区间验证策略表现。"}</span>
+            <strong>{activeScenario.name}</strong>
+            <span>{activeScenario.startDate} 至 {activeScenario.endDate} · {activeScenario.summary}</span>
           </div>
-          <div className="scenario-buttons">
-            {CRISIS_SCENARIOS.map((scenario) => (
-              <button type="button" key={scenario.id} className={activeScenarioId === scenario.id ? "active" : ""} onClick={() => applyScenario(scenario.id)}>
-                {scenario.name}
-              </button>
-            ))}
-          </div>
+          <button type="button" className="reason-toggle" onClick={() => setActiveScenarioId(null)}>
+            清除场景
+          </button>
         </section>
+      )}
 
       <section className="workspace">
         <aside className="strategy-list">
