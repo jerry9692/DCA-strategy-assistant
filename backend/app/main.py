@@ -14,6 +14,8 @@ from app.models import (
     BacktestResult,
     MarketState,
     PricePoint,
+    OptimizationJobCreateResponse,
+    OptimizationJobStatus,
     OptimizationRequest,
     OptimizationResult,
     RecommendationRequest,
@@ -21,6 +23,7 @@ from app.models import (
     StrategyConfig,
     StrategyComparison,
 )
+from app.optimization_jobs import cancel_optimization_job, create_optimization_job, get_optimization_job
 from app.optimizer import optimize_parameters
 from app.strategies import evaluate_prepared_strategy, evaluate_strategy, prepare_market
 from app.strategy_definitions import COMMON_PARAMETERS, STRATEGIES
@@ -75,6 +78,30 @@ def optimization(request: OptimizationRequest) -> OptimizationResult:
         return optimize_parameters(request)
     except Exception as exc:
         _raise_api_error(exc)
+
+
+@app.post("/api/optimizations/jobs", response_model=OptimizationJobCreateResponse)
+def create_optimization(request: OptimizationRequest) -> OptimizationJobCreateResponse:
+    try:
+        return OptimizationJobCreateResponse(jobId=create_optimization_job(request))
+    except Exception as exc:
+        _raise_api_error(exc)
+
+
+@app.get("/api/optimizations/jobs/{job_id}", response_model=OptimizationJobStatus)
+def optimization_status(job_id: str) -> OptimizationJobStatus:
+    status = get_optimization_job(job_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail={"message": "调优任务不存在。", "code": "job_not_found", "retryable": False})
+    return status
+
+
+@app.delete("/api/optimizations/jobs/{job_id}", response_model=OptimizationJobStatus)
+def cancel_optimization(job_id: str) -> OptimizationJobStatus:
+    status = cancel_optimization_job(job_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail={"message": "调优任务不存在。", "code": "job_not_found", "retryable": False})
+    return status
 
 
 def _fixed_config(config: StrategyConfig) -> StrategyConfig:

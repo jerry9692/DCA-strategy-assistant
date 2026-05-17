@@ -1,10 +1,13 @@
+import time
+
 import pandas as pd
 import pytest
 
 from app.backtester import DcaBacktester, _next_trading_day, _schedule
 from app.main import _cached_fixed_backtest, _chart_contributions, _chart_prices, _market_state
-from app.models import BacktestMetrics, ContributionEvent, OptimizationRequest, StrategyConfig
-from app.optimizer import _robust_score, optimize_parameters
+from app.models import BacktestMetrics, ContributionEvent, OptimizationRequest, OptimizationResult, StrategyConfig
+from app.optimization_jobs import cancel_optimization_job, create_optimization_job, get_optimization_job
+from app.optimizer import OptimizationCancelled, _robust_score, optimize_parameters
 from app.strategies import evaluate_prepared_strategy, evaluate_strategy
 
 
@@ -518,3 +521,77 @@ def test_optimizer_counts_unavailable_scenarios(monkeypatch):
     )
 
     assert result.skippedCount > 0
+
+
+def _job_metric() -> BacktestMetrics:
+    return BacktestMetrics(
+        totalInvested=1000,
+        endingValue=1120,
+        returnPct=12,
+        annualizedReturnPct=8,
+        maxDrawdownPct=-6,
+        buyCount=10,
+        avgContribution=100,
+    )
+
+
+def _job_result(request: OptimizationRequest) -> OptimizationResult:
+    return OptimizationResult(
+        symbol=request.symbol,
+        objective=request.objective,
+        baselineConfig=request.config,
+        recommendedConfig=request.config,
+        baselineSummary=_job_metric(),
+        recommendedSummary=_job_metric(),
+        candidates=[],
+        scenarios=[],
+        searchedCount=1,
+        skippedCount=0,
+    )
+
+
+def _wait_for_job(job_id: str, wanted: set[str], timeout: float = 1.0):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        status = get_optimization_job(job_id)
+        if status and status.status in wanted:
+            return status
+        time.sleep(0.01)
+    return get_optimization_job(job_id)
+
+
+def test_optimization_job_completes_with_result(monkeypatch):
+    def fake_optimize(request, progress_callback=None, should_cancel=None):
+        if progress_callback:
+            progress_callback({"evaluatedCount": 1, "totalCount": 2, "currentScenario": "当前选择区间", "bestSoFar": None})
+            progress_callback({"evaluatedCount": 2, "totalCount": 2, "currentScenario": None, "bestSoFar": None})
+        return _job_result(request)
+
+    monkeypatch.setattr("app.optimization_jobs.optimize_parameters", fake_optimize)
+    job_id = create_optimization_job(OptimizationRequest(config=StrategyConfig(strategyType="ma_deviation")))
+
+    status = _wait_for_job(job_id, {"completed"})
+
+    assert status is not None
+    assert status.status == "completed"
+    assert status.progress == 100
+    assert status.result is not None
+    assert status.result.searchedCount == 1
+
+
+def test_optimization_job_can_be_cancelled(monkeypatch):
+    def fake_optimize(request, progress_callback=None, should_cancel=None):
+        while should_cancel and not should_cancel():
+            time.sleep(0.01)
+        raise OptimizationCancelled()
+
+    monkeypatch.setattr("app.optimization_jobs.optimize_parameters", fake_optimize)
+    job_id = create_optimization_job(OptimizationRequest(config=StrategyConfig(strategyType="ma_deviation")))
+
+    cancelled = cancel_optimization_job(job_id)
+    status = _wait_for_job(job_id, {"cancelled"})
+
+    assert cancelled is not None
+    assert cancelled.status == "cancelled"
+    assert status is not None
+    assert status.status == "cancelled"

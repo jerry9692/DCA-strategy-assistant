@@ -14,6 +14,7 @@ SUPPORTED_ASSETS = {
 Frequency = Literal["weekly", "monthly"]
 MarketTone = Literal["up", "down", "neutral"]
 OptimizationObjective = Literal["robust_return", "max_return", "min_drawdown"]
+OptimizationJobState = Literal["queued", "running", "completed", "failed", "cancelled"]
 
 
 class Asset(BaseModel):
@@ -193,3 +194,19 @@ class OptimizationResult(BaseModel):
     scenarios: list[OptimizationScenarioResult]
     searchedCount: int
     skippedCount: int
+
+
+class OptimizationJobCreateResponse(BaseModel):
+    jobId: str
+
+
+class OptimizationJobStatus(BaseModel):
+    jobId: str
+    status: OptimizationJobState
+    progress: float = 0
+    evaluatedCount: int = 0
+    totalCount: int = 0
+    currentScenario: str | None = None
+    bestSoFar: OptimizationCandidate | None = None
+    result: OptimizationResult | None = None
+    error: str | None = None

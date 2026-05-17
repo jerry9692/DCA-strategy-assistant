@@ -491,6 +491,51 @@ select {
   gap: 12px;
 }
 
+.optimization-progress {
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  padding: 14px;
+  margin-bottom: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.optimization-progress-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.progress-track {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dbeafe;
+}
+
+.progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #2563eb;
+  transition: width 0.25s ease;
+}
+
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.progress-meta span {
+  text-align: right;
+}
+
 .optimization-head {
   display: flex;
   align-items: flex-start;
@@ -753,6 +798,7 @@ input[type="range"] {
 .app-shell[data-theme="dark"] .reason-toggle,
 .app-shell[data-theme="dark"] .fixed-metrics,
 .app-shell[data-theme="dark"] .optimization-panel,
+.app-shell[data-theme="dark"] .optimization-progress,
 .app-shell[data-theme="dark"] .config-preview,
 .app-shell[data-theme="dark"] .market-state,
 .app-shell[data-theme="dark"] .comparison-head,
@@ -815,8 +861,13 @@ input[type="range"] {
 .app-shell[data-theme="dark"] .candidate-row b,
 .app-shell[data-theme="dark"] .candidate-row small,
 .app-shell[data-theme="dark"] .market-state,
-.app-shell[data-theme="dark"] .market-state b {
+.app-shell[data-theme="dark"] .market-state b,
+.app-shell[data-theme="dark"] .progress-meta {
   color: #94a3b8;
+}
+
+.app-shell[data-theme="dark"] .progress-track {
+  background: #1e293b;
 }
 
 .app-shell[data-theme="dark"] .strategy:hover,
@@ -933,6 +984,16 @@ input[type="range"] {
 
   .optimization-head {
     flex-direction: column;
+  }
+
+  .optimization-progress-head,
+  .progress-meta {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .progress-meta span {
+    text-align: left;
   }
 
   .optimization-summary {

@@ -131,6 +131,17 @@ type OptimizationResult = {
   searchedCount: number;
   skippedCount: number;
 };
+type OptimizationJobStatus = {
+  jobId: string;
+  status: "queued" | "running" | "completed" | "failed" | "cancelled";
+  progress: number;
+  evaluatedCount: number;
+  totalCount: number;
+  currentScenario?: string | null;
+  bestSoFar?: OptimizationCandidate | null;
+  result?: OptimizationResult | null;
+  error?: string | null;
+};
 type UiError = { message: string; code?: string; retryable: boolean };
 type PresetMode = "conservative" | "balanced" | "aggressive" | "custom";
 
@@ -368,6 +379,7 @@ function App() {
   const [quickDecision, setQuickDecision] = useState<Decision | null>(null);
   const [quickData, setQuickData] = useState<{ dataSource: string; cacheStatus: string } | null>(null);
   const [optimization, setOptimization] = useState<OptimizationResult | null>(null);
+  const [optimizationJob, setOptimizationJob] = useState<OptimizationJobStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [recommendationLoading, setRecommendationLoading] = useState(false);
   const [optimizationLoading, setOptimizationLoading] = useState(false);
@@ -392,10 +404,16 @@ function App() {
     }),
     [strategyType, baseAmount, frequency, minMultiplier, maxMultiplier, params]
   );
+  const optimizationActive = optimizationJob?.status === "queued" || optimizationJob?.status === "running";
 
   useEffect(() => {
     setOptimization(null);
-  }, [symbol, strategyType, startDate, endDate]);
+    if (optimizationActive && optimizationJob) {
+      fetch(`${api}/api/optimizations/jobs/${optimizationJob.jobId}`, { method: "DELETE" }).catch(() => undefined);
+      setOptimizationLoading(false);
+    }
+    setOptimizationJob(null);
+  }, [symbol, strategyType, startDate, endDate, config]);
 
   useEffect(() => {
     Promise.all([fetch(`${api}/api/assets`).then(readJson<Asset[]>), fetch(`${api}/api/strategies`).then(readJson<{ strategies: StrategyDef[] }>)])
@@ -475,6 +493,41 @@ function App() {
     return () => window.clearTimeout(handle);
   }, [symbol, startDate, endDate, config, selectedStrategy, refreshNonce, comparisonStrategyTypes]);
 
+  useEffect(() => {
+    if (!optimizationJob || !optimizationActive) return;
+    let stopped = false;
+    const poll = () => {
+      fetch(`${api}/api/optimizations/jobs/${optimizationJob.jobId}`)
+        .then(readJson<OptimizationJobStatus>)
+        .then((job) => {
+          if (stopped) return;
+          setOptimizationJob(job);
+          if (job.status === "completed") {
+            if (job.result) setOptimization(job.result);
+            setOptimizationLoading(false);
+          }
+          if (job.status === "failed") {
+            setError({ message: job.error || "参数调优失败，请重试。", retryable: true });
+            setOptimizationLoading(false);
+          }
+          if (job.status === "cancelled") {
+            setOptimizationLoading(false);
+          }
+        })
+        .catch((err) => {
+          if (stopped) return;
+          setError(toUiError(err));
+          setOptimizationLoading(false);
+        });
+    };
+    poll();
+    const handle = window.setInterval(poll, 1000);
+    return () => {
+      stopped = true;
+      window.clearInterval(handle);
+    };
+  }, [optimizationJob?.jobId, optimizationActive]);
+
   const applyPreset = (mode: PresetMode) => {
     setPresetMode(mode);
     if (mode === "custom") return;
@@ -533,7 +586,9 @@ function App() {
     if (!selectedStrategy) return;
     setOptimizationLoading(true);
     setError(null);
-    fetch(`${api}/api/optimizations/run`, {
+    setOptimization(null);
+    setOptimizationJob(null);
+    fetch(`${api}/api/optimizations/jobs`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -544,10 +599,31 @@ function App() {
         objective: "robust_return"
       })
     })
-      .then(readJson<OptimizationResult>)
-      .then((data) => setOptimization(data))
-      .catch((err) => setError(toUiError(err)))
-      .finally(() => setOptimizationLoading(false));
+      .then(readJson<{ jobId: string }>)
+      .then((data) =>
+        setOptimizationJob({
+          jobId: data.jobId,
+          status: "queued",
+          progress: 0,
+          evaluatedCount: 0,
+          totalCount: 0
+        })
+      )
+      .catch((err) => {
+        setError(toUiError(err));
+        setOptimizationLoading(false);
+      });
+  };
+
+  const cancelOptimization = () => {
+    if (!optimizationJob || !optimizationActive) return;
+    fetch(`${api}/api/optimizations/jobs/${optimizationJob.jobId}`, { method: "DELETE" })
+      .then(readJson<OptimizationJobStatus>)
+      .then((job) => {
+        setOptimizationJob(job);
+        setOptimizationLoading(false);
+      })
+      .catch((err) => setError(toUiError(err)));
   };
 
   const applyOptimizedConfig = (optimizedConfig: StrategyConfigPayload) => {
@@ -935,6 +1011,33 @@ function App() {
             <b>回撤 {metric(result?.lumpSumMetrics?.maxDrawdownPct, "%")}</b>
           </div>
 
+          {optimizationActive && optimizationJob && (
+            <div className="optimization-progress">
+              <div className="optimization-progress-head">
+                <div>
+                  <div className="section-title">
+                    <Sparkles size={17} />
+                    稳健参数建议计算中
+                  </div>
+                  <p className="muted">
+                    已验证 {optimizationJob.evaluatedCount} / {optimizationJob.totalCount || "-"} 组参数
+                    {optimizationJob.currentScenario ? ` · ${optimizationJob.currentScenario}` : ""}
+                  </p>
+                </div>
+                <button type="button" className="secondary-action" onClick={cancelOptimization}>
+                  取消
+                </button>
+              </div>
+              <div className="progress-track" aria-label="自动调优进度">
+                <span style={{ width: `${Math.max(3, optimizationJob.progress)}%` }} />
+              </div>
+              <div className="progress-meta">
+                <b>{metric(optimizationJob.progress, "%")}</b>
+                {optimizationJob.bestSoFar && <span>当前最佳：{describeConfig(optimizationJob.bestSoFar.config)}</span>}
+              </div>
+            </div>
+          )}
+
           {optimization && (
             <div className="optimization-panel">
               <div className="optimization-head">
@@ -1083,7 +1186,7 @@ function App() {
             <span>跨多个市场阶段搜索更稳定的参数。默认限制为最低 0.6-0.8x、最高 1.2-1.5x，不把功能变成择时交易。</span>
             <button type="button" className="secondary-action" onClick={runOptimization} disabled={optimizationLoading || loading || !selectedStrategy || strategyType === "fixed_dca"}>
               <Sparkles size={15} />
-              {strategyType === "fixed_dca" ? "固定定投无需调优" : optimizationLoading ? "正在搜索参数组合" : "自动调优"}
+              {strategyType === "fixed_dca" ? "固定定投无需调优" : optimizationActive ? "正在后台计算" : "自动调优"}
             </button>
           </div>
           <div className="signals">
@@ -1098,7 +1201,7 @@ function App() {
                   </div>
                 ))}
           </div>
-          {(loading || recommendationLoading || optimizationLoading) && <p className="muted">{optimizationLoading ? "正在搜索稳健参数..." : "正在刷新策略结果..."}</p>}
+          {(loading || recommendationLoading || optimizationLoading) && <p className="muted">{optimizationActive ? "调优任务在后台运行，可以继续查看页面。" : "正在刷新策略结果..."}</p>}
           <p className="muted">数据：{dataSource} · {cacheStatus}</p>
         </aside>
       </section>

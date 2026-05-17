@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from itertools import product
 from statistics import median
-from typing import Any
+from typing import Any, Callable
 
 import pandas as pd
 
@@ -27,6 +27,8 @@ COMMON_MIN_MULTIPLIERS = [0.6, 0.7, 0.8]
 COMMON_MAX_MULTIPLIERS = [1.2, 1.3, 1.4, 1.5]
 MAX_CANDIDATES = 600
 MIN_BUYS_PER_SCENARIO = 6
+OptimizationProgressCallback = Callable[[dict[str, Any]], None]
+OptimizationCancelCheck = Callable[[], bool]
 
 COMPOSITE_WEIGHT_PRESETS = [
     {},
@@ -46,6 +48,10 @@ class Scenario:
     name: str
     start: date
     end: date
+
+
+class OptimizationCancelled(Exception):
+    pass
 
 
 def _empty_metrics() -> BacktestMetrics:
@@ -214,14 +220,29 @@ def _run_candidate(
     return _with_fixed_comparison(metrics, fixed_metrics)
 
 
-def optimize_parameters(request: OptimizationRequest) -> OptimizationResult:
+def _ranked_copy(candidate: OptimizationCandidate, rank: int) -> OptimizationCandidate:
+    return OptimizationCandidate(**{**candidate.model_dump(), "rank": rank})
+
+
+def optimize_parameters(
+    request: OptimizationRequest,
+    progress_callback: OptimizationProgressCallback | None = None,
+    should_cancel: OptimizationCancelCheck | None = None,
+) -> OptimizationResult:
+    def raise_if_cancelled() -> None:
+        if should_cancel and should_cancel():
+            raise OptimizationCancelled("参数调优已取消。")
+
     symbol = validate_symbol(request.symbol)
     end = request.endDate or date.today()
     start = request.startDate or (end - timedelta(days=365 * 5))
     candidates, skipped_count = _candidate_configs(request.config)
+    if progress_callback:
+        progress_callback({"evaluatedCount": 0, "totalCount": len(candidates), "currentScenario": "准备验证场景", "bestSoFar": None})
     scenario_defs = _scenarios(start, end)
     max_end = max(item.end for item in scenario_defs)
     min_start = min(item.start for item in scenario_defs) - timedelta(days=365 * 3)
+    raise_if_cancelled()
     prices, _, _ = get_price_history(symbol, min_start, max_end)
     backtester = DcaBacktester(prices)
     fixed_by_scenario = {
@@ -231,12 +252,27 @@ def optimize_parameters(request: OptimizationRequest) -> OptimizationResult:
 
     unavailable_scenarios = sum(1 for metrics in fixed_by_scenario.values() if metrics is None)
 
-    def evaluate_config(config: StrategyConfig) -> OptimizationCandidate | None:
+    def evaluate_config(
+        config: StrategyConfig,
+        evaluated_count: int | None = None,
+        total_count: int | None = None,
+        best_so_far: OptimizationCandidate | None = None,
+    ) -> OptimizationCandidate | None:
         prepared = prepare_market(prices, config)
         scenario_results: list[OptimizationScenarioMetrics] = []
         scores: list[float] = []
         metrics_for_summary: list[BacktestMetrics] = []
         for scenario in scenario_defs:
+            raise_if_cancelled()
+            if progress_callback and evaluated_count is not None:
+                progress_callback(
+                    {
+                        "evaluatedCount": evaluated_count,
+                        "totalCount": total_count or 0,
+                        "currentScenario": scenario.name,
+                        "bestSoFar": best_so_far,
+                    }
+                )
             fixed_metrics = fixed_by_scenario[scenario.id]
             if fixed_metrics is None:
                 continue
@@ -269,16 +305,28 @@ def optimize_parameters(request: OptimizationRequest) -> OptimizationResult:
         )
 
     baseline = evaluate_config(request.config)
-    ranked = [candidate for config in candidates if (candidate := evaluate_config(config)) is not None]
+    ranked: list[OptimizationCandidate] = []
+    best_so_far: OptimizationCandidate | None = None
+    for index, config in enumerate(candidates, start=1):
+        candidate = evaluate_config(config, index - 1, len(candidates), best_so_far)
+        if candidate is not None:
+            ranked.append(candidate)
+            best_so_far = max(ranked, key=lambda item: item.score)
+        if progress_callback:
+            progress_callback(
+                {
+                    "evaluatedCount": index,
+                    "totalCount": len(candidates),
+                    "currentScenario": None,
+                    "bestSoFar": _ranked_copy(best_so_far, 1) if best_so_far else None,
+                }
+            )
 
     if not ranked or baseline is None:
         raise ValueError("所有验证场景都没有足够数据，无法生成稳健参数建议。")
 
     ranked.sort(key=lambda item: item.score, reverse=True)
-    top_candidates = [
-        OptimizationCandidate(**{**item.model_dump(), "rank": index + 1})
-        for index, item in enumerate(ranked[:10])
-    ]
+    top_candidates = [_ranked_copy(item, index + 1) for index, item in enumerate(ranked[:10])]
     recommended = top_candidates[0]
     scenario_rows: list[OptimizationScenarioResult] = []
     for recommended_scenario in recommended.scenarios:
