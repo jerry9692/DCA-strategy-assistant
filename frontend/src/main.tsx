@@ -1,8 +1,9 @@
-import React, { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useState } from "react";
+import React, { Component, Suspense, lazy, type ErrorInfo, type ReactNode, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import ReactECharts from "echarts-for-react";
 import { Activity, BarChart3, Download, Moon, RefreshCcw, SlidersHorizontal, Sparkles, Sun } from "lucide-react";
 import "./styles.css";
+
+const LazyChart = lazy(() => import("./Chart"));
 
 type Asset = { symbol: string; name: string; currency: string };
 type Param = {
@@ -412,6 +413,14 @@ function ErrorFallback({ onReset }: { onReset: () => void }) {
         </button>
       </section>
     </main>
+  );
+}
+
+function Chart({ option, height }: { option: object; height: number }) {
+  return (
+    <Suspense fallback={<div className="chart-placeholder" style={{ height }}>正在加载图表</div>}>
+      <LazyChart option={option} height={height} />
+    </Suspense>
   );
 }
 
@@ -1259,35 +1268,35 @@ function App() {
               <BarChart3 size={17} />
               价格与买入点
             </div>
-            <ReactECharts option={priceOption} style={{ height: 300 }} />
+            <Chart option={priceOption} height={300} />
           </div>
           <div className="chart-block">
             <div className="section-title">
               <BarChart3 size={17} />
               投入金额与组合价值
             </div>
-            <ReactECharts option={contributionOption} style={{ height: 300 }} />
+            <Chart option={contributionOption} height={300} />
           </div>
           <div className="chart-block">
             <div className="section-title">
               <BarChart3 size={17} />
               账户回撤对比
             </div>
-            <ReactECharts option={drawdownOption} style={{ height: 260 }} />
+            <Chart option={drawdownOption} height={260} />
           </div>
           <div className="chart-block">
             <div className="section-title">
               <BarChart3 size={17} />
               评分与投入倍率
             </div>
-            <ReactECharts option={signalOption} style={{ height: 260 }} />
+            <Chart option={signalOption} height={260} />
           </div>
           <div className="chart-block">
             <div className="section-title">
               <BarChart3 size={17} />
               策略对决
             </div>
-            <ReactECharts option={showdownOption} style={{ height: 300 }} />
+            <Chart option={showdownOption} height={300} />
             <div className="comparison-table">
               <div className="comparison-head">
                 <span>策略</span>

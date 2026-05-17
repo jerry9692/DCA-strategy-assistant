@@ -679,6 +679,13 @@ select {
   margin-top: 12px;
 }
 
+.chart-placeholder {
+  display: grid;
+  place-items: center;
+  color: #64748b;
+  font-size: 13px;
+}
+
 .comparison-table {
   display: grid;
   gap: 4px;
