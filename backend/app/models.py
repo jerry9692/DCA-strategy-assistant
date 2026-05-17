@@ -75,6 +75,7 @@ class ContributionEvent(BaseModel):
     multiplier: float
     score: float
     reasons: list[str]
+    drawdownPct: float = 0
 
 
 class BacktestMetrics(BaseModel):

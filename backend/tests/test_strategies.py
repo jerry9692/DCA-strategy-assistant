@@ -224,6 +224,20 @@ def test_lump_sum_invests_total_budget_once_and_tracks_value():
     assert metrics.endingValue > 1000
 
 
+def test_cashflow_adjusted_drawdown_detects_price_drop_between_buys():
+    prices = fixture_prices([100, 100, 100, 90, 90, 90, 90, 95])
+    config = StrategyConfig(strategyType="fixed_dca", baseAmount=100, frequency="weekly")
+    events, metrics = DcaBacktester(prices).run(
+        "fixed_dca",
+        config,
+        pd.Timestamp("2020-01-01").date(),
+        pd.Timestamp("2020-01-10").date(),
+    )
+    assert events[1].portfolioValue > events[0].portfolioValue
+    assert events[1].drawdownPct == -10
+    assert metrics.maxDrawdownPct == -10
+
+
 def test_metrics_include_risk_adjusted_ratios_when_series_is_long_enough():
     prices = fixture_prices([100 + i * 0.5 for i in range(180)])
     config = StrategyConfig(strategyType="fixed_dca", baseAmount=100, frequency="weekly")

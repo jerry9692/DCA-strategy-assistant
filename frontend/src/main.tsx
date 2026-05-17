@@ -33,6 +33,7 @@ type Contribution = {
   portfolioValue: number;
   multiplier: number;
   score: number;
+  drawdownPct: number;
 };
 type Metrics = {
   totalInvested: number;
@@ -106,14 +107,6 @@ function defaultsFor(strategy?: StrategyDef) {
 function metric(value: number | null | undefined, suffix = "") {
   if (value === null || value === undefined || Number.isNaN(value)) return "-";
   return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}${suffix}`;
-}
-
-function drawdownSeries(events: Contribution[]) {
-  let peak = 0;
-  return events.map((event) => {
-    peak = Math.max(peak, event.portfolioValue);
-    return peak > 0 ? Number(((event.portfolioValue / peak - 1) * 100).toFixed(2)) : 0;
-  });
 }
 
 async function readJson<T>(res: Response): Promise<T> {
@@ -363,13 +356,13 @@ function App() {
       legend: { top: 0, textStyle: { color: "#475569" } },
       grid: { left: 46, right: 20, top: 36, bottom: 34 },
       xAxis: { type: "category", data: result?.contributions.map((event) => event.date) ?? [], axisLabel: { color: "#64748b" } },
-      yAxis: { type: "value", axisLabel: { color: "#64748b", formatter: "{value}%" } },
+      yAxis: { type: "value", max: 0, axisLabel: { color: "#64748b", formatter: "{value}%" } },
       series: [
         {
           name: "本策略回撤",
           type: "line",
           showSymbol: false,
-          data: drawdownSeries(result?.contributions ?? []),
+          data: result?.contributions.map((event) => event.drawdownPct) ?? [],
           areaStyle: { color: "rgba(124, 58, 237, 0.08)" },
           lineStyle: { color: "#7c3aed", width: 2 }
         },
@@ -377,7 +370,7 @@ function App() {
           name: "固定DCA回撤",
           type: "line",
           showSymbol: false,
-          data: drawdownSeries(result?.fixedContributions ?? []),
+          data: result?.fixedContributions.map((event) => event.drawdownPct) ?? [],
           lineStyle: { color: "#64748b", width: 2, type: "dashed" }
         }
       ]

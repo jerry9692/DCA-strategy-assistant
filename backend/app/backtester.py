@@ -59,6 +59,29 @@ def _risk_adjusted_ratios(events: list[ContributionEvent], risk_free_rate: float
     )
 
 
+def _with_cashflow_adjusted_drawdowns(events: list[ContributionEvent]) -> list[ContributionEvent]:
+    if not events:
+        return []
+
+    curve = 1.0
+    peak = 1.0
+    drawdowns = [0.0]
+    for previous, current in zip(events, events[1:]):
+        if previous.portfolioValue <= 0:
+            period_return = 0.0
+        else:
+            value_before_contribution = current.portfolioValue - current.shares * current.price
+            period_return = value_before_contribution / previous.portfolioValue - 1
+        curve *= 1 + period_return
+        peak = max(peak, curve)
+        drawdowns.append((curve / peak - 1) * 100 if peak > 0 else 0.0)
+
+    return [
+        event.model_copy(update={"drawdownPct": round(drawdown, 2)})
+        for event, drawdown in zip(events, drawdowns)
+    ]
+
+
 def _money_weighted_annualized_return(events: list[ContributionEvent]) -> float | None:
     if len(events) < 2:
         return None
@@ -107,15 +130,9 @@ def _metrics(events: list[ContributionEvent], first_date: date, last_date: date)
             buyCount=0,
             avgContribution=0,
         )
-    values = [event.portfolioValue for event in events]
     total_invested = max(event.totalInvested for event in events)
     ending = events[-1].portfolioValue
-    peak = values[0]
-    max_drawdown = 0.0
-    for value in values:
-        peak = max(peak, value)
-        if peak > 0:
-            max_drawdown = min(max_drawdown, value / peak - 1)
+    max_drawdown = min(event.drawdownPct for event in events) / 100
     years = max((last_date - first_date).days / 365.25, 1 / 365.25)
     annualized = _money_weighted_annualized_return(events)
     if annualized is None:
@@ -183,6 +200,7 @@ class DcaBacktester:
                     reasons=[],
                 )
             )
+        events = _with_cashflow_adjusted_drawdowns(events)
         return events, _metrics(events, start, end)
 
     def _run_fixed(
@@ -220,6 +238,7 @@ class DcaBacktester:
                     reasons=[],
                 )
             )
+        events = _with_cashflow_adjusted_drawdowns(events)
         return events, _metrics(events, start, end)
 
     def run_lump_sum(
@@ -266,4 +285,5 @@ class DcaBacktester:
                     reasons=[],
                 )
             )
+        events = _with_cashflow_adjusted_drawdowns(events)
         return events, _metrics(events, start, end)

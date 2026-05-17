@@ -96,6 +96,7 @@ def _chart_contributions(events) -> list[dict]:
             "portfolioValue": event.portfolioValue,
             "multiplier": event.multiplier,
             "score": event.score,
+            "drawdownPct": event.drawdownPct,
         }
         for event in events
     ]
