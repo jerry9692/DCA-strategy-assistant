@@ -13,6 +13,7 @@ SUPPORTED_ASSETS = {
 
 Frequency = Literal["weekly", "monthly"]
 MarketTone = Literal["up", "down", "neutral"]
+OptimizationObjective = Literal["robust_return", "max_return", "min_drawdown"]
 
 
 class Asset(BaseModel):
@@ -143,3 +144,52 @@ class RecommendationRequest(BaseModel):
     symbol: str = "QQQ"
     config: StrategyConfig = Field(default_factory=StrategyConfig)
     asOf: date | None = None
+
+
+class OptimizationRequest(BaseModel):
+    symbol: str = "QQQ"
+    config: StrategyConfig = Field(default_factory=StrategyConfig)
+    startDate: date | None = None
+    endDate: date | None = None
+    objective: OptimizationObjective = "robust_return"
+
+
+class OptimizationScenarioMetrics(BaseModel):
+    id: str
+    name: str
+    startDate: date
+    endDate: date
+    metrics: BacktestMetrics
+    fixedMetrics: BacktestMetrics
+    score: float
+
+
+class OptimizationCandidate(BaseModel):
+    rank: int
+    score: float
+    config: StrategyConfig
+    scenarios: list[OptimizationScenarioMetrics]
+    summary: BacktestMetrics
+
+
+class OptimizationScenarioResult(BaseModel):
+    id: str
+    name: str
+    startDate: date
+    endDate: date
+    baselineMetrics: BacktestMetrics
+    recommendedMetrics: BacktestMetrics
+    fixedMetrics: BacktestMetrics
+
+
+class OptimizationResult(BaseModel):
+    symbol: str
+    objective: OptimizationObjective
+    baselineConfig: StrategyConfig
+    recommendedConfig: StrategyConfig
+    baselineSummary: BacktestMetrics
+    recommendedSummary: BacktestMetrics
+    candidates: list[OptimizationCandidate]
+    scenarios: list[OptimizationScenarioResult]
+    searchedCount: int
+    skippedCount: int

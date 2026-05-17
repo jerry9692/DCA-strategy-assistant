@@ -14,11 +14,14 @@ from app.models import (
     BacktestResult,
     MarketState,
     PricePoint,
+    OptimizationRequest,
+    OptimizationResult,
     RecommendationRequest,
     SUPPORTED_ASSETS,
     StrategyConfig,
     StrategyComparison,
 )
+from app.optimizer import optimize_parameters
 from app.strategies import evaluate_prepared_strategy, evaluate_strategy, prepare_market
 from app.strategy_definitions import COMMON_PARAMETERS, STRATEGIES
 
@@ -62,6 +65,14 @@ def recommendation(request: RecommendationRequest):
         prices, data_source, cache_status = get_price_history(symbol, start, end)
         decision = evaluate_strategy(request.config.strategyType, request.config, prices)
         return {"symbol": symbol, "decision": decision, "dataSource": data_source, "cacheStatus": cache_status}
+    except Exception as exc:
+        _raise_api_error(exc)
+
+
+@app.post("/api/optimizations/run", response_model=OptimizationResult)
+def optimization(request: OptimizationRequest) -> OptimizationResult:
+    try:
+        return optimize_parameters(request)
     except Exception as exc:
         _raise_api_error(exc)
 

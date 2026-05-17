@@ -481,6 +481,123 @@ select {
   font-weight: 650;
 }
 
+.optimization-panel {
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #fbfdff;
+  padding: 14px;
+  margin-bottom: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.optimization-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.optimization-head .section-title {
+  margin-bottom: 4px;
+}
+
+.optimization-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(110px, 1fr));
+  gap: 10px;
+}
+
+.config-preview {
+  display: grid;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.config-preview span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.config-preview b {
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.scenario-table,
+.candidate-table {
+  display: grid;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.scenario-head,
+.scenario-row,
+.candidate-head,
+.candidate-row {
+  display: grid;
+  align-items: center;
+  gap: 8px;
+  min-width: 760px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+
+.scenario-head,
+.candidate-head {
+  background: #f1f5f9;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.scenario-row,
+.candidate-row {
+  border-top: 1px solid #e2e8f0;
+  color: #334155;
+}
+
+.scenario-head,
+.scenario-row {
+  grid-template-columns: minmax(150px, 1.3fr) repeat(4, minmax(90px, 1fr));
+}
+
+.candidate-head,
+.candidate-row {
+  grid-template-columns: 58px 76px 92px 92px minmax(260px, 1fr) 64px;
+}
+
+.candidate-row small {
+  color: #475569;
+  line-height: 1.45;
+}
+
+.optimizer-card {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.optimizer-card strong {
+  color: #334155;
+  font-size: 13px;
+}
+
+.optimizer-card span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.optimizer-card .secondary-action {
+  justify-content: center;
+}
+
 .chart-block {
   border-top: 1px solid #e2e8f0;
   padding-top: 14px;
@@ -635,8 +752,12 @@ input[type="range"] {
 .app-shell[data-theme="dark"] .secondary-action,
 .app-shell[data-theme="dark"] .reason-toggle,
 .app-shell[data-theme="dark"] .fixed-metrics,
+.app-shell[data-theme="dark"] .optimization-panel,
+.app-shell[data-theme="dark"] .config-preview,
 .app-shell[data-theme="dark"] .market-state,
 .app-shell[data-theme="dark"] .comparison-head,
+.app-shell[data-theme="dark"] .scenario-head,
+.app-shell[data-theme="dark"] .candidate-head,
 .app-shell[data-theme="dark"] .fatal-error {
   background: #111827;
   border-color: #243244;
@@ -665,6 +786,8 @@ input[type="range"] {
 .app-shell[data-theme="dark"] .crisis-strip strong,
 .app-shell[data-theme="dark"] .showdown-picker strong,
 .app-shell[data-theme="dark"] .fixed-metrics span,
+.app-shell[data-theme="dark"] .optimizer-card strong,
+.app-shell[data-theme="dark"] .config-preview b,
 .app-shell[data-theme="dark"] label,
 .app-shell[data-theme="dark"] .compare-choice {
   color: #cbd5e1;
@@ -678,10 +801,19 @@ input[type="range"] {
 .app-shell[data-theme="dark"] .metric span,
 .app-shell[data-theme="dark"] .fixed-metrics,
 .app-shell[data-theme="dark"] .fixed-metrics b,
+.app-shell[data-theme="dark"] .config-preview span,
+.app-shell[data-theme="dark"] .optimizer-card span,
 .app-shell[data-theme="dark"] .signals div,
 .app-shell[data-theme="dark"] .comparison-row,
 .app-shell[data-theme="dark"] .comparison-row b,
 .app-shell[data-theme="dark"] .comparison-head,
+.app-shell[data-theme="dark"] .scenario-head,
+.app-shell[data-theme="dark"] .scenario-row,
+.app-shell[data-theme="dark"] .scenario-row b,
+.app-shell[data-theme="dark"] .candidate-head,
+.app-shell[data-theme="dark"] .candidate-row,
+.app-shell[data-theme="dark"] .candidate-row b,
+.app-shell[data-theme="dark"] .candidate-row small,
 .app-shell[data-theme="dark"] .market-state,
 .app-shell[data-theme="dark"] .market-state b {
   color: #94a3b8;
@@ -717,8 +849,11 @@ input[type="range"] {
 .app-shell[data-theme="dark"] .recommendation,
 .app-shell[data-theme="dark"] .metric,
 .app-shell[data-theme="dark"] .showdown-picker,
+.app-shell[data-theme="dark"] .optimizer-card,
 .app-shell[data-theme="dark"] .signals,
-.app-shell[data-theme="dark"] .comparison-row {
+.app-shell[data-theme="dark"] .comparison-row,
+.app-shell[data-theme="dark"] .scenario-row,
+.app-shell[data-theme="dark"] .candidate-row {
   border-color: #243244;
 }
 
@@ -735,6 +870,10 @@ input[type="range"] {
 
   .metrics-grid {
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  .optimization-summary {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .crisis-strip {
@@ -790,6 +929,14 @@ input[type="range"] {
 
   .metrics-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .optimization-head {
+    flex-direction: column;
+  }
+
+  .optimization-summary {
+    grid-template-columns: 1fr;
   }
 
   .market-state {

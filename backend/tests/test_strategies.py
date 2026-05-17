@@ -3,7 +3,8 @@ import pytest
 
 from app.backtester import DcaBacktester, _next_trading_day, _schedule
 from app.main import _cached_fixed_backtest, _chart_prices, _market_state
-from app.models import StrategyConfig
+from app.models import BacktestMetrics, OptimizationRequest, StrategyConfig
+from app.optimizer import _robust_score, optimize_parameters
 from app.strategies import evaluate_prepared_strategy, evaluate_strategy
 
 
@@ -278,3 +279,126 @@ def test_cached_fixed_backtest_reuses_same_parameter_result(monkeypatch):
 
     assert calls == 1
     _cached_fixed_backtest.cache_clear()
+
+
+def long_fixture_prices(start="2019-01-01", end="2024-12-31"):
+    index = pd.bdate_range(start, end)
+    values = [100 + i * 0.04 + (i % 90) * 0.03 for i in range(len(index))]
+    return pd.DataFrame({"close": values}, index=index)
+
+
+def test_optimizer_returns_candidates_for_each_tunable_strategy(monkeypatch):
+    prices = long_fixture_prices()
+
+    def fake_price_history(symbol, start, end):
+        return prices, "fixture", "cache-hit"
+
+    monkeypatch.setattr("app.optimizer.get_price_history", fake_price_history)
+    monkeypatch.setattr("app.optimizer.MAX_CANDIDATES", 16)
+
+    for strategy_type in [
+        "drawdown_boost",
+        "ma_deviation",
+        "historical_percentile",
+        "rsi_sentiment",
+        "grid_weighted",
+        "composite_score",
+    ]:
+        result = optimize_parameters(
+            OptimizationRequest(
+                symbol="QQQ",
+                startDate=pd.Timestamp("2022-01-03").date(),
+                endDate=pd.Timestamp("2024-12-31").date(),
+                config=StrategyConfig(strategyType=strategy_type, baseAmount=100, frequency="weekly"),
+            )
+        )
+        assert result.recommendedConfig.strategyType == strategy_type
+        assert result.candidates
+        assert result.scenarios
+        assert result.searchedCount <= 16
+
+
+def test_optimizer_rejects_fixed_dca():
+    with pytest.raises(ValueError, match="固定定投没有可调参数"):
+        optimize_parameters(OptimizationRequest(config=StrategyConfig(strategyType="fixed_dca")))
+
+
+def test_optimizer_keeps_current_config_as_baseline(monkeypatch):
+    prices = long_fixture_prices()
+
+    def fake_price_history(symbol, start, end):
+        return prices, "fixture", "cache-hit"
+
+    config = StrategyConfig(
+        strategyType="ma_deviation",
+        baseAmount=100,
+        frequency="weekly",
+        minMultiplier=0.4,
+        maxMultiplier=2.5,
+        params={"maWindow": 150, "deviationPct": 12},
+    )
+    monkeypatch.setattr("app.optimizer.get_price_history", fake_price_history)
+    monkeypatch.setattr("app.optimizer.MAX_CANDIDATES", 8)
+
+    result = optimize_parameters(
+        OptimizationRequest(
+            symbol="QQQ",
+            startDate=pd.Timestamp("2022-01-03").date(),
+            endDate=pd.Timestamp("2024-12-31").date(),
+            config=config,
+        )
+    )
+
+    assert result.baselineConfig == config
+    assert result.baselineSummary.buyCount > 0
+
+
+def test_robust_score_penalizes_single_scenario_blowup():
+    steady = BacktestMetrics(
+        totalInvested=1000,
+        endingValue=1200,
+        returnPct=20,
+        annualizedReturnPct=10,
+        maxDrawdownPct=-8,
+        buyCount=10,
+        avgContribution=100,
+        versusFixedPct=1,
+        sharpeRatio=1,
+    )
+    blowup = BacktestMetrics(
+        totalInvested=1000,
+        endingValue=700,
+        returnPct=-30,
+        annualizedReturnPct=-20,
+        maxDrawdownPct=-55,
+        buyCount=10,
+        avgContribution=100,
+        versusFixedPct=-20,
+        sharpeRatio=-1,
+    )
+
+    stable_score = _robust_score([10, 9, 8], [steady, steady, steady])
+    fragile_score = _robust_score([30, 28, -20], [steady, steady, blowup])
+
+    assert stable_score > fragile_score
+
+
+def test_optimizer_counts_unavailable_scenarios(monkeypatch):
+    prices = long_fixture_prices("2022-01-01", "2024-12-31")
+
+    def fake_price_history(symbol, start, end):
+        return prices, "fixture", "cache-hit"
+
+    monkeypatch.setattr("app.optimizer.get_price_history", fake_price_history)
+    monkeypatch.setattr("app.optimizer.MAX_CANDIDATES", 4)
+
+    result = optimize_parameters(
+        OptimizationRequest(
+            symbol="QQQ",
+            startDate=pd.Timestamp("2024-01-01").date(),
+            endDate=pd.Timestamp("2024-12-31").date(),
+            config=StrategyConfig(strategyType="historical_percentile", baseAmount=100, frequency="weekly"),
+        )
+    )
+
+    assert result.skippedCount > 0

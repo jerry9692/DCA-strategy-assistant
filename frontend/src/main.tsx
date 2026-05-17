@@ -1,7 +1,7 @@
 import React, { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import ReactECharts from "echarts-for-react";
-import { Activity, BarChart3, Download, Moon, RefreshCcw, SlidersHorizontal, Sun } from "lucide-react";
+import { Activity, BarChart3, Download, Moon, RefreshCcw, SlidersHorizontal, Sparkles, Sun } from "lucide-react";
 import "./styles.css";
 
 type Asset = { symbol: string; name: string; currency: string };
@@ -63,6 +63,14 @@ type StrategyComparison = {
   metrics: Metrics;
   contributions: Contribution[];
 };
+type StrategyConfigPayload = {
+  strategyType: string;
+  baseAmount: number;
+  frequency: "weekly" | "monthly";
+  minMultiplier: number;
+  maxMultiplier: number;
+  params: Record<string, number | string | boolean>;
+};
 type Backtest = {
   symbol: string;
   strategyType: string;
@@ -84,6 +92,43 @@ type RecommendationResponse = {
   decision: Decision;
   dataSource: string;
   cacheStatus: string;
+};
+type OptimizationScenarioMetric = {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  metrics: Metrics;
+  fixedMetrics: Metrics;
+  score: number;
+};
+type OptimizationCandidate = {
+  rank: number;
+  score: number;
+  config: StrategyConfigPayload;
+  scenarios: OptimizationScenarioMetric[];
+  summary: Metrics;
+};
+type OptimizationScenarioResult = {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  baselineMetrics: Metrics;
+  recommendedMetrics: Metrics;
+  fixedMetrics: Metrics;
+};
+type OptimizationResult = {
+  symbol: string;
+  objective: "robust_return" | "max_return" | "min_drawdown";
+  baselineConfig: StrategyConfigPayload;
+  recommendedConfig: StrategyConfigPayload;
+  baselineSummary: Metrics;
+  recommendedSummary: Metrics;
+  candidates: OptimizationCandidate[];
+  scenarios: OptimizationScenarioResult[];
+  searchedCount: number;
+  skippedCount: number;
 };
 type UiError = { message: string; code?: string; retryable: boolean };
 type PresetMode = "conservative" | "balanced" | "aggressive" | "custom";
@@ -219,6 +264,15 @@ function exportBacktestCsv(result: Backtest | null) {
   downloadText(`dca-backtest-${result.symbol}-${result.strategyType}-${result.recommendation.date}.csv`, csv);
 }
 
+function describeConfig(config: StrategyConfigPayload) {
+  const items = [
+    `最低 ${config.minMultiplier}x`,
+    `最高 ${config.maxMultiplier}x`,
+    ...Object.entries(config.params).map(([key, value]) => `${key}: ${String(value)}`)
+  ];
+  return items.join(" · ");
+}
+
 function metric(value: number | null | undefined, suffix = "") {
   if (value === null || value === undefined || Number.isNaN(value)) return "-";
   return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}${suffix}`;
@@ -307,8 +361,10 @@ function App() {
   const [result, setResult] = useState<Backtest | null>(null);
   const [quickDecision, setQuickDecision] = useState<Decision | null>(null);
   const [quickData, setQuickData] = useState<{ dataSource: string; cacheStatus: string } | null>(null);
+  const [optimization, setOptimization] = useState<OptimizationResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [recommendationLoading, setRecommendationLoading] = useState(false);
+  const [optimizationLoading, setOptimizationLoading] = useState(false);
   const [error, setError] = useState<UiError | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [showAllReasons, setShowAllReasons] = useState(false);
@@ -320,7 +376,7 @@ function App() {
 
   const selectedStrategy = useMemo(() => strategies.find((item) => item.type === strategyType), [strategies, strategyType]);
   const config = useMemo(
-    () => ({
+    (): StrategyConfigPayload => ({
       strategyType,
       baseAmount,
       frequency,
@@ -330,6 +386,10 @@ function App() {
     }),
     [strategyType, baseAmount, frequency, minMultiplier, maxMultiplier, params]
   );
+
+  useEffect(() => {
+    setOptimization(null);
+  }, [symbol, strategyType, startDate, endDate]);
 
   useEffect(() => {
     Promise.all([fetch(`${api}/api/assets`).then(readJson<Asset[]>), fetch(`${api}/api/strategies`).then(readJson<{ strategies: StrategyDef[] }>)])
@@ -461,6 +521,34 @@ function App() {
       })
       .catch((err) => setError(toUiError(err)))
       .finally(() => setRecommendationLoading(false));
+  };
+
+  const runOptimization = () => {
+    if (!selectedStrategy) return;
+    setOptimizationLoading(true);
+    setError(null);
+    fetch(`${api}/api/optimizations/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        symbol,
+        startDate,
+        endDate,
+        config,
+        objective: "robust_return"
+      })
+    })
+      .then(readJson<OptimizationResult>)
+      .then((data) => setOptimization(data))
+      .catch((err) => setError(toUiError(err)))
+      .finally(() => setOptimizationLoading(false));
+  };
+
+  const applyOptimizedConfig = (optimizedConfig: StrategyConfigPayload) => {
+    setPresetMode("custom");
+    setMinMultiplier(optimizedConfig.minMultiplier);
+    setMaxMultiplier(optimizedConfig.maxMultiplier);
+    setParams(optimizedConfig.params);
   };
 
   const priceOption = useMemo(() => {
@@ -834,6 +922,74 @@ function App() {
             <b>回撤 {metric(result?.lumpSumMetrics?.maxDrawdownPct, "%")}</b>
           </div>
 
+          {optimization && (
+            <div className="optimization-panel">
+              <div className="optimization-head">
+                <div>
+                  <div className="section-title">
+                    <Sparkles size={17} />
+                    稳健参数建议
+                  </div>
+                  <p className="muted">这是基于历史多场景验证的稳健建议，不代表未来保证最优。</p>
+                </div>
+                <button type="button" className="secondary-action" onClick={() => applyOptimizedConfig(optimization.recommendedConfig)}>
+                  应用推荐参数
+                </button>
+              </div>
+              <div className="optimization-summary">
+                <Metric label="推荐稳健分" value={metric(optimization.candidates[0]?.score)} />
+                <Metric label="平均年化提升" value={metric(optimization.recommendedSummary.annualizedReturnPct - optimization.baselineSummary.annualizedReturnPct, "%")} />
+                <Metric label="平均回撤变化" value={metric(optimization.recommendedSummary.maxDrawdownPct - optimization.baselineSummary.maxDrawdownPct, "%")} />
+                <Metric label="搜索组合" value={`${optimization.searchedCount}`} />
+              </div>
+              <div className="config-preview">
+                <span>推荐参数</span>
+                <b>{describeConfig(optimization.recommendedConfig)}</b>
+              </div>
+              <div className="scenario-table">
+                <div className="scenario-head">
+                  <span>验证场景</span>
+                  <span>推荐年化</span>
+                  <span>当前年化</span>
+                  <span>推荐回撤</span>
+                  <span>相对固定</span>
+                </div>
+                {optimization.scenarios.map((scenario) => (
+                  <div className="scenario-row" key={scenario.id}>
+                    <span>{scenario.name}</span>
+                    <b>{metric(scenario.recommendedMetrics.annualizedReturnPct, "%")}</b>
+                    <b>{metric(scenario.baselineMetrics.annualizedReturnPct, "%")}</b>
+                    <b>{metric(scenario.recommendedMetrics.maxDrawdownPct, "%")}</b>
+                    <b>{metric(scenario.recommendedMetrics.versusFixedPct, "%")}</b>
+                  </div>
+                ))}
+              </div>
+              <div className="candidate-table">
+                <div className="candidate-head">
+                  <span>排名</span>
+                  <span>稳健分</span>
+                  <span>平均年化</span>
+                  <span>平均回撤</span>
+                  <span>参数</span>
+                  <span>操作</span>
+                </div>
+                {optimization.candidates.map((candidate) => (
+                  <div className="candidate-row" key={`${candidate.rank}-${candidate.score}`}>
+                    <span>#{candidate.rank}</span>
+                    <b>{metric(candidate.score)}</b>
+                    <b>{metric(candidate.summary.annualizedReturnPct, "%")}</b>
+                    <b>{metric(candidate.summary.maxDrawdownPct, "%")}</b>
+                    <small>{describeConfig(candidate.config)}</small>
+                    <button type="button" className="reason-toggle" onClick={() => applyOptimizedConfig(candidate.config)}>
+                      应用
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {optimization.skippedCount > 0 && <p className="muted">已跳过 {optimization.skippedCount} 个超出上限或数据不足的场景/候选。</p>}
+            </div>
+          )}
+
           <div className="chart-block">
             <div className="section-title">
               <BarChart3 size={17} />
@@ -909,6 +1065,14 @@ function App() {
               onChange={(value) => { setParams((current) => ({ ...current, [param.key]: value })); markCustom(); }}
             />
           ))}
+          <div className="optimizer-card">
+            <strong>稳健参数建议</strong>
+            <span>跨多个市场阶段搜索更稳定的参数，不把单段历史冠军当作未来答案。</span>
+            <button type="button" className="secondary-action" onClick={runOptimization} disabled={optimizationLoading || loading || !selectedStrategy || strategyType === "fixed_dca"}>
+              <Sparkles size={15} />
+              {strategyType === "fixed_dca" ? "固定定投无需调优" : optimizationLoading ? "正在搜索参数组合" : "自动调优"}
+            </button>
+          </div>
           <div className="signals">
             <strong>当前信号</strong>
             {decision &&
@@ -921,7 +1085,7 @@ function App() {
                   </div>
                 ))}
           </div>
-          {(loading || recommendationLoading) && <p className="muted">正在刷新策略结果...</p>}
+          {(loading || recommendationLoading || optimizationLoading) && <p className="muted">{optimizationLoading ? "正在搜索稳健参数..." : "正在刷新策略结果..."}</p>}
           <p className="muted">数据：{dataSource} · {cacheStatus}</p>
         </aside>
       </section>

@@ -29,6 +29,7 @@ Each strategy returns a recommended amount, multiplier, score, raw signal values
 - Apply conservative, balanced, or aggressive parameter presets saved in localStorage.
 - Replay preset crisis scenarios such as the 2020 selloff and 2022 rate-hike drawdown.
 - Switch between light and dark themes, and export backtest contribution records to CSV.
+- Generate robust parameter suggestions by validating candidate settings across multiple market regimes.
 
 ## Tech Stack
 
@@ -66,6 +67,7 @@ PYTHONPATH=backend pytest backend/tests -q
 | GET | `/api/assets` | List supported assets |
 | GET | `/api/strategies` | Strategy definitions with default parameters |
 | POST | `/api/recommendations/run` | Get a single investment recommendation for a given date |
+| POST | `/api/optimizations/run` | Search robust parameters for the current strategy across multiple scenarios |
 | POST | `/api/backtests/run` | Run a full historical backtest with metrics and chart data |
 
 ## Backtest Output
@@ -79,6 +81,12 @@ Each backtest returns:
 - **Market state**: 50/200-day moving-average trend label and summary
 - **Price series**: daily close prices for charting
 - **Recommendation**: the strategy's current signal
+
+## Optimization Output
+
+Parameter optimization returns a robust suggestion, not a future guarantee. It evaluates the current strategy's candidate parameters across the selected date range plus preset stress scenarios, then ranks candidates by a stability-aware score that balances annualized return, Sharpe ratio, drawdown, and fixed-DCA underperformance.
+
+The response includes the baseline config, recommended config, Top 10 candidates, scenario-by-scenario metrics, searched count, and skipped count.
 
 ## Project Structure
 
@@ -112,6 +120,7 @@ DCA-strategy-assistant/
 - The grid strategy is "grid-weighted DCA" — it only adjusts buy amounts, no sell signals.
 - Backtesting uses a simple IRR bisection method for annualized return; no dividend reinvestment yet.
 - Fee and slippage rates are supported in the engine but not yet exposed in strategy parameters.
+- Parameter optimization is historical multi-scenario validation only. It does not predict which parameters will be best in future markets.
 
 ## License
 
