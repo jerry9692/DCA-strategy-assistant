@@ -250,6 +250,39 @@ def test_chart_contributions_account_drawdown_reflects_cash_reserve():
     assert fixed[1]["accountDrawdownPct"] == -10
 
 
+def test_chart_contributions_account_drawdown_does_not_assume_borrowing():
+    events = [
+        ContributionEvent(
+            date="2020-01-01",
+            price=100,
+            amount=150,
+            shares=1.5,
+            totalShares=1.5,
+            totalInvested=150,
+            portfolioValue=150,
+            multiplier=1.5,
+            score=1,
+            reasons=[],
+        ),
+        ContributionEvent(
+            date="2020-01-08",
+            price=90,
+            amount=150,
+            shares=1.66666667,
+            totalShares=3.16666667,
+            totalInvested=300,
+            portfolioValue=285,
+            multiplier=1.5,
+            score=1,
+            reasons=[],
+        ),
+    ]
+
+    chart = _chart_contributions(events, scheduled_budget=100)
+
+    assert chart[1]["accountDrawdownPct"] == -10
+
+
 def test_signal_reasons_do_not_render_nan_for_short_windows():
     prepared = pd.DataFrame(
         {

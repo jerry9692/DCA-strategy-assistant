@@ -181,9 +181,13 @@ def _scenarios(start: date, end: date) -> list[Scenario]:
     recent_start = max(start, end - timedelta(days=365))
     return [
         Scenario("selected", "当前选择区间", start, end),
+        Scenario("brexit_2016", "2016 Brexit 冲击", date(2016, 6, 23), date(2016, 7, 15)),
+        Scenario("q4_selloff_2018", "2018 Q4 紧缩杀跌", date(2018, 10, 3), date(2018, 12, 24)),
         Scenario("covid_2020", "2020 熔断冲击", date(2020, 2, 18), date(2020, 5, 29)),
+        Scenario("liquidity_rally_2021", "2021 流动性牛市", date(2021, 1, 4), date(2021, 12, 31)),
         Scenario("rate_hike_2022", "2022 加息长熊", date(2022, 1, 3), date(2022, 12, 30)),
         Scenario("ai_rebound_2023", "2023 科技股修复", date(2023, 1, 3), date(2023, 8, 31)),
+        Scenario("ai_momentum_2024", "2024 AI 集中行情", date(2023, 10, 27), date(2024, 7, 10)),
         Scenario("recent_12m", "最近 12 个月", recent_start, end),
     ]
 

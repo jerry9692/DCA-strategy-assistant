@@ -772,18 +772,17 @@ function App() {
   };
 
   const priceOption = useMemo(() => {
-    const dates = result?.priceSeries.map((p) => p.date) ?? [];
     return {
       tooltip: { trigger: "axis" },
       grid: { left: 42, right: 18, top: 24, bottom: 34 },
-      xAxis: { type: "category", data: dates, axisLabel: { color: "#64748b" } },
+      xAxis: { type: "time", axisLabel: { color: "#64748b" } },
       yAxis: { type: "value", scale: true, axisLabel: { color: "#64748b" } },
       series: [
         {
           name: "价格",
           type: "line",
           showSymbol: false,
-          data: result?.priceSeries.map((p) => p.close) ?? [],
+          data: result?.priceSeries.map((point) => [point.date, point.close]) ?? [],
           lineStyle: { color: "#2563eb", width: 2 }
         },
         {
@@ -1003,9 +1002,9 @@ function App() {
         <label>
           频率
           <select value={frequency} onChange={(event) => setFrequency(event.target.value as Frequency)}>
-            <option value="weekly">每周</option>
-            <option value="biweekly">双周</option>
-            <option value="monthly">每月</option>
+            <option value="weekly">每周（周一）</option>
+            <option value="biweekly">双周（周一）</option>
+            <option value="monthly">每月（月初）</option>
           </select>
         </label>
         <label>

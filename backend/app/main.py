@@ -163,7 +163,7 @@ def _account_drawdowns(events, scheduled_budget: float | None = None) -> list[fl
             previous_cash = 0.0
         else:
             previous_planned_budget = scheduled_budget * index
-            previous_cash = previous_planned_budget - previous.totalInvested
+            previous_cash = max(0.0, previous_planned_budget - previous.totalInvested)
         previous_account_value = previous.portfolioValue + previous_cash
         if previous_account_value <= 0:
             period_return = 0.0
