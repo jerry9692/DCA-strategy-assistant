@@ -39,8 +39,9 @@ def _risk_adjusted_ratios(events: list[ContributionEvent], risk_free_rate: float
     for previous, current in zip(events, events[1:]):
         if previous.portfolioValue <= 0:
             continue
-        value_before_contribution = current.portfolioValue - current.shares * current.price
-        returns.append(value_before_contribution / previous.portfolioValue - 1)
+        current_purchase_value = current.shares * current.price
+        portfolio_value_before_current_purchase = current.portfolioValue - current_purchase_value
+        returns.append(portfolio_value_before_current_purchase / previous.portfolioValue - 1)
     if len(returns) < 2:
         return None, None
 
@@ -75,8 +76,9 @@ def _with_cashflow_adjusted_drawdowns(events: list[ContributionEvent]) -> list[C
         if previous.portfolioValue <= 0:
             period_return = 0.0
         else:
-            value_before_contribution = current.portfolioValue - current.shares * current.price
-            period_return = value_before_contribution / previous.portfolioValue - 1
+            current_purchase_value = current.shares * current.price
+            portfolio_value_before_current_purchase = current.portfolioValue - current_purchase_value
+            period_return = portfolio_value_before_current_purchase / previous.portfolioValue - 1
         curve *= 1 + period_return
         peak = max(peak, curve)
         drawdowns.append((curve / peak - 1) * 100 if peak > 0 else 0.0)

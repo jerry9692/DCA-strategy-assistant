@@ -70,7 +70,7 @@ class ContributionEvent(BaseModel):
     date: str
     price: float
     amount: float
-    shares: float
+    shares: float = Field(description="Shares bought in this contribution event, not cumulative shares.")
     totalShares: float
     totalInvested: float
     portfolioValue: float

@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 import yfinance as yf
+from yfinance.exceptions import YFRateLimitError
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 from app.models import SUPPORTED_ASSETS
@@ -86,12 +87,26 @@ def _download(symbol: str, start: date, end: date) -> pd.DataFrame:
     )
     if data.empty:
         return pd.DataFrame(columns=["close"])
-    close = data["Close"]
-    if isinstance(close, pd.DataFrame):
-        close = close.iloc[:, 0]
+    close = _close_series(data)
     frame = close.rename("close").to_frame()
     frame.index = pd.to_datetime(frame.index).tz_localize(None)
     return frame.dropna().sort_index()
+
+
+def _close_series(data: pd.DataFrame) -> pd.Series:
+    if isinstance(data.columns, pd.MultiIndex):
+        for level in range(data.columns.nlevels):
+            if "Close" in data.columns.get_level_values(level):
+                close = data.xs("Close", axis=1, level=level)
+                if isinstance(close, pd.DataFrame):
+                    return close.iloc[:, 0]
+                return close
+        raise PriceDataError("Yahoo Finance response did not include close prices.", code="missing_close", retryable=True)
+
+    close = data["Close"]
+    if isinstance(close, pd.DataFrame):
+        return close.iloc[:, 0]
+    return close
 
 
 def _cache_covers(frame: pd.DataFrame, start: date, end: date) -> bool:
@@ -101,6 +116,14 @@ def _cache_covers(frame: pd.DataFrame, start: date, end: date) -> bool:
     last = frame.index.max().date()
     # Allow small gaps for weekends, market holidays, and delayed daily bars.
     return first <= start + timedelta(days=7) and last >= end - timedelta(days=7)
+
+
+def _cache_range_text(frame: pd.DataFrame) -> str:
+    if frame.empty:
+        return "本地无可用缓存"
+    first = frame.index.min().date().isoformat()
+    last = frame.index.max().date().isoformat()
+    return f"本地缓存范围为 {first} 至 {last}"
 
 
 def get_price_history(symbol: str, start: date | None = None, end: date | None = None) -> tuple[pd.DataFrame, str, str]:
@@ -117,17 +140,33 @@ def get_price_history(symbol: str, start: date | None = None, end: date | None =
         if not downloaded.empty:
             _save_prices(normalized, downloaded)
             return downloaded, "Yahoo Finance", "fresh"
-    except Exception as exc:
         if not cached.empty:
-            return cached, "Yahoo Finance cache", "cache-fallback"
+            raise PriceDataError(
+                f"Yahoo Finance returned no new price data, and {_cache_range_text(cached)}，无法覆盖所选区间。",
+                code="stale_cache",
+                retryable=True,
+            )
+    except Exception as exc:
+        if isinstance(exc, PriceDataError):
+            raise
+        if isinstance(exc, YFRateLimitError):
+            raise PriceDataError(
+                f"Yahoo Finance 当前限流，且 {_cache_range_text(cached)}，无法覆盖所选区间。请稍后重试，或把结束日期调到缓存范围内。",
+                code="rate_limited",
+                retryable=True,
+            ) from exc
+        if not cached.empty:
+            raise PriceDataError(
+                f"Yahoo Finance 数据获取失败，且 {_cache_range_text(cached)}，无法覆盖所选区间。请稍后重试，或把结束日期调到缓存范围内。",
+                code="stale_cache",
+                retryable=True,
+            ) from exc
         raise PriceDataError(
             "Unable to fetch Yahoo Finance data and no local cache is available. Check the network connection and retry.",
             code="network_unavailable",
             retryable=True,
         ) from exc
 
-    if not cached.empty:
-        return cached, "Yahoo Finance cache", "cache-only"
     raise PriceDataError(
         f"Yahoo Finance returned no price data for {normalized}.",
         code="no_price_data",
