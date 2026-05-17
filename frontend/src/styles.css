@@ -42,10 +42,7 @@ select {
 }
 
 .topbar-actions,
-.view-tabs,
-.scenario-buttons,
-.signal-head,
-.signal-meta {
+.scenario-buttons {
   display: flex;
 }
 
@@ -54,16 +51,6 @@ select {
   gap: 10px;
 }
 
-.view-tabs {
-  align-items: center;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid #d9e0ea;
-  border-radius: 8px;
-  background: #fff;
-}
-
-.view-tabs button,
 .scenario-buttons button {
   border: 0;
   border-radius: 7px;
@@ -74,7 +61,6 @@ select {
   font-weight: 700;
 }
 
-.view-tabs button.active,
 .scenario-buttons button.active {
   color: #0f766e;
   background: #f0fdfa;
@@ -141,117 +127,12 @@ h2 {
   flex-wrap: wrap;
 }
 
-.today-dashboard,
 .crisis-strip {
   padding: 14px;
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   margin-bottom: 16px;
-}
-
-.signal-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(220px, 1fr));
-  gap: 12px;
-}
-
-.signal-card {
-  min-height: 260px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 14px;
-  display: grid;
-  align-content: start;
-  gap: 12px;
-  background: #fff;
-}
-
-.signal-head {
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.signal-head div {
-  display: grid;
-  gap: 3px;
-}
-
-.signal-head strong {
-  color: #0f172a;
-  font-size: 20px;
-}
-
-.signal-head span,
-.signal-card p,
-.signal-error {
-  color: #64748b;
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.state-dot {
-  border-radius: 999px;
-  padding: 6px 9px;
-  background: #f8fafc;
-  color: #475569;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.state-dot.up {
-  background: #dcfce7;
-  color: #047857;
-}
-
-.state-dot.down {
-  background: #ffe4e6;
-  color: #be123c;
-}
-
-.signal-amount {
-  display: grid;
-  gap: 2px;
-}
-
-.signal-amount span {
-  color: #64748b;
-  font-size: 12px;
-}
-
-.signal-amount strong {
-  color: #0f172a;
-  font-size: 34px;
-}
-
-.signal-meta {
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.signal-meta span {
-  border: 1px solid #e2e8f0;
-  border-radius: 7px;
-  padding: 6px 8px;
-  color: #475569;
-  font-size: 12px;
-}
-
-.reason-row.compact {
-  margin: 0;
-}
-
-.loading-card {
-  place-items: center;
-  color: #1d4ed8;
-  font-weight: 700;
-}
-
-.loading-card svg {
-  animation: spin 0.9s linear infinite;
 }
 
 .crisis-strip {
@@ -472,6 +353,12 @@ select {
   padding: 8px 10px;
   cursor: pointer;
   font-weight: 650;
+}
+
+.secondary-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .secondary-action:hover,
@@ -734,6 +621,107 @@ input[type="range"] {
   justify-self: start;
 }
 
+.app-shell[data-theme="dark"] {
+  color: #dbeafe;
+  background: #0b1220;
+}
+
+.app-shell[data-theme="dark"] .control-strip,
+.app-shell[data-theme="dark"] .crisis-strip,
+.app-shell[data-theme="dark"] .strategy-list,
+.app-shell[data-theme="dark"] .param-panel,
+.app-shell[data-theme="dark"] .center-panel,
+.app-shell[data-theme="dark"] .icon-button,
+.app-shell[data-theme="dark"] .secondary-action,
+.app-shell[data-theme="dark"] .reason-toggle,
+.app-shell[data-theme="dark"] .fixed-metrics,
+.app-shell[data-theme="dark"] .market-state,
+.app-shell[data-theme="dark"] .comparison-head,
+.app-shell[data-theme="dark"] .fatal-error {
+  background: #111827;
+  border-color: #243244;
+}
+
+.app-shell[data-theme="dark"] input,
+.app-shell[data-theme="dark"] select {
+  background: #0f172a;
+  border-color: #334155;
+  color: #e5e7eb;
+}
+
+.app-shell[data-theme="dark"] h2,
+.app-shell[data-theme="dark"] .strategy strong,
+.app-shell[data-theme="dark"] .metric strong,
+.app-shell[data-theme="dark"] .signals b,
+.app-shell[data-theme="dark"] .comparison-row span {
+  color: #f8fafc;
+}
+
+.app-shell[data-theme="dark"] .section-title,
+.app-shell[data-theme="dark"] .icon-button,
+.app-shell[data-theme="dark"] .strategy,
+.app-shell[data-theme="dark"] .secondary-action,
+.app-shell[data-theme="dark"] .reason-toggle,
+.app-shell[data-theme="dark"] .crisis-strip strong,
+.app-shell[data-theme="dark"] .showdown-picker strong,
+.app-shell[data-theme="dark"] .fixed-metrics span,
+.app-shell[data-theme="dark"] label,
+.app-shell[data-theme="dark"] .compare-choice {
+  color: #cbd5e1;
+}
+
+.app-shell[data-theme="dark"] .eyebrow,
+.app-shell[data-theme="dark"] .muted,
+.app-shell[data-theme="dark"] .strategy span,
+.app-shell[data-theme="dark"] .showdown-picker > span,
+.app-shell[data-theme="dark"] .crisis-strip span,
+.app-shell[data-theme="dark"] .metric span,
+.app-shell[data-theme="dark"] .fixed-metrics,
+.app-shell[data-theme="dark"] .fixed-metrics b,
+.app-shell[data-theme="dark"] .signals div,
+.app-shell[data-theme="dark"] .comparison-row,
+.app-shell[data-theme="dark"] .comparison-row b,
+.app-shell[data-theme="dark"] .comparison-head,
+.app-shell[data-theme="dark"] .market-state,
+.app-shell[data-theme="dark"] .market-state b {
+  color: #94a3b8;
+}
+
+.app-shell[data-theme="dark"] .strategy:hover,
+.app-shell[data-theme="dark"] .strategy.active {
+  border-color: #2563eb;
+  background: #172554;
+}
+
+.app-shell[data-theme="dark"] .reason-row span {
+  background: #0f172a;
+  border-color: #243244;
+  color: #cbd5e1;
+}
+
+.app-shell[data-theme="dark"] .market-state.up,
+.app-shell[data-theme="dark"] .score-pill {
+  background: #052e2b;
+  border-color: #115e59;
+  color: #5eead4;
+}
+
+.app-shell[data-theme="dark"] .market-state.down,
+.app-shell[data-theme="dark"] .error {
+  background: #3f0d16;
+  border-color: #9f1239;
+  color: #fecdd3;
+}
+
+.app-shell[data-theme="dark"] .chart-block,
+.app-shell[data-theme="dark"] .recommendation,
+.app-shell[data-theme="dark"] .metric,
+.app-shell[data-theme="dark"] .showdown-picker,
+.app-shell[data-theme="dark"] .signals,
+.app-shell[data-theme="dark"] .comparison-row {
+  border-color: #243244;
+}
+
 @media (max-width: 1120px) {
   .workspace {
     flex-direction: column;
@@ -747,10 +735,6 @@ input[type="range"] {
 
   .metrics-grid {
     grid-template-columns: repeat(3, 1fr);
-  }
-
-  .signal-grid {
-    grid-template-columns: 1fr;
   }
 
   .crisis-strip {
@@ -800,13 +784,8 @@ input[type="range"] {
     gap: 12px;
   }
 
-  .topbar-actions,
-  .view-tabs {
+  .topbar-actions {
     width: 100%;
-  }
-
-  .view-tabs button {
-    flex: 1;
   }
 
   .metrics-grid {

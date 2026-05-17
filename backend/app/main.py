@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from functools import lru_cache
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,7 +18,6 @@ from app.models import (
     SUPPORTED_ASSETS,
     StrategyConfig,
     StrategyComparison,
-    TodaySignalsRequest,
 )
 from app.strategies import evaluate_prepared_strategy, evaluate_strategy, prepare_market
 from app.strategy_definitions import COMMON_PARAMETERS, STRATEGIES
@@ -75,6 +75,31 @@ def _fixed_config(config: StrategyConfig) -> StrategyConfig:
         maxMultiplier=1,
         params={},
     )
+
+
+@lru_cache(maxsize=128)
+def _cached_fixed_backtest(
+    symbol: str,
+    start: date,
+    end: date,
+    base_amount: float,
+    frequency: str,
+) -> tuple[tuple, BacktestMetrics]:
+    prices, _, _ = get_price_history(symbol, start, end)
+    events, metrics = DcaBacktester(prices).run(
+        "fixed_dca",
+        StrategyConfig(
+            strategyType="fixed_dca",
+            baseAmount=base_amount,
+            frequency=frequency,
+            minMultiplier=1,
+            maxMultiplier=1,
+            params={},
+        ),
+        start,
+        end,
+    )
+    return tuple(events), metrics
 
 
 def _chart_prices(prices, start: date, max_points: int = 360) -> list[dict]:
@@ -178,35 +203,6 @@ def _market_state(prices: pd.DataFrame, end: date) -> MarketState:
     )
 
 
-@app.post("/api/signals/today")
-def today_signals(request: TodaySignalsRequest) -> dict:
-    signals = []
-    end = request.asOf or date.today()
-    start = end - timedelta(days=365 * 10)
-    for symbol, name in SUPPORTED_ASSETS.items():
-        try:
-            prices, data_source, cache_status = get_price_history(symbol, start, end)
-            prepared = prepare_market(prices, request.config)
-            decision = evaluate_prepared_strategy(request.config.strategyType, request.config, prepared)
-            signals.append(
-                {
-                    "symbol": symbol,
-                    "name": name,
-                    "decision": decision.model_dump(),
-                    "marketState": _market_state(prices, end).model_dump(),
-                    "dataSource": data_source,
-                    "cacheStatus": cache_status,
-                }
-            )
-        except Exception as exc:
-            if isinstance(exc, PriceDataError):
-                message = exc.message
-            else:
-                message = str(exc)
-            signals.append({"symbol": symbol, "name": name, "error": message})
-    return {"signals": signals}
-
-
 @app.post("/api/backtests/run")
 def backtest(request: BacktestRequest) -> dict:
     try:
@@ -218,23 +214,42 @@ def backtest(request: BacktestRequest) -> dict:
 
         backtester = DcaBacktester(prices)
         prepared = prepare_market(prices, request.config)
+        fee_rate = float(request.config.params.get("feeRate", 0))
+        slippage_rate = float(request.config.params.get("slippageRate", 0))
         events, metrics = backtester.run(
             request.config.strategyType,
             request.config,
             start,
             end,
-            fee_rate=float(request.config.params.get("feeRate", 0)),
-            slippage_rate=float(request.config.params.get("slippageRate", 0)),
+            fee_rate=fee_rate,
+            slippage_rate=slippage_rate,
             prepared=prepared,
         )
-        fixed_events, fixed_metrics = backtester.run("fixed_dca", _fixed_config(request.config), start, end)
+        if fee_rate == 0 and slippage_rate == 0:
+            fixed_events_tuple, fixed_metrics = _cached_fixed_backtest(
+                symbol,
+                start,
+                end,
+                request.config.baseAmount,
+                request.config.frequency,
+            )
+            fixed_events = list(fixed_events_tuple)
+        else:
+            fixed_events, fixed_metrics = backtester.run(
+                "fixed_dca",
+                _fixed_config(request.config),
+                start,
+                end,
+                fee_rate=fee_rate,
+                slippage_rate=slippage_rate,
+            )
         lump_sum_events, lump_sum_metrics = backtester.run_lump_sum(
             fixed_metrics.totalInvested,
             start,
             end,
             request.config.frequency,
-            fee_rate=float(request.config.params.get("feeRate", 0)),
-            slippage_rate=float(request.config.params.get("slippageRate", 0)),
+            fee_rate=fee_rate,
+            slippage_rate=slippage_rate,
         )
         metrics = _with_comparison_metrics(metrics, fixed_metrics, lump_sum_metrics)
         recommendation = evaluate_prepared_strategy(request.config.strategyType, request.config, prepared)

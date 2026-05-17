@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 
 from app.backtester import DcaBacktester, _next_trading_day, _schedule
-from app.main import _chart_prices, _market_state
+from app.main import _cached_fixed_backtest, _chart_prices, _market_state
 from app.models import StrategyConfig
 from app.strategies import evaluate_prepared_strategy, evaluate_strategy
 
@@ -257,3 +257,24 @@ def test_market_state_detects_uptrend():
     assert state.tone == "up"
     assert state.sma50 is not None
     assert state.sma200 is not None
+
+
+def test_cached_fixed_backtest_reuses_same_parameter_result(monkeypatch):
+    calls = 0
+    prices = fixture_prices([100 + i for i in range(30)])
+
+    def fake_price_history(symbol, start, end):
+        nonlocal calls
+        calls += 1
+        return prices, "fixture", "cache-hit"
+
+    monkeypatch.setattr("app.main.get_price_history", fake_price_history)
+    _cached_fixed_backtest.cache_clear()
+    start = pd.Timestamp("2020-01-01").date()
+    end = pd.Timestamp("2020-01-31").date()
+
+    _cached_fixed_backtest("QQQ", start, end, 100, "weekly")
+    _cached_fixed_backtest("QQQ", start, end, 100, "weekly")
+
+    assert calls == 1
+    _cached_fixed_backtest.cache_clear()
