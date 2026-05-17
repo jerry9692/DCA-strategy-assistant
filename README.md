@@ -88,7 +88,7 @@ Each backtest returns:
 
 Parameter optimization returns a robust suggestion, not a future guarantee. It evaluates the current strategy's candidate parameters across the selected date range plus preset stress scenarios, then ranks candidates by a stability-aware score that balances annualized return, Sharpe ratio, drawdown, and fixed-DCA underperformance. The default search keeps DCA discipline by only considering 0.6-0.8x minimum multipliers and 1.2-1.5x maximum multipliers.
 
-The response includes the baseline config, recommended config, Top 10 candidates, scenario-by-scenario metrics, searched count, and skipped count.
+The response includes the baseline config, recommended config, Top 5 candidates, scenario-by-scenario metrics, searched count, and skipped count.
 
 ## Project Structure
 

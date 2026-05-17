@@ -523,6 +523,28 @@ def test_optimizer_counts_unavailable_scenarios(monkeypatch):
     assert result.skippedCount > 0
 
 
+def test_optimizer_returns_top_five_candidates(monkeypatch):
+    prices = long_fixture_prices()
+
+    def fake_price_history(symbol, start, end):
+        return prices, "fixture", "cache-hit"
+
+    monkeypatch.setattr("app.optimizer.get_price_history", fake_price_history)
+    monkeypatch.setattr("app.optimizer.MAX_CANDIDATES", 12)
+
+    result = optimize_parameters(
+        OptimizationRequest(
+            symbol="QQQ",
+            startDate=pd.Timestamp("2022-01-03").date(),
+            endDate=pd.Timestamp("2024-12-31").date(),
+            config=StrategyConfig(strategyType="ma_deviation", baseAmount=100, frequency="weekly"),
+        )
+    )
+
+    assert len(result.candidates) == 5
+    assert [candidate.rank for candidate in result.candidates] == [1, 2, 3, 4, 5]
+
+
 def _job_metric() -> BacktestMetrics:
     return BacktestMetrics(
         totalInvested=1000,

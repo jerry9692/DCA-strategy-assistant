@@ -326,7 +326,7 @@ def optimize_parameters(
         raise ValueError("所有验证场景都没有足够数据，无法生成稳健参数建议。")
 
     ranked.sort(key=lambda item: item.score, reverse=True)
-    top_candidates = [_ranked_copy(item, index + 1) for index, item in enumerate(ranked[:10])]
+    top_candidates = [_ranked_copy(item, index + 1) for index, item in enumerate(ranked[:5])]
     recommended = top_candidates[0]
     scenario_rows: list[OptimizationScenarioResult] = []
     for recommended_scenario in recommended.scenarios:
