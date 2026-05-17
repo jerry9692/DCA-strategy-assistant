@@ -67,7 +67,7 @@ type StrategyComparison = {
 type StrategyConfigPayload = {
   strategyType: string;
   baseAmount: number;
-  frequency: "daily" | "weekly" | "biweekly" | "monthly";
+  frequency: "weekly" | "biweekly" | "monthly";
   minMultiplier: number;
   maxMultiplier: number;
   params: Record<string, number | string | boolean>;
@@ -144,7 +144,7 @@ type OptimizationJobStatus = {
 };
 type UiError = { message: string; code?: string; retryable: boolean };
 type PresetMode = "conservative" | "balanced" | "aggressive" | "custom";
-type Frequency = "daily" | "weekly" | "biweekly" | "monthly";
+type Frequency = "weekly" | "biweekly" | "monthly";
 type MarketCode = "us" | "cn";
 type PressureScenario = {
   id: string;
@@ -983,7 +983,6 @@ function App() {
         <label>
           频率
           <select value={frequency} onChange={(event) => setFrequency(event.target.value as Frequency)}>
-            <option value="daily">每天</option>
             <option value="weekly">每周</option>
             <option value="biweekly">双周</option>
             <option value="monthly">每月</option>

@@ -15,7 +15,6 @@ def _next_trading_day(prices: pd.DataFrame, scheduled: pd.Timestamp) -> pd.Times
 
 def _schedule(start: date, end: date, frequency: str) -> pd.DatetimeIndex:
     rules = {
-        "daily": "B",
         "weekly": "W-MON",
         "biweekly": "2W-MON",
         "monthly": "MS",
