@@ -34,6 +34,7 @@ type Contribution = {
   multiplier: number;
   score: number;
   drawdownPct: number;
+  accountDrawdownPct?: number;
 };
 type Metrics = {
   totalInvested: number;
@@ -134,15 +135,15 @@ type UiError = { message: string; code?: string; retryable: boolean };
 type PresetMode = "conservative" | "balanced" | "aggressive" | "custom";
 
 const api = "";
-const SETTINGS_KEY = "dca-assistant-settings-v2";
+const SETTINGS_KEY = "dca-assistant-settings-v3";
 const today = new Date();
 const fiveYearsAgo = new Date(today);
 fiveYearsAgo.setFullYear(today.getFullYear() - 5);
 
 const PARAMETER_PRESETS: Record<Exclude<PresetMode, "custom">, { label: string; minMultiplier: number; maxMultiplier: number }> = {
-  conservative: { label: "保守", minMultiplier: 0.6, maxMultiplier: 1.5 },
-  balanced: { label: "均衡", minMultiplier: 0.2, maxMultiplier: 2.5 },
-  aggressive: { label: "激进", minMultiplier: 0.1, maxMultiplier: 4 }
+  conservative: { label: "保守", minMultiplier: 0.8, maxMultiplier: 1.2 },
+  balanced: { label: "均衡", minMultiplier: 0.8, maxMultiplier: 1.2 },
+  aggressive: { label: "激进", minMultiplier: 0.8, maxMultiplier: 1.2 }
 };
 
 const CRISIS_SCENARIOS = [
@@ -241,7 +242,7 @@ function downloadText(filename: string, content: string, type = "text/csv;charse
 
 function exportBacktestCsv(result: Backtest | null) {
   if (!result) return;
-  const rows = [["series", "date", "price", "amount", "portfolioValue", "multiplier", "score", "drawdownPct"]];
+  const rows = [["series", "date", "price", "amount", "portfolioValue", "multiplier", "score", "drawdownPct", "accountDrawdownPct"]];
   const append = (series: string, events: Contribution[]) => {
     events.forEach((event) => {
       rows.push([
@@ -252,7 +253,8 @@ function exportBacktestCsv(result: Backtest | null) {
         String(event.portfolioValue),
         String(event.multiplier),
         String(event.score),
-        String(event.drawdownPct)
+        String(event.drawdownPct),
+        String(accountDrawdown(event))
       ]);
     });
   };
@@ -276,6 +278,10 @@ function describeConfig(config: StrategyConfigPayload) {
 function metric(value: number | null | undefined, suffix = "") {
   if (value === null || value === undefined || Number.isNaN(value)) return "-";
   return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}${suffix}`;
+}
+
+function accountDrawdown(event: Contribution) {
+  return event.accountDrawdownPct ?? event.drawdownPct;
 }
 
 async function readJson<T>(res: Response): Promise<T> {
@@ -353,8 +359,8 @@ function App() {
   const [strategyType, setStrategyType] = useState(String(savedSettings?.strategyType ?? "composite_score"));
   const [baseAmount, setBaseAmount] = useState(Number(savedSettings?.baseAmount ?? 100));
   const [frequency, setFrequency] = useState<"weekly" | "monthly">((savedSettings?.frequency as "weekly" | "monthly") ?? "weekly");
-  const [minMultiplier, setMinMultiplier] = useState(Number(savedSettings?.minMultiplier ?? 0.2));
-  const [maxMultiplier, setMaxMultiplier] = useState(Number(savedSettings?.maxMultiplier ?? 2.5));
+  const [minMultiplier, setMinMultiplier] = useState(Number(savedSettings?.minMultiplier ?? 0.8));
+  const [maxMultiplier, setMaxMultiplier] = useState(Number(savedSettings?.maxMultiplier ?? 1.2));
   const [startDate, setStartDate] = useState(String(savedSettings?.startDate ?? isoDate(fiveYearsAgo)));
   const [endDate, setEndDate] = useState(String(savedSettings?.endDate ?? isoDate(today)));
   const [params, setParams] = useState<Record<string, number | string | boolean>>({});
@@ -622,18 +628,25 @@ function App() {
       yAxis: { type: "value", max: 0, axisLabel: { color: "#64748b", formatter: "{value}%" } },
       series: [
         {
-          name: "本策略回撤",
+          name: "本策略账户回撤",
           type: "line",
           showSymbol: false,
-          data: result?.contributions.map((event) => event.drawdownPct) ?? [],
+          data: result?.contributions.map(accountDrawdown) ?? [],
           areaStyle: { color: "rgba(124, 58, 237, 0.08)" },
           lineStyle: { color: "#7c3aed", width: 2 }
         },
-        {
-          name: "固定DCA回撤",
+        ...(result?.strategyComparisons.map((item, index) => ({
+          name: `${item.name}账户回撤`,
           type: "line",
           showSymbol: false,
-          data: result?.fixedContributions.map((event) => event.drawdownPct) ?? [],
+          data: item.contributions.map(accountDrawdown),
+          lineStyle: { color: ["#0f766e", "#2563eb", "#d97706"][index % 3], width: 2 }
+        })) ?? []),
+        {
+          name: "固定DCA账户回撤",
+          type: "line",
+          showSymbol: false,
+          data: result?.fixedContributions.map(accountDrawdown) ?? [],
           lineStyle: { color: "#64748b", width: 2, type: "dashed" }
         }
       ]

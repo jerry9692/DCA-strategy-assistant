@@ -20,6 +20,8 @@ Currently supports **QQQ, VOO, SPY** (US-listed ETFs, USD denominated, daily dat
 
 Each strategy returns a recommended amount, multiplier, score, raw signal values, and human-readable reasons.
 
+Default dynamic bounds are intentionally mild: **0.8x minimum** and **1.2x maximum**. The tool is designed as disciplined DCA with small adjustments, not market-timing.
+
 ## v0.2 Highlights
 
 - Compare dynamic DCA against both fixed DCA and a lump-sum investment baseline.
@@ -75,7 +77,7 @@ PYTHONPATH=backend pytest backend/tests -q
 Each backtest returns:
 
 - **Metrics**: total invested, ending portfolio value, total return %, annualized return %, max drawdown, Sharpe/Sortino ratios, number of buys, and comparisons against fixed-DCA and lump-sum baselines
-- **Contribution events**: date, price, amount, shares purchased, portfolio value, multiplier per buy
+- **Contribution events**: date, price, amount, shares purchased, portfolio value, multiplier per buy, and account-level drawdown for chart comparison
 - **Baselines**: fixed-DCA and lump-sum metrics and chart series
 - **Strategy comparisons**: optional peer strategy results for showdown charts and tables
 - **Market state**: 50/200-day moving-average trend label and summary

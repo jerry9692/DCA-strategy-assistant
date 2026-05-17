@@ -50,8 +50,8 @@ class StrategyConfig(BaseModel):
     strategyType: str = "composite_score"
     baseAmount: float = Field(default=100, gt=0)
     frequency: Frequency = "weekly"
-    minMultiplier: float = Field(default=0.2, ge=0)
-    maxMultiplier: float = Field(default=2.5, gt=0)
+    minMultiplier: float = Field(default=0.8, ge=0)
+    maxMultiplier: float = Field(default=1.2, gt=0)
     params: dict[str, Any] = Field(default_factory=dict)
 
 

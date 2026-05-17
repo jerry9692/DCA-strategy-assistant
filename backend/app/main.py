@@ -124,7 +124,34 @@ def _chart_prices(prices, start: date, max_points: int = 360) -> list[dict]:
     ]
 
 
-def _chart_contributions(events) -> list[dict]:
+def _account_drawdowns(events, scheduled_budget: float | None = None) -> list[float]:
+    if not events:
+        return []
+
+    curve = 1.0
+    peak = 1.0
+    drawdowns = [0.0]
+    for index, (previous, current) in enumerate(zip(events, events[1:]), start=1):
+        if scheduled_budget is None:
+            previous_cash = 0.0
+        else:
+            previous_planned_budget = scheduled_budget * index
+            previous_cash = previous_planned_budget - previous.totalInvested
+        previous_account_value = previous.portfolioValue + previous_cash
+        if previous_account_value <= 0:
+            period_return = 0.0
+        else:
+            current_buy_value = current.shares * current.price
+            value_before_new_budget = current.portfolioValue - current_buy_value + previous_cash
+            period_return = value_before_new_budget / previous_account_value - 1
+        curve *= 1 + period_return
+        peak = max(peak, curve)
+        drawdowns.append((curve / peak - 1) * 100 if peak > 0 else 0.0)
+    return [round(item, 2) for item in drawdowns]
+
+
+def _chart_contributions(events, scheduled_budget: float | None = None) -> list[dict]:
+    account_drawdowns = _account_drawdowns(events, scheduled_budget)
     return [
         {
             "date": event.date,
@@ -134,8 +161,9 @@ def _chart_contributions(events) -> list[dict]:
             "multiplier": event.multiplier,
             "score": event.score,
             "drawdownPct": event.drawdownPct,
+            "accountDrawdownPct": account_drawdown,
         }
-        for event in events
+        for event, account_drawdown in zip(events, account_drawdowns)
     ]
 
 
@@ -297,15 +325,15 @@ def backtest(request: BacktestRequest) -> dict:
             "fixedMetrics": fixed_metrics.model_dump(),
             "lumpSumMetrics": lump_sum_metrics.model_dump(),
             "marketState": _market_state(prices, end).model_dump(),
-            "contributions": _chart_contributions(events),
-            "fixedContributions": _chart_contributions(fixed_events),
+            "contributions": _chart_contributions(events, request.config.baseAmount),
+            "fixedContributions": _chart_contributions(fixed_events, request.config.baseAmount),
             "lumpSumContributions": _chart_contributions(lump_sum_events),
             "strategyComparisons": [
                 {
                     "strategyType": item.strategyType,
                     "name": item.name,
                     "metrics": item.metrics.model_dump(),
-                    "contributions": _chart_contributions(item.contributions),
+                    "contributions": _chart_contributions(item.contributions, request.config.baseAmount),
                 }
                 for item in comparisons
             ],

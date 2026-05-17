@@ -2,8 +2,8 @@ import pandas as pd
 import pytest
 
 from app.backtester import DcaBacktester, _next_trading_day, _schedule
-from app.main import _cached_fixed_backtest, _chart_prices, _market_state
-from app.models import BacktestMetrics, OptimizationRequest, StrategyConfig
+from app.main import _cached_fixed_backtest, _chart_contributions, _chart_prices, _market_state
+from app.models import BacktestMetrics, ContributionEvent, OptimizationRequest, StrategyConfig
 from app.optimizer import _robust_score, optimize_parameters
 from app.strategies import evaluate_prepared_strategy, evaluate_strategy
 
@@ -176,6 +176,67 @@ def test_chart_prices_filters_with_timestamp_boundary():
     )
     chart = _chart_prices(prices, pd.Timestamp("2021-10-01").date())
     assert [point["date"] for point in chart] == ["2021-10-01", "2021-10-04"]
+
+
+def test_chart_contributions_account_drawdown_reflects_cash_reserve():
+    dynamic_events = [
+        ContributionEvent(
+            date="2020-01-01",
+            price=100,
+            amount=80,
+            shares=0.8,
+            totalShares=0.8,
+            totalInvested=80,
+            portfolioValue=80,
+            multiplier=0.8,
+            score=0.5,
+            reasons=[],
+        ),
+        ContributionEvent(
+            date="2020-01-08",
+            price=90,
+            amount=80,
+            shares=0.88888889,
+            totalShares=1.68888889,
+            totalInvested=160,
+            portfolioValue=152,
+            multiplier=0.8,
+            score=0.5,
+            reasons=[],
+        ),
+    ]
+    fixed_events = [
+        ContributionEvent(
+            date="2020-01-01",
+            price=100,
+            amount=100,
+            shares=1,
+            totalShares=1,
+            totalInvested=100,
+            portfolioValue=100,
+            multiplier=1,
+            score=0.5,
+            reasons=[],
+        ),
+        ContributionEvent(
+            date="2020-01-08",
+            price=90,
+            amount=100,
+            shares=1.11111111,
+            totalShares=2.11111111,
+            totalInvested=200,
+            portfolioValue=190,
+            multiplier=1,
+            score=0.5,
+            reasons=[],
+        ),
+    ]
+
+    dynamic = _chart_contributions(dynamic_events, scheduled_budget=100)
+    fixed = _chart_contributions(fixed_events, scheduled_budget=100)
+
+    assert dynamic[1]["accountDrawdownPct"] == -8
+    assert fixed[1]["accountDrawdownPct"] == -10
 
 
 def test_signal_reasons_do_not_render_nan_for_short_windows():
