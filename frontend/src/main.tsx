@@ -916,7 +916,7 @@ function App() {
           <input type="date" value={endDate} onChange={(event) => { setEndDate(event.target.value); setActiveScenarioId(null); }} />
         </label>
         <div className="period-control">
-          <span>回测周期</span>
+          <span>快捷周期</span>
           <div className="period-buttons">
             {QUICK_BACKTEST_PERIODS.map((period) => (
               <button

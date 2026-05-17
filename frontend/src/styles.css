@@ -139,18 +139,17 @@ h2 {
   gap: 6px;
   height: 38px;
   align-items: center;
-  padding: 3px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #f8fafc;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .period-buttons button {
-  height: 30px;
+  height: 34px;
   min-width: 48px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
   color: #475569;
   padding: 0 10px;
   cursor: pointer;
@@ -158,8 +157,9 @@ h2 {
 }
 
 .period-buttons button.active {
-  background: #0f766e;
-  color: #fff;
+  border-color: #0f766e;
+  background: #f0fdfa;
+  color: #0f766e;
 }
 
 .crisis-strip {
@@ -846,7 +846,7 @@ input[type="range"] {
 
 .app-shell[data-theme="dark"] input,
 .app-shell[data-theme="dark"] select,
-.app-shell[data-theme="dark"] .period-buttons {
+.app-shell[data-theme="dark"] .period-buttons button {
   background: #0f172a;
   border-color: #334155;
   color: #e5e7eb;
@@ -878,8 +878,9 @@ input[type="range"] {
 }
 
 .app-shell[data-theme="dark"] .period-buttons button.active {
-  background: #0f766e;
-  color: #fff;
+  border-color: #14b8a6;
+  background: #052e2b;
+  color: #5eead4;
 }
 
 .app-shell[data-theme="dark"] .eyebrow,
