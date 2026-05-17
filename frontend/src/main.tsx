@@ -393,6 +393,14 @@ function App() {
   );
 
   const selectedStrategy = useMemo(() => strategies.find((item) => item.type === strategyType), [strategies, strategyType]);
+  const strategyNameByType = useMemo(
+    () => new Map(strategies.map((strategy) => [strategy.type, strategy.name])),
+    [strategies]
+  );
+  const comparisonTypes = useMemo(
+    () => comparisonStrategyTypes.filter((item, index, source) => item !== strategyType && source.indexOf(item) === index),
+    [comparisonStrategyTypes, strategyType]
+  );
   const config = useMemo(
     (): StrategyConfigPayload => ({
       strategyType,
@@ -458,10 +466,10 @@ function App() {
         params,
         presetMode,
         activeScenarioId,
-        comparisonStrategyTypes
+        comparisonStrategyTypes: comparisonTypes
       })
     );
-  }, [activeScenarioId, baseAmount, comparisonStrategyTypes, darkMode, endDate, frequency, maxMultiplier, minMultiplier, params, presetMode, selectedStrategy, startDate, strategyType, symbol]);
+  }, [activeScenarioId, baseAmount, comparisonTypes, darkMode, endDate, frequency, maxMultiplier, minMultiplier, params, presetMode, selectedStrategy, startDate, strategyType, symbol]);
 
   useEffect(() => {
     if (!selectedStrategy) return;
@@ -476,7 +484,7 @@ function App() {
           startDate,
           endDate,
           config,
-          comparisonStrategyTypes
+          comparisonStrategyTypes: comparisonTypes
         })
       })
         .then(async (res) => {
@@ -491,7 +499,7 @@ function App() {
         .finally(() => setLoading(false));
     }, 450);
     return () => window.clearTimeout(handle);
-  }, [symbol, startDate, endDate, config, selectedStrategy, refreshNonce, comparisonStrategyTypes]);
+  }, [symbol, startDate, endDate, config, selectedStrategy, refreshNonce, comparisonTypes]);
 
   useEffect(() => {
     if (!optimizationJob || !optimizationActive) return;
@@ -770,7 +778,7 @@ function App() {
       yAxis: { type: "value", name: "组合价值", axisLabel: { color: "#64748b" } },
       series: [
         {
-          name: selectedStrategy?.name ?? "本策略",
+          name: result ? strategyNameByType.get(result.strategyType) ?? "本策略" : selectedStrategy?.name ?? "本策略",
           type: "line",
           showSymbol: false,
           data: result?.contributions.map((event) => event.portfolioValue) ?? [],
@@ -792,7 +800,7 @@ function App() {
         }
       ]
     }),
-    [result, selectedStrategy]
+    [result, selectedStrategy, strategyNameByType]
   );
 
   const comparisonRows = useMemo(
@@ -801,14 +809,14 @@ function App() {
         ? [
             {
               strategyType: result.strategyType,
-              name: selectedStrategy?.name ?? "本策略",
+              name: strategyNameByType.get(result.strategyType) ?? "本策略",
               metrics: result.metrics
             }
           ]
         : []),
       ...(result?.strategyComparisons.map((item) => ({ strategyType: item.strategyType, name: item.name, metrics: item.metrics })) ?? [])
     ],
-    [result, selectedStrategy]
+    [result, strategyNameByType]
   );
 
   return (
@@ -926,8 +934,8 @@ function App() {
             {strategies
               .filter((strategy) => strategy.type !== strategyType)
               .map((strategy) => {
-                const checked = comparisonStrategyTypes.includes(strategy.type);
-                const disabled = !checked && comparisonStrategyTypes.length >= 3;
+                const checked = comparisonTypes.includes(strategy.type);
+                const disabled = !checked && comparisonTypes.length >= 3;
                 return (
                   <label key={strategy.type} className={disabled ? "compare-choice disabled" : "compare-choice"}>
                     <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleComparison(strategy.type)} />
