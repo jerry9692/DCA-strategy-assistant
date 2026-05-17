@@ -333,8 +333,8 @@ def test_optimizer_keeps_current_config_as_baseline(monkeypatch):
         strategyType="ma_deviation",
         baseAmount=100,
         frequency="weekly",
-        minMultiplier=0.4,
-        maxMultiplier=2.5,
+        minMultiplier=0.7,
+        maxMultiplier=1.4,
         params={"maWindow": 150, "deviationPct": 12},
     )
     monkeypatch.setattr("app.optimizer.get_price_history", fake_price_history)
@@ -351,6 +351,29 @@ def test_optimizer_keeps_current_config_as_baseline(monkeypatch):
 
     assert result.baselineConfig == config
     assert result.baselineSummary.buyCount > 0
+
+
+def test_optimizer_default_search_space_stays_dca_like(monkeypatch):
+    prices = long_fixture_prices()
+
+    def fake_price_history(symbol, start, end):
+        return prices, "fixture", "cache-hit"
+
+    monkeypatch.setattr("app.optimizer.get_price_history", fake_price_history)
+
+    result = optimize_parameters(
+        OptimizationRequest(
+            symbol="QQQ",
+            startDate=pd.Timestamp("2022-01-03").date(),
+            endDate=pd.Timestamp("2024-12-31").date(),
+            config=StrategyConfig(strategyType="historical_percentile", baseAmount=100, frequency="weekly"),
+        )
+    )
+
+    assert result.recommendedConfig.minMultiplier >= 0.6
+    assert result.recommendedConfig.maxMultiplier <= 1.5
+    assert all(candidate.config.minMultiplier >= 0.6 for candidate in result.candidates)
+    assert all(candidate.config.maxMultiplier <= 1.5 for candidate in result.candidates)
 
 
 def test_robust_score_penalizes_single_scenario_blowup():

@@ -23,8 +23,8 @@ from app.models import (
 from app.strategies import prepare_market
 
 
-COMMON_MIN_MULTIPLIERS = [0, 0.2, 0.4, 0.6]
-COMMON_MAX_MULTIPLIERS = [1.5, 2.5, 3.5, 5]
+COMMON_MIN_MULTIPLIERS = [0.6, 0.7, 0.8]
+COMMON_MAX_MULTIPLIERS = [1.2, 1.3, 1.4, 1.5]
 MAX_CANDIDATES = 600
 MIN_BUYS_PER_SCENARIO = 6
 
