@@ -240,6 +240,7 @@ const QUICK_BACKTEST_PERIODS = [
   { id: "5y", label: "5年", years: 5 },
   { id: "10y", label: "10年", years: 10 }
 ];
+const FREQUENCY_OPTIONS: Frequency[] = ["weekly", "biweekly", "monthly"];
 
 function isoDate(date: Date) {
   const year = date.getFullYear();
@@ -261,6 +262,10 @@ function yearsBefore(dateText: string, years: number) {
 
 function clampEndDate(value: string) {
   return value > todayIso ? todayIso : value;
+}
+
+function normalizeFrequency(value: unknown): Frequency {
+  return FREQUENCY_OPTIONS.includes(value as Frequency) ? (value as Frequency) : "weekly";
 }
 
 function defaultsFor(strategy?: StrategyDef) {
@@ -381,6 +386,12 @@ async function readJson<T>(res: Response): Promise<T> {
     if (typeof detail === "object" && detail?.message) {
       throw { message: detail.message, code: detail.code, retryable: Boolean(detail.retryable) };
     }
+    if (Array.isArray(detail)) {
+      const first = detail[0];
+      const field = Array.isArray(first?.loc) ? first.loc.filter((item: unknown) => item !== "body").join(".") : "";
+      const reason = first?.msg ? String(first.msg) : "请求参数不合法";
+      throw { message: field ? `${field}: ${reason}` : reason, code: "validation_failed", retryable: false };
+    }
     throw { message: typeof detail === "string" ? detail : "请求失败", retryable: true };
   }
   if (!payload) {
@@ -455,7 +466,7 @@ function App() {
   const [symbol, setSymbol] = useState(String(savedSettings?.symbol ?? "QQQ"));
   const [strategyType, setStrategyType] = useState(String(savedSettings?.strategyType ?? "composite_score"));
   const [baseAmount, setBaseAmount] = useState(Number(savedSettings?.baseAmount ?? 100));
-  const [frequency, setFrequency] = useState<Frequency>((savedSettings?.frequency as Frequency) ?? "weekly");
+  const [frequency, setFrequency] = useState<Frequency>(normalizeFrequency(savedSettings?.frequency));
   const [minMultiplier, setMinMultiplier] = useState(Number(savedSettings?.minMultiplier ?? 0.8));
   const [maxMultiplier, setMaxMultiplier] = useState(Number(savedSettings?.maxMultiplier ?? 1.2));
   const [startDate, setStartDate] = useState(String(savedSettings?.startDate ?? isoDate(fiveYearsAgo)));
