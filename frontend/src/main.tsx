@@ -242,7 +242,7 @@ function downloadText(filename: string, content: string, type = "text/csv;charse
 
 function exportBacktestCsv(result: Backtest | null) {
   if (!result) return;
-  const rows = [["series", "date", "price", "amount", "portfolioValue", "multiplier", "score", "drawdownPct", "accountDrawdownPct"]];
+  const rows = [["series", "date", "price", "amount", "portfolioValue", "multiplier", "score", "holdingDrawdownPct", "accountDrawdownPct"]];
   const append = (series: string, events: Contribution[]) => {
     events.forEach((event) => {
       rows.push([
@@ -913,7 +913,7 @@ function App() {
             <Metric label="期末价值" value={`$${metric(result?.metrics.endingValue)}`} />
             <Metric label="收益率" value={metric(result?.metrics.returnPct, "%")} />
             <Metric label="资金年化" value={metric(result?.metrics.annualizedReturnPct, "%")} />
-            <Metric label="组合最大回撤" value={metric(result?.metrics.maxDrawdownPct, "%")} />
+            <Metric label="持仓最大回撤" value={metric(result?.metrics.maxDrawdownPct, "%")} />
             <Metric label="相对固定" value={metric(result?.metrics.versusFixedPct, "%")} />
             <Metric label="相对一次性" value={metric(result?.metrics.versusLumpSumPct, "%")} />
             <Metric label="夏普比率" value={metric(result?.metrics.sharpeRatio)} />
@@ -943,7 +943,7 @@ function App() {
                     <Sparkles size={17} />
                     稳健参数建议
                   </div>
-                  <p className="muted">这是基于历史多场景验证的稳健建议，不代表未来保证最优。</p>
+                  <p className="muted">这是基于历史多场景验证的稳健建议，不代表未来保证最优。默认只搜索最低 0.6-0.8x、最高 1.2-1.5x，保持定投纪律。</p>
                 </div>
                 <button type="button" className="secondary-action" onClick={() => applyOptimizedConfig(optimization.recommendedConfig)}>
                   应用推荐参数
@@ -1020,7 +1020,7 @@ function App() {
           <div className="chart-block">
             <div className="section-title">
               <BarChart3 size={17} />
-              组合回撤对比
+              账户回撤对比
             </div>
             <ReactECharts option={drawdownOption} style={{ height: 260 }} />
           </div>
@@ -1080,7 +1080,7 @@ function App() {
           ))}
           <div className="optimizer-card">
             <strong>稳健参数建议</strong>
-            <span>跨多个市场阶段搜索更稳定的参数，不把单段历史冠军当作未来答案。</span>
+            <span>跨多个市场阶段搜索更稳定的参数。默认限制为最低 0.6-0.8x、最高 1.2-1.5x，不把功能变成择时交易。</span>
             <button type="button" className="secondary-action" onClick={runOptimization} disabled={optimizationLoading || loading || !selectedStrategy || strategyType === "fixed_dca"}>
               <Sparkles size={15} />
               {strategyType === "fixed_dca" ? "固定定投无需调优" : optimizationLoading ? "正在搜索参数组合" : "自动调优"}

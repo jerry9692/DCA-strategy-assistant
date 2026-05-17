@@ -77,7 +77,7 @@ PYTHONPATH=backend pytest backend/tests -q
 Each backtest returns:
 
 - **Metrics**: total invested, ending portfolio value, total return %, annualized return %, max drawdown, Sharpe/Sortino ratios, number of buys, and comparisons against fixed-DCA and lump-sum baselines
-- **Contribution events**: date, price, amount, shares purchased, portfolio value, multiplier per buy, and account-level drawdown for chart comparison
+- **Contribution events**: date, price, amount, shares purchased, portfolio value, multiplier per buy, holding drawdown, and account drawdown for chart comparison
 - **Baselines**: fixed-DCA and lump-sum metrics and chart series
 - **Strategy comparisons**: optional peer strategy results for showdown charts and tables
 - **Market state**: 50/200-day moving-average trend label and summary
