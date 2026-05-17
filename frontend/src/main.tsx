@@ -157,6 +157,7 @@ type PressureScenario = {
 const api = "";
 const SETTINGS_KEY = "dca-assistant-settings-v3";
 const today = new Date();
+const todayIso = isoDate(today);
 const fiveYearsAgo = new Date(today);
 fiveYearsAgo.setFullYear(today.getFullYear() - 5);
 
@@ -254,6 +255,10 @@ function yearsBefore(dateText: string, years: number) {
   const date = parseDateInput(dateText);
   date.setFullYear(date.getFullYear() - years);
   return isoDate(date);
+}
+
+function clampEndDate(value: string) {
+  return value > todayIso ? todayIso : value;
 }
 
 function defaultsFor(strategy?: StrategyDef) {
@@ -444,7 +449,7 @@ function App() {
   const [minMultiplier, setMinMultiplier] = useState(Number(savedSettings?.minMultiplier ?? 0.8));
   const [maxMultiplier, setMaxMultiplier] = useState(Number(savedSettings?.maxMultiplier ?? 1.2));
   const [startDate, setStartDate] = useState(String(savedSettings?.startDate ?? isoDate(fiveYearsAgo)));
-  const [endDate, setEndDate] = useState(String(savedSettings?.endDate ?? isoDate(today)));
+  const [endDate, setEndDate] = useState(clampEndDate(String(savedSettings?.endDate ?? todayIso)));
   const [params, setParams] = useState<Record<string, number | string | boolean>>({});
   const [result, setResult] = useState<Backtest | null>(null);
   const [quickDecision, setQuickDecision] = useState<Decision | null>(null);
@@ -536,6 +541,13 @@ function App() {
   useEffect(() => {
     if (activeScenarioId && !activeScenario) setActiveScenarioId(null);
   }, [activeScenario, activeScenarioId]);
+
+  useEffect(() => {
+    if (endDate > todayIso) {
+      setEndDate(todayIso);
+      setActiveScenarioId(null);
+    }
+  }, [endDate]);
 
   useEffect(() => {
     if (!selectedStrategy || Object.keys(params).length === 0) return;
@@ -980,7 +992,12 @@ function App() {
         </label>
         <label>
           结束
-          <input type="date" value={endDate} onChange={(event) => { setEndDate(event.target.value); setActiveScenarioId(null); }} />
+          <div className="date-with-action">
+            <input type="date" max={todayIso} value={endDate} onChange={(event) => { setEndDate(clampEndDate(event.target.value)); setActiveScenarioId(null); }} />
+            <button type="button" onClick={() => { setEndDate(todayIso); setActiveScenarioId(null); }}>
+              今天
+            </button>
+          </div>
         </label>
         <div className="period-control">
           <span>快捷周期</span>
