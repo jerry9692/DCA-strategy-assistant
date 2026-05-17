@@ -172,6 +172,24 @@ def test_schedule_includes_start_date_as_first_buy_opportunity():
     assert pd.Timestamp("2020-01-06") in schedule
 
 
+def test_schedule_supports_daily_trading_days_without_weekend_duplicates():
+    schedule = _schedule(pd.Timestamp("2020-01-03").date(), pd.Timestamp("2020-01-08").date(), "daily")
+    assert list(schedule) == [
+        pd.Timestamp("2020-01-03"),
+        pd.Timestamp("2020-01-06"),
+        pd.Timestamp("2020-01-07"),
+        pd.Timestamp("2020-01-08"),
+    ]
+
+
+def test_schedule_supports_biweekly_events():
+    schedule = _schedule(pd.Timestamp("2020-01-01").date(), pd.Timestamp("2020-02-10").date(), "biweekly")
+    assert schedule[0] == pd.Timestamp("2020-01-01")
+    assert pd.Timestamp("2020-01-06") in schedule
+    assert pd.Timestamp("2020-01-20") in schedule
+    assert pd.Timestamp("2020-02-03") in schedule
+
+
 def test_chart_prices_filters_with_timestamp_boundary():
     prices = pd.DataFrame(
         {"close": [100, 101, 102]},

@@ -38,7 +38,9 @@ COMMON_PARAMETERS = [
         type="select",
         default="weekly",
         options=[
+            ParameterOption(label="每天", value="daily"),
             ParameterOption(label="每周", value="weekly"),
+            ParameterOption(label="双周", value="biweekly"),
             ParameterOption(label="每月", value="monthly"),
         ],
         help="回测时生成买入日期的频率。",

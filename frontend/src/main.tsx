@@ -67,7 +67,7 @@ type StrategyComparison = {
 type StrategyConfigPayload = {
   strategyType: string;
   baseAmount: number;
-  frequency: "weekly" | "monthly";
+  frequency: "daily" | "weekly" | "biweekly" | "monthly";
   minMultiplier: number;
   maxMultiplier: number;
   params: Record<string, number | string | boolean>;
@@ -144,6 +144,7 @@ type OptimizationJobStatus = {
 };
 type UiError = { message: string; code?: string; retryable: boolean };
 type PresetMode = "conservative" | "balanced" | "aggressive" | "custom";
+type Frequency = "daily" | "weekly" | "biweekly" | "monthly";
 type MarketCode = "us" | "cn";
 type PressureScenario = {
   id: string;
@@ -445,7 +446,7 @@ function App() {
   const [symbol, setSymbol] = useState(String(savedSettings?.symbol ?? "QQQ"));
   const [strategyType, setStrategyType] = useState(String(savedSettings?.strategyType ?? "composite_score"));
   const [baseAmount, setBaseAmount] = useState(Number(savedSettings?.baseAmount ?? 100));
-  const [frequency, setFrequency] = useState<"weekly" | "monthly">((savedSettings?.frequency as "weekly" | "monthly") ?? "weekly");
+  const [frequency, setFrequency] = useState<Frequency>((savedSettings?.frequency as Frequency) ?? "weekly");
   const [minMultiplier, setMinMultiplier] = useState(Number(savedSettings?.minMultiplier ?? 0.8));
   const [maxMultiplier, setMaxMultiplier] = useState(Number(savedSettings?.maxMultiplier ?? 1.2));
   const [startDate, setStartDate] = useState(String(savedSettings?.startDate ?? isoDate(fiveYearsAgo)));
@@ -981,8 +982,10 @@ function App() {
         </label>
         <label>
           频率
-          <select value={frequency} onChange={(event) => setFrequency(event.target.value as "weekly" | "monthly")}>
+          <select value={frequency} onChange={(event) => setFrequency(event.target.value as Frequency)}>
+            <option value="daily">每天</option>
             <option value="weekly">每周</option>
+            <option value="biweekly">双周</option>
             <option value="monthly">每月</option>
           </select>
         </label>

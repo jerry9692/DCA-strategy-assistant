@@ -14,7 +14,13 @@ def _next_trading_day(prices: pd.DataFrame, scheduled: pd.Timestamp) -> pd.Times
 
 
 def _schedule(start: date, end: date, frequency: str) -> pd.DatetimeIndex:
-    rule = "W-MON" if frequency == "weekly" else "MS"
+    rules = {
+        "daily": "B",
+        "weekly": "W-MON",
+        "biweekly": "2W-MON",
+        "monthly": "MS",
+    }
+    rule = rules.get(frequency, "W-MON")
     start_point = pd.DatetimeIndex([pd.Timestamp(start)])
     anchored = pd.date_range(start=pd.Timestamp(start), end=pd.Timestamp(end), freq=rule)
     return start_point.union(anchored)

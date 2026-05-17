@@ -11,7 +11,7 @@ SUPPORTED_ASSETS = {
 }
 
 
-Frequency = Literal["weekly", "monthly"]
+Frequency = Literal["daily", "weekly", "biweekly", "monthly"]
 MarketTone = Literal["up", "down", "neutral"]
 OptimizationObjective = Literal["robust_return", "max_return", "min_drawdown"]
 OptimizationJobState = Literal["queued", "running", "completed", "failed", "cancelled"]
