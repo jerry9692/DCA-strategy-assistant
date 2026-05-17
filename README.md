@@ -26,6 +26,9 @@ Each strategy returns a recommended amount, multiplier, score, raw signal values
 - Read the current market state from 50/200-day moving averages.
 - Evaluate strategies with Sharpe and Sortino ratios in addition to return and drawdown.
 - Run a strategy showdown by comparing up to 3 extra strategies on the same asset and date range.
+- Open to a daily signal dashboard for QQQ, VOO, and SPY.
+- Apply conservative, balanced, or aggressive parameter presets saved in localStorage.
+- Replay preset crisis scenarios such as the 2020 selloff and 2022 rate-hike drawdown.
 
 ## Tech Stack
 
@@ -63,6 +66,7 @@ PYTHONPATH=backend pytest backend/tests -q
 | GET | `/api/assets` | List supported assets |
 | GET | `/api/strategies` | Strategy definitions with default parameters |
 | POST | `/api/recommendations/run` | Get a single investment recommendation for a given date |
+| POST | `/api/signals/today` | Get today's signal panel for all supported assets |
 | POST | `/api/backtests/run` | Run a full historical backtest with metrics and chart data |
 
 ## Backtest Output

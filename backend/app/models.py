@@ -139,6 +139,11 @@ class BacktestRequest(BaseModel):
     comparisonStrategyTypes: list[str] = Field(default_factory=list, max_length=3)
 
 
+class TodaySignalsRequest(BaseModel):
+    config: StrategyConfig = Field(default_factory=StrategyConfig)
+    asOf: date | None = None
+
+
 class RecommendationRequest(BaseModel):
     symbol: str = "QQQ"
     config: StrategyConfig = Field(default_factory=StrategyConfig)

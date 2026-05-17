@@ -85,12 +85,54 @@ type RecommendationResponse = {
   dataSource: string;
   cacheStatus: string;
 };
+type TodaySignal = {
+  symbol: string;
+  name: string;
+  decision?: Decision;
+  marketState?: MarketState | null;
+  dataSource?: string;
+  cacheStatus?: string;
+  error?: string;
+};
 type UiError = { message: string; code?: string; retryable: boolean };
+type PresetMode = "conservative" | "balanced" | "aggressive" | "custom";
+type ViewMode = "signals" | "backtest";
 
 const api = "";
+const SETTINGS_KEY = "dca-assistant-settings-v2";
 const today = new Date();
 const fiveYearsAgo = new Date(today);
 fiveYearsAgo.setFullYear(today.getFullYear() - 5);
+
+const PARAMETER_PRESETS: Record<Exclude<PresetMode, "custom">, { label: string; minMultiplier: number; maxMultiplier: number }> = {
+  conservative: { label: "保守", minMultiplier: 0.6, maxMultiplier: 1.5 },
+  balanced: { label: "均衡", minMultiplier: 0.2, maxMultiplier: 2.5 },
+  aggressive: { label: "激进", minMultiplier: 0.1, maxMultiplier: 4 }
+};
+
+const CRISIS_SCENARIOS = [
+  {
+    id: "covid_2020",
+    name: "2020 熔断冲击",
+    startDate: "2020-02-18",
+    endDate: "2020-05-29",
+    summary: "检验策略在急跌和快速反弹中的加码节奏。"
+  },
+  {
+    id: "rate_hike_2022",
+    name: "2022 加息杀估值",
+    startDate: "2022-01-03",
+    endDate: "2022-12-30",
+    summary: "检验策略在长时间下跌和震荡中的资金消耗。"
+  },
+  {
+    id: "ai_rebound_2023",
+    name: "2023 科技股修复",
+    startDate: "2023-01-03",
+    endDate: "2023-08-31",
+    summary: "观察策略在持续修复行情中是否过早降档。"
+  }
+];
 
 function isoDate(date: Date) {
   return date.toISOString().slice(0, 10);
@@ -102,6 +144,47 @@ function defaultsFor(strategy?: StrategyDef) {
     params[param.key] = param.default;
   });
   return params;
+}
+
+function presetFor(strategy: StrategyDef | undefined, mode: PresetMode) {
+  const base = defaultsFor(strategy);
+  if (mode === "custom") {
+    return {
+      minMultiplier: PARAMETER_PRESETS.balanced.minMultiplier,
+      maxMultiplier: PARAMETER_PRESETS.balanced.maxMultiplier,
+      params: base
+    };
+  }
+
+  const preset = PARAMETER_PRESETS[mode];
+  const params = { ...base };
+  if (mode === "conservative") {
+    if ("maxDrawdownPct" in params) params.maxDrawdownPct = 40;
+    if ("deviationPct" in params) params.deviationPct = 25;
+    if ("oversold" in params) params.oversold = 25;
+    if ("overbought" in params) params.overbought = 75;
+    if ("smooth" in params) params.smooth = true;
+  }
+  if (mode === "aggressive") {
+    if ("maxDrawdownPct" in params) params.maxDrawdownPct = 20;
+    if ("deviationPct" in params) params.deviationPct = 10;
+    if ("oversold" in params) params.oversold = 35;
+    if ("overbought" in params) params.overbought = 65;
+    if ("smooth" in params) params.smooth = false;
+    if ("drawdownWeight" in params) params.drawdownWeight = 1.5;
+    if ("maWeight" in params) params.maWeight = 1.2;
+    if ("rsiWeight" in params) params.rsiWeight = 1.2;
+  }
+  return { minMultiplier: preset.minMultiplier, maxMultiplier: preset.maxMultiplier, params };
+}
+
+function readSavedSettings() {
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
 }
 
 function metric(value: number | null | undefined, suffix = "") {
@@ -176,26 +259,34 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 }
 
 function App() {
+  const savedSettings = useMemo(() => readSavedSettings(), []);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [strategies, setStrategies] = useState<StrategyDef[]>([]);
-  const [symbol, setSymbol] = useState("QQQ");
-  const [strategyType, setStrategyType] = useState("composite_score");
-  const [baseAmount, setBaseAmount] = useState(100);
-  const [frequency, setFrequency] = useState<"weekly" | "monthly">("weekly");
-  const [minMultiplier, setMinMultiplier] = useState(0.2);
-  const [maxMultiplier, setMaxMultiplier] = useState(2.5);
-  const [startDate, setStartDate] = useState(isoDate(fiveYearsAgo));
-  const [endDate, setEndDate] = useState(isoDate(today));
+  const [viewMode, setViewMode] = useState<ViewMode>((savedSettings?.viewMode as ViewMode) ?? "signals");
+  const [symbol, setSymbol] = useState(String(savedSettings?.symbol ?? "QQQ"));
+  const [strategyType, setStrategyType] = useState(String(savedSettings?.strategyType ?? "composite_score"));
+  const [baseAmount, setBaseAmount] = useState(Number(savedSettings?.baseAmount ?? 100));
+  const [frequency, setFrequency] = useState<"weekly" | "monthly">((savedSettings?.frequency as "weekly" | "monthly") ?? "weekly");
+  const [minMultiplier, setMinMultiplier] = useState(Number(savedSettings?.minMultiplier ?? 0.2));
+  const [maxMultiplier, setMaxMultiplier] = useState(Number(savedSettings?.maxMultiplier ?? 2.5));
+  const [startDate, setStartDate] = useState(String(savedSettings?.startDate ?? isoDate(fiveYearsAgo)));
+  const [endDate, setEndDate] = useState(String(savedSettings?.endDate ?? isoDate(today)));
   const [params, setParams] = useState<Record<string, number | string | boolean>>({});
   const [result, setResult] = useState<Backtest | null>(null);
+  const [todaySignals, setTodaySignals] = useState<TodaySignal[]>([]);
   const [quickDecision, setQuickDecision] = useState<Decision | null>(null);
   const [quickData, setQuickData] = useState<{ dataSource: string; cacheStatus: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [signalsLoading, setSignalsLoading] = useState(false);
   const [recommendationLoading, setRecommendationLoading] = useState(false);
   const [error, setError] = useState<UiError | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [showAllReasons, setShowAllReasons] = useState(false);
-  const [comparisonStrategyTypes, setComparisonStrategyTypes] = useState<string[]>(["drawdown_boost", "ma_deviation"]);
+  const [presetMode, setPresetMode] = useState<PresetMode>((savedSettings?.presetMode as PresetMode) ?? "balanced");
+  const [activeScenarioId, setActiveScenarioId] = useState<string | null>(String(savedSettings?.activeScenarioId ?? "") || null);
+  const [comparisonStrategyTypes, setComparisonStrategyTypes] = useState<string[]>(
+    Array.isArray(savedSettings?.comparisonStrategyTypes) ? savedSettings.comparisonStrategyTypes : ["drawdown_boost", "ma_deviation"]
+  );
 
   const selectedStrategy = useMemo(() => strategies.find((item) => item.type === strategyType), [strategies, strategyType]);
   const config = useMemo(
@@ -215,19 +306,51 @@ function App() {
       .then(([assetData, strategyData]) => {
         setAssets(assetData);
         setStrategies(strategyData.strategies);
-        const composite = strategyData.strategies.find((item: StrategyDef) => item.type === "composite_score");
-        setParams(defaultsFor(composite));
+        const active = strategyData.strategies.find((item: StrategyDef) => item.type === strategyType) ?? strategyData.strategies.find((item: StrategyDef) => item.type === "composite_score");
+        if (savedSettings?.params && savedSettings?.strategyType === strategyType) {
+          setParams(savedSettings.params);
+        } else {
+          const preset = presetFor(active, presetMode);
+          setMinMultiplier(preset.minMultiplier);
+          setMaxMultiplier(preset.maxMultiplier);
+          setParams(preset.params);
+        }
       })
       .catch((err) => setError(toUiError(err)));
   }, []);
 
   useEffect(() => {
-    setParams(defaultsFor(selectedStrategy));
+    const preset = presetFor(selectedStrategy, presetMode === "custom" ? "balanced" : presetMode);
+    setMinMultiplier(preset.minMultiplier);
+    setMaxMultiplier(preset.maxMultiplier);
+    setParams(preset.params);
     setComparisonStrategyTypes((current) => current.filter((item) => item !== strategyType));
   }, [strategyType]);
 
   useEffect(() => {
-    if (!selectedStrategy) return;
+    if (!selectedStrategy || Object.keys(params).length === 0) return;
+    window.localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        viewMode,
+        symbol,
+        strategyType,
+        baseAmount,
+        frequency,
+        minMultiplier,
+        maxMultiplier,
+        startDate,
+        endDate,
+        params,
+        presetMode,
+        activeScenarioId,
+        comparisonStrategyTypes
+      })
+    );
+  }, [activeScenarioId, baseAmount, comparisonStrategyTypes, endDate, frequency, maxMultiplier, minMultiplier, params, presetMode, selectedStrategy, startDate, strategyType, symbol, viewMode]);
+
+  useEffect(() => {
+    if (!selectedStrategy || viewMode !== "backtest") return;
     const handle = window.setTimeout(() => {
       setLoading(true);
       setError(null);
@@ -254,7 +377,51 @@ function App() {
         .finally(() => setLoading(false));
     }, 450);
     return () => window.clearTimeout(handle);
-  }, [symbol, startDate, endDate, config, selectedStrategy, refreshNonce, comparisonStrategyTypes]);
+  }, [symbol, startDate, endDate, config, selectedStrategy, refreshNonce, comparisonStrategyTypes, viewMode]);
+
+  useEffect(() => {
+    if (!selectedStrategy || viewMode !== "signals") return;
+    const handle = window.setTimeout(() => {
+      setSignalsLoading(true);
+      setError(null);
+      fetch(`${api}/api/signals/today`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          asOf: endDate,
+          config
+        })
+      })
+        .then(readJson<{ signals: TodaySignal[] }>)
+        .then((data) => setTodaySignals(data.signals))
+        .catch((err) => setError(toUiError(err)))
+        .finally(() => setSignalsLoading(false));
+    }, 350);
+    return () => window.clearTimeout(handle);
+  }, [config, endDate, refreshNonce, selectedStrategy, viewMode]);
+
+  const applyPreset = (mode: PresetMode) => {
+    setPresetMode(mode);
+    if (mode === "custom") return;
+    const preset = presetFor(selectedStrategy, mode);
+    setMinMultiplier(preset.minMultiplier);
+    setMaxMultiplier(preset.maxMultiplier);
+    setParams(preset.params);
+  };
+
+  const markCustom = () => {
+    setPresetMode("custom");
+    setActiveScenarioId(null);
+  };
+
+  const applyScenario = (scenarioId: string) => {
+    const scenario = CRISIS_SCENARIOS.find((item) => item.id === scenarioId);
+    if (!scenario) return;
+    setActiveScenarioId(scenario.id);
+    setStartDate(scenario.startDate);
+    setEndDate(scenario.endDate);
+    setViewMode("backtest");
+  };
 
   const runRecommendationOnly = () => {
     if (!selectedStrategy) return;
@@ -464,42 +631,77 @@ function App() {
       <header className="topbar">
         <div>
           <p className="eyebrow">DCA Strategy Assistant v0.2</p>
-          <h1>定投策略工作台</h1>
+          <h1>{viewMode === "signals" ? "今日信号面板" : "定投策略工作台"}</h1>
         </div>
-        <button className={loading ? "icon-button spinning" : "icon-button"} onClick={() => setRefreshNonce((value) => value + 1)} title="刷新回测" disabled={loading}>
-          <RefreshCcw size={18} />
-        </button>
+        <div className="topbar-actions">
+          <div className="view-tabs">
+            <button type="button" className={viewMode === "signals" ? "active" : ""} onClick={() => setViewMode("signals")}>
+              今日信号
+            </button>
+            <button type="button" className={viewMode === "backtest" ? "active" : ""} onClick={() => setViewMode("backtest")}>
+              回测工作台
+            </button>
+          </div>
+          <button className={loading || signalsLoading ? "icon-button spinning" : "icon-button"} onClick={() => setRefreshNonce((value) => value + 1)} title="刷新" disabled={loading || signalsLoading}>
+            <RefreshCcw size={18} />
+          </button>
+        </div>
       </header>
 
       <section className="control-strip">
         <label>
-          标的
-          <select value={symbol} onChange={(event) => setSymbol(event.target.value)}>
-            {assets.map((asset) => (
-              <option key={asset.symbol} value={asset.symbol}>
-                {asset.symbol} · {asset.name}
+          策略
+          <select value={strategyType} onChange={(event) => setStrategyType(event.target.value)}>
+            {strategies.map((strategy) => (
+              <option key={strategy.type} value={strategy.type}>
+                {strategy.name}
               </option>
             ))}
           </select>
         </label>
         <label>
-          基础金额
-          <input type="number" min={1} step={10} value={baseAmount} onChange={(event) => setBaseAmount(Number(event.target.value))} />
-        </label>
-        <label>
-          频率
-          <select value={frequency} onChange={(event) => setFrequency(event.target.value as "weekly" | "monthly")}>
-            <option value="weekly">每周</option>
-            <option value="monthly">每月</option>
+          参数预设
+          <select value={presetMode} onChange={(event) => applyPreset(event.target.value as PresetMode)}>
+            <option value="conservative">保守</option>
+            <option value="balanced">均衡</option>
+            <option value="aggressive">激进</option>
+            <option value="custom">自定义</option>
           </select>
         </label>
+        {viewMode === "backtest" && (
+          <label>
+            标的
+            <select value={symbol} onChange={(event) => setSymbol(event.target.value)}>
+              {assets.map((asset) => (
+                <option key={asset.symbol} value={asset.symbol}>
+                  {asset.symbol} · {asset.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label>
-          开始
-          <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+          基础金额
+          <input type="number" min={1} step={10} value={baseAmount} onChange={(event) => { setBaseAmount(Number(event.target.value)); markCustom(); }} />
         </label>
+        {viewMode === "backtest" && (
+          <>
+            <label>
+              频率
+              <select value={frequency} onChange={(event) => setFrequency(event.target.value as "weekly" | "monthly")}>
+                <option value="weekly">每周</option>
+                <option value="monthly">每月</option>
+              </select>
+            </label>
+            <label>
+              开始
+              <input type="date" value={startDate} onChange={(event) => { setStartDate(event.target.value); setActiveScenarioId(null); }} />
+            </label>
+          </>
+        )}
         <label>
-          结束
-          <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+          {viewMode === "signals" ? "信号日期" : "结束"}
+          <input type="date" value={endDate} onChange={(event) => { setEndDate(event.target.value); setActiveScenarioId(null); }} />
         </label>
       </section>
 
@@ -514,7 +716,72 @@ function App() {
         </div>
       )}
 
-      <section className="workspace">
+      {viewMode === "signals" && (
+        <section className="today-dashboard">
+          <div className="section-title">
+            <Activity size={17} />
+            今日信号
+          </div>
+          <div className="signal-grid">
+            {todaySignals.map((item) => (
+              <article key={item.symbol} className="signal-card">
+                <div className="signal-head">
+                  <div>
+                    <strong>{item.symbol}</strong>
+                    <span>{item.name}</span>
+                  </div>
+                  <b className={item.marketState ? `state-dot ${item.marketState.tone}` : "state-dot neutral"}>{item.marketState?.label ?? "等待数据"}</b>
+                </div>
+                {item.error ? (
+                  <p className="signal-error">{item.error}</p>
+                ) : (
+                  <>
+                    <div className="signal-amount">
+                      <span>建议投入</span>
+                      <strong>${metric(item.decision?.recommendedAmount)}</strong>
+                    </div>
+                    <div className="signal-meta">
+                      <span>倍率 {metric(item.decision?.multiplier, "x")}</span>
+                      <span>评分 {metric(item.decision?.score)}</span>
+                      <span>价格 ${metric(item.decision?.price)}</span>
+                    </div>
+                    <p>{item.marketState?.summary}</p>
+                    <div className="reason-row compact">
+                      {item.decision?.reasons.slice(0, 3).map((reason) => (
+                        <span key={reason}>{reason}</span>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </article>
+            ))}
+            {signalsLoading && (
+              <article className="signal-card loading-card">
+                <RefreshCcw size={18} />
+                <span>正在刷新今日信号</span>
+              </article>
+            )}
+          </div>
+        </section>
+      )}
+
+      {viewMode === "backtest" && (
+        <section className="crisis-strip">
+          <div>
+            <strong>历史危机回放</strong>
+            <span>{CRISIS_SCENARIOS.find((item) => item.id === activeScenarioId)?.summary ?? "选择一个场景，快速切换到对应行情区间验证策略表现。"}</span>
+          </div>
+          <div className="scenario-buttons">
+            {CRISIS_SCENARIOS.map((scenario) => (
+              <button type="button" key={scenario.id} className={activeScenarioId === scenario.id ? "active" : ""} onClick={() => applyScenario(scenario.id)}>
+                {scenario.name}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {viewMode === "backtest" && <section className="workspace">
         <aside className="strategy-list">
           <div className="section-title">
             <Activity size={17} />
@@ -682,14 +949,14 @@ function App() {
             参数
           </div>
           {selectedStrategy && <p className="strategy-note">{selectedStrategy.description}</p>}
-          <RangeControl label="最低倍率" value={minMultiplier} min={0} max={1} step={0.05} onChange={setMinMultiplier} />
-          <RangeControl label="最高倍率" value={maxMultiplier} min={1} max={5} step={0.1} onChange={setMaxMultiplier} />
+          <RangeControl label="最低倍率" value={minMultiplier} min={0} max={1} step={0.05} onChange={(value) => { setMinMultiplier(value); markCustom(); }} />
+          <RangeControl label="最高倍率" value={maxMultiplier} min={1} max={5} step={0.1} onChange={(value) => { setMaxMultiplier(value); markCustom(); }} />
           {selectedStrategy?.parameters.map((param) => (
             <ParamControl
               key={param.key}
               param={param}
               value={params[param.key] ?? param.default}
-              onChange={(value) => setParams((current) => ({ ...current, [param.key]: value }))}
+              onChange={(value) => { setParams((current) => ({ ...current, [param.key]: value })); markCustom(); }}
             />
           ))}
           <div className="signals">
@@ -707,7 +974,7 @@ function App() {
           {(loading || recommendationLoading) && <p className="muted">正在刷新策略结果...</p>}
           <p className="muted">数据：{dataSource} · {cacheStatus}</p>
         </aside>
-      </section>
+      </section>}
     </main>
   );
 }

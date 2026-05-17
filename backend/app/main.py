@@ -17,6 +17,7 @@ from app.models import (
     SUPPORTED_ASSETS,
     StrategyConfig,
     StrategyComparison,
+    TodaySignalsRequest,
 )
 from app.strategies import evaluate_prepared_strategy, evaluate_strategy, prepare_market
 from app.strategy_definitions import COMMON_PARAMETERS, STRATEGIES
@@ -175,6 +176,35 @@ def _market_state(prices: pd.DataFrame, end: date) -> MarketState:
         sma200=round(float(sma200), 4),
         distanceToSma200Pct=round(distance, 2) if distance is not None else None,
     )
+
+
+@app.post("/api/signals/today")
+def today_signals(request: TodaySignalsRequest) -> dict:
+    signals = []
+    end = request.asOf or date.today()
+    start = end - timedelta(days=365 * 10)
+    for symbol, name in SUPPORTED_ASSETS.items():
+        try:
+            prices, data_source, cache_status = get_price_history(symbol, start, end)
+            prepared = prepare_market(prices, request.config)
+            decision = evaluate_prepared_strategy(request.config.strategyType, request.config, prepared)
+            signals.append(
+                {
+                    "symbol": symbol,
+                    "name": name,
+                    "decision": decision.model_dump(),
+                    "marketState": _market_state(prices, end).model_dump(),
+                    "dataSource": data_source,
+                    "cacheStatus": cache_status,
+                }
+            )
+        except Exception as exc:
+            if isinstance(exc, PriceDataError):
+                message = exc.message
+            else:
+                message = str(exc)
+            signals.append({"symbol": symbol, "name": name, "error": message})
+    return {"signals": signals}
 
 
 @app.post("/api/backtests/run")
