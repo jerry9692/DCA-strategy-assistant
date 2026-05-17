@@ -181,8 +181,29 @@ const CRISIS_SCENARIOS = [
   }
 ];
 
+const QUICK_BACKTEST_PERIODS = [
+  { id: "1y", label: "1年", years: 1 },
+  { id: "3y", label: "3年", years: 3 },
+  { id: "5y", label: "5年", years: 5 },
+  { id: "10y", label: "10年", years: 10 }
+];
+
 function isoDate(date: Date) {
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateInput(value: string) {
+  const parsed = new Date(`${value}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
+function yearsBefore(dateText: string, years: number) {
+  const date = parseDateInput(dateText);
+  date.setFullYear(date.getFullYear() - years);
+  return isoDate(date);
 }
 
 function defaultsFor(strategy?: StrategyDef) {
@@ -401,6 +422,10 @@ function App() {
     () => comparisonStrategyTypes.filter((item, index, source) => item !== strategyType && source.indexOf(item) === index),
     [comparisonStrategyTypes, strategyType]
   );
+  const activePeriodId = useMemo(
+    () => QUICK_BACKTEST_PERIODS.find((period) => yearsBefore(endDate, period.years) === startDate)?.id ?? null,
+    [endDate, startDate]
+  );
   const config = useMemo(
     (): StrategyConfigPayload => ({
       strategyType,
@@ -556,6 +581,11 @@ function App() {
     setActiveScenarioId(scenario.id);
     setStartDate(scenario.startDate);
     setEndDate(scenario.endDate);
+  };
+
+  const applyBacktestPeriod = (years: number) => {
+    setStartDate(yearsBefore(endDate, years));
+    setActiveScenarioId(null);
   };
 
   const runRecommendationOnly = () => {
@@ -885,6 +915,21 @@ function App() {
           结束
           <input type="date" value={endDate} onChange={(event) => { setEndDate(event.target.value); setActiveScenarioId(null); }} />
         </label>
+        <div className="period-control">
+          <span>回测周期</span>
+          <div className="period-buttons">
+            {QUICK_BACKTEST_PERIODS.map((period) => (
+              <button
+                type="button"
+                key={period.id}
+                className={activePeriodId === period.id ? "active" : ""}
+                onClick={() => applyBacktestPeriod(period.years)}
+              >
+                {period.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </section>
 
       {error && (

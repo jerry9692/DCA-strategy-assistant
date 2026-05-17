@@ -31,7 +31,8 @@ select {
 .recommendation,
 .metrics-grid,
 .section-title,
-.reason-row {
+.reason-row,
+.period-buttons {
   display: flex;
 }
 
@@ -125,6 +126,40 @@ h2 {
   border-radius: 8px;
   margin-bottom: 16px;
   flex-wrap: wrap;
+}
+
+.period-control {
+  display: grid;
+  gap: 6px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.period-buttons {
+  gap: 6px;
+  height: 38px;
+  align-items: center;
+  padding: 3px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.period-buttons button {
+  height: 30px;
+  min-width: 48px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #475569;
+  padding: 0 10px;
+  cursor: pointer;
+  font-weight: 740;
+}
+
+.period-buttons button.active {
+  background: #0f766e;
+  color: #fff;
 }
 
 .crisis-strip {
@@ -810,7 +845,8 @@ input[type="range"] {
 }
 
 .app-shell[data-theme="dark"] input,
-.app-shell[data-theme="dark"] select {
+.app-shell[data-theme="dark"] select,
+.app-shell[data-theme="dark"] .period-buttons {
   background: #0f172a;
   border-color: #334155;
   color: #e5e7eb;
@@ -835,8 +871,15 @@ input[type="range"] {
 .app-shell[data-theme="dark"] .optimizer-card strong,
 .app-shell[data-theme="dark"] .config-preview b,
 .app-shell[data-theme="dark"] label,
+.app-shell[data-theme="dark"] .period-control,
+.app-shell[data-theme="dark"] .period-buttons button,
 .app-shell[data-theme="dark"] .compare-choice {
   color: #cbd5e1;
+}
+
+.app-shell[data-theme="dark"] .period-buttons button.active {
+  background: #0f766e;
+  color: #fff;
 }
 
 .app-shell[data-theme="dark"] .eyebrow,
