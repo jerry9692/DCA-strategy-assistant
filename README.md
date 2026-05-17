@@ -45,6 +45,26 @@ Default dynamic bounds are intentionally mild: **0.8x minimum** and **1.2x maxim
 
 ### Prerequisites
 - Python 3.10+
+- Node.js 18+
+
+### One-click dev startup on Windows
+
+Double-click `start-dev.bat`, or run:
+
+```powershell
+.\start-dev.ps1
+```
+
+It opens two PowerShell windows, one for the FastAPI backend and one for the Vite frontend:
+
+- Backend: `http://127.0.0.1:8000`
+- Frontend: `http://127.0.0.1:5173`
+
+If dependencies are missing, run this once:
+
+```powershell
+.\start-dev.ps1 -Install
+```
 
 ### Backend
 
