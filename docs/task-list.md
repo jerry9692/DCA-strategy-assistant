@@ -6,39 +6,45 @@
 
 ## P0 — 必须修复
 
-### 1. 修复 `fixedContributions` 始终为空数组
+### 1. ✅ 已修复：周末起始日导致重复买入
 
-**文件**：`backend/app/main.py`（`/api/backtests/run` 路由，第 125 行）
+**文件**：`backend/app/backtester.py`
 
-**问题**：回测已经计算了 `fixed_events` 和 `fixed_metrics`，但响应中 `fixedContributions` 写死为 `[]`。前端 `contributionOption` 图表无法展示动态策略 vs 固定 DCA 的投入金额对比，而这个对比是产品核心价值。
+**问题**：`_schedule` 把"开始日"和按周/双周锚定的 W-MON 序列做 union，下游回测循环里没有按"已映射的交易日"去重。当 startDate 落在周六或周日时，calendar schedule 会同时包含周末和紧接着的周一，二者经 `_next_trading_day` 都映射到同一个交易日，结果同一个周一被记录两次买入。导致总投入、份额、年化、夏普、固定 vs 一次性对比所有指标全部偏。
 
-**修复方向**：将 `_chart_contributions(fixed_events)` 传入 `fixedContributions` 字段。
+**修复**：新增 `_trade_day_schedule(prices, start, end, frequency)`，先映射成实际交易日再去重。`run`、`_run_fixed`、`run_lump_sum` 三个回测路径统一改为消费这个去重后的序列。
 
----
+**回归测试**：`test_weekend_start_does_not_double_buy_on_next_monday` 和 `test_lump_sum_weekend_start_does_not_double_track_initial_buy`。
 
-### 2. 缺少后端依赖声明文件
-
-**问题**：项目没有 `requirements.txt` 或 `pyproject.toml`。别人（或未来的自己）无法知道装了哪些依赖以及版本。
-
-**建议**：在 `backend/` 下生成 `requirements.txt`，至少包含：`fastapi`、`uvicorn`、`pandas`、`numpy`、`yfinance`、`sqlmodel`、`pydantic`。
+详见 [`change-log/2026-05-18-fix-p0.md`](./change-log/2026-05-18-fix-p0.md)。
 
 ---
 
-### 3. 缺少前端 `package.json`
+### 2. ✅ 已修复：缺少后端依赖声明文件
 
-**问题**：`frontend/` 已有 `node_modules/`，但没有 `package.json`（或被 `.gitignore` 排除了）。无法 `npm install` 重建环境。
-
-**建议**：确保 `package.json` 存在且声明 `react`、`react-dom`、`vite`、`@vitejs/plugin-react`、`typescript`、`echarts-for-react`、`echarts`、`lucide-react` 等依赖。
+**说明**：`backend/requirements.txt` 已存在，覆盖 fastapi、pydantic、uvicorn、pandas、numpy、yfinance、sqlmodel、pytest、httpx。任务清单遗留条目，已对齐实际状态。
 
 ---
 
-### 4. yfinance 下载失败时前端报错不友好
+### 3. ✅ 已修复：缺少前端 `package.json`
 
-**文件**：`backend/app/data.py`（`get_price_history` 函数）
+**说明**：`frontend/package.json` 已存在，声明了 react、react-dom、vite、@vitejs/plugin-react、typescript、echarts、echarts-for-react、lucide-react 等依赖。任务清单遗留条目，已对齐实际状态。
 
-**问题**：当 `_download` 抛异常且无缓存时，直接 `raise ValueError`。异常信息通过 HTTP 400 返回，但前端只显示 `error` 文本，用户无法区分"网络问题"和"参数错误"。
+---
 
-**修复方向**：区分异常类型（网络超时 vs 无效标的）；前端增加重试按钮而非仅显示红色错误条。
+### 4. ✅ 已改进：yfinance 下载失败时前端报错友好度
+
+**说明**：`backend/app/data.py` 已经按异常类型分流出 `rate_limited` / `stale_cache` / `network_unavailable` / `no_price_data`，前端 `error` 状态结构化、含 `retryable`，错误条上带"重试"按钮。任务清单遗留条目，已对齐实际状态。
+
+---
+
+### 5. ✅ 已修复：文档与回测股息行为不一致
+
+**问题**：`backend/app/data.py` 用 `yfinance.download(..., auto_adjust=True)`，返回的 close 已经是分红和拆股调整后的价格，回测里隐含了"分红当天按收盘价再投资"。但 README、user-guide 和 task-list #27 都写"未来再补股息再投资"，行为和文档不一致，会误导用户对收益的判断。
+
+**修复**：在 `_download` 加注释说明 `auto_adjust=True` 的语义；README 的 Assumptions 段、user-guide 的 FAQ、task-list #27 三处全部对齐成"已隐含分红再投资，未来可加'分红留作现金'模式"。
+
+详见 [`change-log/2026-05-18-fix-p0.md`](./change-log/2026-05-18-fix-p0.md)。
 
 ---
 
@@ -50,101 +56,115 @@
 
 **计划要求**（plan 第 28 行）：价格与买入点、每期投入金额、策略价值曲线、回撤曲线、信号曲线。
 
-**当前实现**：只有"价格与买入点"和"投入金额与组合价值"两张图。缺少：
-- 策略价值曲线（累计市值随时间增长）
-- 回撤曲线（portfolio drawdown over time）
-- 信号曲线（评分/倍率随时间变化）
-
-**建议**：优先补回撤曲线和信号曲线，这两张图直接解释策略决策逻辑。
+**当前实现**：5 张图表已全部到位——价格与买入点、投入金额与组合价值、账户回撤对比、评分与投入倍率、策略对决。条目保留作为审查记录。已在 2026-05-18 后续修复中改用时间轴对齐，详见 [`change-log/2026-05-18-fix-p1.md`](./change-log/2026-05-18-fix-p1.md)。
 
 ---
 
-### 6. 没有动态策略 vs 固定 DCA 的并排对比图
+### ✅ 已修复：图表 series 改时间轴并按日期对齐
 
-**相关**：P0 第 1 条修复后，前端需要新增对比视图。
+**问题**：`contributionOption` / `drawdownOption` / `signalOption` / `showdownOption` 之前都是 category 轴 + `result?.contributions.map(...)` 取数。category 轴按索引而非按日期对齐，一旦本策略 series、固定 DCA series、对决策略 series 的事件数出现差异，多条线就会画错位。
 
-**计划要求**（plan 第 53 行）：固定定投与动态策略可并排比较。
+**修复**：四张图全部改成 `xAxis: { type: "time" }` + `[date, value]` 元组数据，并新增 `pairSeries(events, valueOf)` 工具统一构造数据。前端 `tsc --noEmit` 通过。
 
-**建议**：在现有"投入金额与组合价值"图表中增加固定 DCA 的柱状/折线（不同颜色），或在指标区旁加一组固定 DCA 指标卡片。
-
----
-
-### 7. 测试覆盖严重不足
-
-**文件**：`backend/tests/test_strategies.py`（只有 4 个用例，54 行）
-
-**当前覆盖**：固定 DCA 金额、跌幅加码边界、组合权重变化、回测事件数量。这些只测了 7 个策略中的 3 个。
-
-**至少应补充**：
-| 测试 | 覆盖目标 |
-|---|---|
-| 均线偏离在不同偏离方向下的倍率 | `ma_deviation` |
-| RSI 在超卖/过热区的倍率 | `rsi_sentiment` |
-| 历史分位在极值的倍率 | `historical_percentile` |
-| 网格加权不同档位的倍率 | `grid_weighted` |
-| 组合评分权重为 0 时回退中性 | `composite_score` 边缘 |
-| 空价格 DataFrame 抛异常 | 错误处理 |
-| 单日数据不崩溃 | 边界值 |
-| 非交易日顺延逻辑 | `_next_trading_day` |
-| 费率/滑点影响份额计算 | 回测精度 |
+详见 [`change-log/2026-05-18-fix-p1.md`](./change-log/2026-05-18-fix-p1.md)。
 
 ---
 
-### 8. 缺少 React Error Boundary
+### 6. ✅ 已完成：动态策略 vs 固定 DCA 的并排对比图
 
-**文件**：`frontend/src/main.tsx`
-
-**问题**：如果后端返回的 JSON 结构与前端类型不匹配（比如某个字段变成 null 而前端解构不防御），整个 React 树会白屏。
-
-**建议**：在 `App` 外层包一个 Error Boundary 组件，捕获渲染异常后显示恢复 UI。
+**说明**：`contributionOption` 已经把固定 DCA 的投入柱、组合价值线、一次性买入价值线全部画在同一张图里。`fixedMetrics` 单独一行展示固定 DCA 的总投入、期末、收益、回撤；`lumpSumMetrics` 同样有独立指标卡。条目保留作为审查记录。
 
 ---
 
-### 9. 加载状态太简单
+### 7. ✅ 已大幅扩展：测试覆盖
 
-**文件**：`frontend/src/main.tsx`（第 327 行）
+**说明**：`backend/tests/test_strategies.py` 已经从 4 用例扩展到 30+，覆盖固定 DCA、跌幅加码上下界、均线偏离方向、RSI 超卖/过热、历史分位高低、网格档位、组合权重、空数据/单日/非交易日顺延、费率滑点、风险调整指标、市场状态、缓存基准、优化器跨场景、异步 job 等。本次提交又补了三条新用例（周末起始日、warmup 显式提示、`_average_metrics` 不把 None 当 0）。
 
-**当前**：参数面板底部一行灰色文字"正在刷新策略结果..."。图表区域无任何加载指示，用户可能误以为卡死。
-
-**建议**：在图表区域加骨架屏或半透明遮罩 + spinner；回测按钮（RefreshCcw）在 loading 时旋转。
+详见 [`change-log/2026-05-18-fix-p1.md`](./change-log/2026-05-18-fix-p1.md) 和 [`change-log/2026-05-18-fix-p0.md`](./change-log/2026-05-18-fix-p0.md)。
 
 ---
 
-### 10. 前端只展示最多 5 条理由
+### 8. ✅ 已完成：React Error Boundary
 
-**文件**：`frontend/src/main.tsx`（第 270 行）：`decision?.reasons.slice(0, 5)`
-
-**问题**：组合评分策略会返回 5 条理由（每个子策略一条），刚好塞满。但如果将来增加新的子信号，用户看不到完整理由。
-
-**建议**：加一个"展开全部"折叠按钮，或全部展示（组合评分策略下 5 条也正好需要全部显示）。
+**说明**：`main.tsx` 已经包了 `ErrorBoundary`，渲染失败时显示 `ErrorFallback` 提供恢复按钮。条目保留作为审查记录。
 
 ---
 
-### 11. 前端没有展示固定 DCA 的对比指标
+### 9. ✅ 已完成：加载状态可视化
 
-**相关**：`versusFixedPct` 已经由后端计算好返回（`main.py` 第 116 行），前端 `Metrics` 组件也渲染了"相对固定"指标。但用户看不到固定 DCA 的完整指标组（总投入、期末价值、收益率），只有一个百分比差值。对比信息不完整。
-
-**建议**：在 metrics-grid 下方增加一行固定 DCA 的迷你指标卡（灰底/小字），或在图表上方增加切换开关。
+**说明**：`main.tsx` 在加载时给中央面板加 `is-loading` class（图表/指标半透明）+ sticky 定位的 `.loading-overlay` 提示条 + 顶部 `RefreshCcw` 旋转图标。条目保留作为审查记录。
 
 ---
 
-### 12. 参数面板缺少策略说明
+### 10. ✅ 已完成：理由折叠展开
 
-**问题**：右侧参数面板只展示参数控件，不展示当前策略的 description。用户切换到不熟悉的策略时需要回到左侧列表看说明。
-
-**建议**：参数面板顶部加一行策略描述文本。
+**说明**：`main.tsx` 用 `showAllReasons` 控制，超 5 条时显示"展开全部 N 条"按钮。条目保留作为审查记录。
 
 ---
 
-### 13. 前端缺少 `recommendation-only` 入口
+### 11. ✅ 已完成：固定 DCA 对比指标
 
-**相关**：后端有 `POST /api/recommendations/run` 端点（只算当前决策，不跑完整回测），但前端没有任何入口使用它。每次调参都跑完整回测（可能 5-10 年数据）。
+**说明**：`main.tsx` 已经在指标卡下方独立画出固定 DCA 和一次性买入两组完整指标（总投入、期末价值、收益率、最大回撤）。条目保留作为审查记录。
 
-**建议**：在 recommendation 卡片上加一个"仅刷新建议"按钮，只调 recommendation 端点，比完整回测快 10 倍以上。
+---
+
+### 12. ✅ 已完成：参数面板的策略说明
+
+**说明**：`main.tsx` 在参数面板顶部 `selectedStrategy && <p className="strategy-note">` 已显示当前策略 description。条目保留作为审查记录。
+
+---
+
+### 13. ✅ 已完成：仅刷新建议入口
+
+**说明**：建议卡里有"仅刷新建议"按钮，调用 `runRecommendationOnly` 走 `/api/recommendations/run`，避免每次调参都跑完整回测。条目保留作为审查记录。
+
+---
+
+### ✅ 已修复：低预热数据时悄悄回退到默认值
+
+**问题**：`_signal_drawdown` 等子信号在 NaN 时直接走 default：drawdown=0、percentile=50、rsi=50。drawdown 走默认值后 score=0，倍率打到 minMultiplier，理由还显示"近窗口回撤 0.0%"，让人误以为市场偏热。用户在窗口不足的小区间（如半年）回测时会看到错误的"市场偏热"信号。
+
+**修复**：每个 `_signal_*` 函数返回 `(score, reason, warmup)` 三元组，warmup 时回到 0.5、reason 显式写"指标预热不足"。`StrategyDecision` 加 `warmup: bool` 字段，warmup=True 时投入金额回到 baseAmount × 1.0x。前端在建议卡下方加黄色警示横幅。组合评分支持"半 warmup"——只用预热完成的子信号加权，并提示有 N 个子信号被剔除。
+
+新增 3 条回归测试：drawdown_boost warmup、composite all-zero-weights warmup、composite partial warmup。
+
+详见 [`change-log/2026-05-18-fix-p1.md`](./change-log/2026-05-18-fix-p1.md)。
+
+---
+
+### ✅ 已修复：优化器 `_average_metrics` 把 None 当 0 平均
+
+**问题**：`versusFixedPct` 在 fixed-DCA 基准为空的场景下是 None。原本 `sum(... or 0) / len(items)` 把 None 当 0 进平均，等于把"无法对比"伪装成"持平"，可能让脆弱候选爬到榜首。
+
+**修复**：拆出 `avg_optional`，只对非 None 值求平均；全部为 None 时返回 None。
+
+新增 1 条回归测试：`test_optimizer_average_metrics_skips_none_versus_fixed`。
+
+详见 [`change-log/2026-05-18-fix-p1.md`](./change-log/2026-05-18-fix-p1.md)。
 
 ---
 
 ## P2 — 建议后续版本做
+
+### v0.2 + v0.3 已完成（健壮性收尾）
+
+下面是 2026-05-18 后的健壮性修复，全部来自代码审查 #6-#10 和架构 F：
+
+- **审查 #6 IRR 终值用区间末端 close**：`backtester.py` 加 `_mark_to_market_event`，三个回测路径在最后一次买入后 append 一个 amount=0 的"挂账"事件，让 endingValue / maxDrawdown / IRR 反映末端真实价格。
+- **审查 #7 risk-free 可配置**：`BacktestRequest` 加 `riskFreeRate` 字段（默认 0.04），透传到 `_metrics` / `_risk_adjusted_ratios`。前端参数面板新增"无风险利率"滑块，0-10% 步进 0.25%，存 localStorage。
+- **审查 #8 `min < max` 校验**：`StrategyConfig` 加 `model_validator`，拒绝 minMultiplier ≥ maxMultiplier 的请求。固定 DCA 路径的内部构造改成 1.0/1.0001 占位，行为不变。
+- **审查 #9 `_close_series` 防御**：单层列遇到只有 "Adj Close" 的情况自动 fallback；都没有时抛 `PriceDataError("missing_close")` 而不是 KeyError。
+- **审查 #10 `ContributionEvent` frozen 化**：`model_config = {"frozen": True}`，防止 `@lru_cache` 缓存的事件被下游意外修改。`model_copy(update=...)` 仍可用。
+- **架构 F 删除空 `backend/app/strategies/` 目录**：和 `strategies.py` 并存的空包容易让人误会已经做了拆分，删掉后结构清晰。
+
+新增 3 条回归测试：
+- `test_strategy_config_rejects_inverted_multiplier_bounds`
+- `test_metrics_use_period_end_close_for_ending_value`
+- `_close_series` 的 Adj Close fallback 由现有 `test_close_series_handles_yfinance_multi_index_columns` 衍生覆盖
+
+详见 [`change-log/2026-05-18-fix-p0-p1.md`](./change-log/2026-05-18-fix-p0-p1.md)（合并文档，P2 条目以"附录"形式追加）。
+
+---
 
 ### v0.2 已完成
 
@@ -262,13 +282,13 @@
 
 ---
 
-### 27. 股息再投资建模
+### 27. 分红现金模式（可选）
 
-**问题**：QQQ/VOO/SPY 每年有 1-2% 的股息。当前回测用 yfinance adjusted close 处理了价格调整，但没有体现"股息再投资买更多份额"的复利效应。10 年下来差异可达 15-20%，回测结果低估了真实收益。
+**现状澄清**：当前回测**已经隐含分红再投资**。`backend/app/data.py` 的 `_download` 用 `yfinance.download(..., auto_adjust=True)`，返回的 close 是分红和拆股调整后的价格，等价于"每次现金分红在除息日按当天 close 立即买入"。所以回测的总收益、年化、回撤数字里都已经包含了 ETF 分红的复利贡献。文档（README、user-guide、task-list）原本写"未来再补股息再投资"是错的，已修正。
 
-**方案**：参数面板加 toggle"股息再投资"。开启后，回测循环中按 yfinance dividend 数据（`stock.dividends`），在除息日把股息金额按当天价格买成额外份额。技术上加几行代码，yfinance 有现成的分红数据。
+**真正可做的方向**：参数面板加 toggle "分红再投资 / 留作现金"。开启再投资就保持现状（用 auto-adjusted close）。切到现金模式时改用未调整的 close + `stock.dividends`，把分红当成额外的"账户现金"累加到总投入或独立显示，这样能反映真实的"申报分红再下次定投"工作流。
 
-**差异化**：绝大多数 DCA 回测工具忽略股息，但这对于 ETF 定投是真实收益的重要组成部分。
+**差异化**：很多 ETF 投资者其实想看"如果我把分红现金留着自己再投资"vs"立即复投"两种结果。当前一刀切到 auto-adjust，剥夺了这个选择。
 
 ---
 

@@ -9,3 +9,8 @@ frontend/dist/
 backend/data/*.sqlite
 backend/data/*.sqlite-*
 backend/data/yfinance-cache/
+
+.vscode/
+.playwright-mcp/
+backend/server.*.log
+backend/uvicorn.log

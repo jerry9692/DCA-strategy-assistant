@@ -1,4 +1,4 @@
-# DCA Strategy Assistant v0.2
+# DCA Strategy Assistant v0.3
 
 A local web application for dynamic Dollar-Cost Averaging (DCA) investment research. Instead of investing the same amount every period, it uses 7 market-driven strategies to adjust your contribution based on current conditions — buy more when the market dips, less when it's overheated.
 
@@ -21,6 +21,19 @@ Currently supports **QQQ, VOO, SPY** (US-listed ETFs, USD denominated, daily dat
 Each strategy returns a recommended amount, multiplier, score, raw signal values, and human-readable reasons.
 
 Default dynamic bounds are intentionally mild: **0.8x minimum** and **1.2x maximum**. The tool is designed as disciplined DCA with small adjustments, not market-timing.
+
+## v0.3 Highlights
+
+- 修复了周末/月初非交易日开始时回测会重复买入同一个交易日的 bug。
+- 信号预热不足时显式提示用户而不是悄悄按基础金额执行；前端在建议卡上方有黄色警示横幅。
+- 优化器跨场景平均时正确处理 `versusFixedPct=None` 的场景，避免脆弱候选爬到榜首。
+- 4 张主图表统一改为时间轴 + `[date, value]` 元组数据，多 series 按日期对齐而非按索引对齐。
+- 区间末端补一笔 mark-to-market 事件，让 endingValue / 最大回撤 / IRR 反映末端真实价格。
+- 无风险利率从硬编码 4% 变成可配置滑块（0-10%），影响夏普 / 索提诺。
+- `StrategyConfig` 校验 `minMultiplier < maxMultiplier`，避免把工具退化成"始终低于基础金额"。
+- yfinance 偶发只返回 Adj Close 时优雅降级，不再抛 KeyError。
+- `ContributionEvent` frozen 化，防止 lru_cache 被下游意外修改污染。
+- 文档对齐实际行为：明确历史回测**已经隐含分红再投资**（auto_adjust）。
 
 ## v0.2 Highlights
 
@@ -138,9 +151,10 @@ DCA-strategy-assistant/
 
 ## Assumptions & Limitations
 
-- v0.2: USD only, daily data, QQQ/VOO/SPY only.
+- v0.3: USD only, daily data, QQQ/VOO/SPY only.
 - The grid strategy is "grid-weighted DCA" — it only adjusts buy amounts, no sell signals.
-- Backtesting uses a simple IRR bisection method for annualized return; no dividend reinvestment yet.
+- Backtesting uses a simple IRR bisection method for annualized return.
+- Price data is fetched from Yahoo Finance with `auto_adjust=True`, so historical close prices already reflect dividend and split adjustments. Backtest returns and drawdowns therefore implicitly assume cash dividends are reinvested on the ex-date at that day's close. There is no separate "hold dividends as cash" mode yet.
 - Fee and slippage rates are supported in the engine but not yet exposed in strategy parameters.
 - Parameter optimization is historical multi-scenario validation only. It does not predict which parameters will be best in future markets.
 

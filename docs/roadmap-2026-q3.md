@@ -1,0 +1,440 @@
+# DCA Strategy Assistant — 下阶段路线图（2026 Q3+）
+
+代码审查（2026-05-18 P0/P1/P2 三轮）已经把 #1-#10 + 架构 F 的全部 bug 和健壮性条目清零。从这里开始的工作分成两条线：
+
+- **稳态线**：把项目从"能跑的研究工具"升级为"可被同事/朋友/外部用户使用的产品"。重点是工程质量、可部署、可观测。
+- **价值线**：把 DCA 助手从"7 个策略 + 回测工作台"升级到"投资决策伴侣"。重点是新功能、新 insight、新差异化。
+
+下面按 P0 → P1 → P2 → P3 → 实验排，每一项都给出**价值 / 成本 / 触发条件**三个判断维度，方便取舍。
+
+---
+
+## P0 — 工程基础底线（建议本周内做）
+
+这一档不是产品功能，是没了它就会咬人的最小工程基础。当前项目缺这一块的程度让代码审查能找到的 bug 还会继续来。
+
+### A1 引入 ruff + black + 后端 pre-commit
+
+- **现状**：纯靠人眼。代码风格已经有不一致（未用的 import、空行间距、对长行的偏好）。
+- **价值**：高。下次代码审查不会再被风格问题干扰，能聚焦真正的 bug。
+- **成本**：1 小时。`ruff check --fix` + `ruff format`，提交一个"风格统一"PR。
+- **配置**：`pyproject.toml` 加 ruff section，行长 110，目标 py310。
+
+### A2 后端加 mypy 或 pyright
+
+- **现状**：Pydantic v2 + 类型注解写得很好，但没 type checker 兜底。`evaluate_prepared_strategy` 里的 NaN 默认值这种坑，类型检查能在写时发现。
+- **价值**：中-高。一次性投入，长期受益。
+- **成本**：半天（包含修复初次扫描的告警）。建议从 `--strict-optional` 起步，逐步收紧。
+
+### A3 前端加 ESLint + Prettier + Vitest
+
+- **现状**：1438 行 `main.tsx` 没有任何静态分析或测试。改一行可能改坏五处。
+- **价值**：高。前端是用户唯一的接触面，回归代价大。
+- **成本**：半天。Vitest 本地跑、ESLint 配 `react-hooks/exhaustive-deps` 能立刻发现两处依赖数组缺漏。
+- **顺手做**：先给 `pairSeries`、`accountDrawdown`、`exportBacktestCsv` 加单元测试。
+
+### A4 GitHub Actions CI
+
+- **现状**：本地 `pytest` + `tsc --noEmit` 才能验证。任何人提 PR 没有自动化保障。
+- **价值**：高。是工程协作的最低门槛。
+- **成本**：1 小时。一个 yaml：在 push/PR 时跑 `pytest backend/tests` + `npx tsc --noEmit` + 前端 build。
+- **附加**：把 `pytest --cov` 跑起来，覆盖率上传到 Codecov（可选）。
+
+### A5 Dockerfile + docker-compose
+
+- **现状**：只有 `start-dev.bat` / `.ps1`。Mac/Linux 用户无法运行。
+- **价值**：中。本地用户面拓宽 + 可以一行命令分享给朋友试用 + 为未来云端部署铺路。
+- **成本**：2 小时。多阶段构建：Python 后端 + Node 前端，nginx 起静态。
+- **触发条件**：有人想分享给非 Windows 用户、或想跑在 home server 上时立刻做。
+
+### A6 仓库基础健全
+
+- `LICENSE` 文件还没有（README 写了 MIT 但没文件）。
+- `.gitattributes` 设置 LF 统一。
+- `CONTRIBUTING.md` 给一个最小开发流程文档。
+- 把 `backend/server.err.log` / `server.out.log` / `server.job.log` / `uvicorn.log` 加进 `.gitignore` 并删除已提交的（如果有）。
+
+---
+
+## P1 — 必修的架构债（建议本月内做）
+
+这一档的项目已经在多次代码审查里被点过名，再不做就会拖慢所有功能开发。
+
+### B1 拆 `frontend/src/main.tsx`（架构建议 D）
+
+- **现状**：1438 行单文件，App 组件里塞了 17 个 useState、4 个 useMemo、5 个 useEffect。
+- **价值**：高。下次想加任何新页面（多标的组合、压力测试、定投日历）都需要先拆。
+- **成本**：1 天。不重写逻辑，只搬代码。
+- **拆分建议**：
+  
+  ```
+  src/
+  ├── App.tsx                    # 顶层 layout、theme、error boundary
+  ├── api/
+  │   ├── client.ts              # readJson、toUiError
+  │   └── types.ts               # 所有 type Decision / Backtest / ...
+  ├── hooks/
+  │   ├── useBacktest.ts         # 防抖 + 请求 + state
+  │   ├── useOptimization.ts     # job 创建 + 轮询 + 取消
+  │   └── useSettings.ts         # localStorage 加载/持久化
+  ├── panels/
+  │   ├── ControlStrip.tsx       # 顶部控制栏 + 快捷周期 + 压力场景
+  │   ├── StrategyList.tsx       # 左侧策略列表 + showdown picker
+  │   ├── ParamPanel.tsx         # 右侧参数面板 + 自动调优入口
+  │   ├── RecommendationCard.tsx # 中部建议卡 + 市场状态 + reasons + warmup
+  │   ├── MetricsGrid.tsx        # 指标卡 + 固定/lump 基准
+  │   └── OptimizationPanel.tsx  # 稳健参数建议 + 进度条
+  ├── charts/
+  │   ├── PriceChart.tsx
+  │   ├── ContributionChart.tsx
+  │   ├── DrawdownChart.tsx
+  │   ├── SignalChart.tsx
+  │   └── ShowdownChart.tsx
+  └── utils/
+      ├── series.ts              # pairSeries、accountDrawdown
+      ├── csv.ts                 # exportBacktestCsv
+      └── format.ts              # metric、isoDate、yearsBefore
+  ```
+- **顺手收益**：tree shaking 改善、HMR 速度变快、跑 Vitest 写 hook 单测可行。
+
+### B2 优化器并行化或缓存（架构建议 B）
+
+- **现状**：grid search 最坏 600 候选 × 9 场景 = 5400 次 backtest，单线程串行。每个候选都重新 `prepare_market` 一次。
+- **价值**：中-高。一次稳健调优要几十秒到几分钟，用户耐心耗光就放弃了。
+- **成本**：半天。
+- **方案 A（先做）**：`prepare_market` 只跟 `IndicatorSettings`（5 个窗口）有关，多个候选共用同一份 prepared。给 `prepare_market` 加 `@lru_cache(maxsize=64)`（key 用 settings tuple + price hash）。预计减 60-80% 时间。
+- **方案 B（再做）**：`concurrent.futures.ProcessPoolExecutor` 按候选分发。预计再减 50-75%，但要解决 `pd.DataFrame` 跨进程序列化成本——所以建议先做 A 再观察是否需要 B。
+
+### B3 策略注册表（架构建议 E）
+
+- **现状**：`evaluate_prepared_strategy` 里 7 段 if/elif；新加策略要改 3 处（注册表 + 派发 + warmup 处理）。
+- **价值**：中。当前策略稳定，但下次加策略（比如 P3 的 Bollinger / 波动率定投）必受益。
+- **成本**：半天。
+- **方案**：
+  
+  ```python
+  StrategyHandler = Callable[[pd.Series, StrategyConfig], "SignalResult"]
+  STRATEGY_HANDLERS: dict[str, StrategyHandler] = {
+      "drawdown_boost": _drawdown_handler,
+      "ma_deviation": _ma_handler,
+      ...
+  }
+  ```
+  
+  `evaluate_prepared_strategy` 变成 ~20 行调度逻辑。`composite_score` 仍特殊处理（聚合多个 handler）。
+
+### B4 OpenAPI 类型同步（架构建议 C）
+
+- **现状**：`models.py` 改一处，`main.tsx` 顶部 60 行 type 也要手动改。
+- **价值**：中。schema 改动不频繁，但每次都得记得双改，已经踩过坑。
+- **成本**：3 小时。
+- **方案**：`openapi-typescript` 生成 `frontend/src/api/generated.ts`，加 `npm run gen:api` 脚本。CI 跑一遍验证生成产物没漂移。
+
+---
+
+## P2 — 现有功能完善（建议下迭代做）
+
+这一档是已有功能的体验细化和小幅扩展。
+
+### C1 支持更多标的（task-list #18）
+
+- **现状**：`SUPPORTED_ASSETS` 写死 QQQ/VOO/SPY 三个。
+- **价值**：高。任何用户上来都会问"能加我持有的 XX 吗"。
+- **成本**：1-2 天。
+- **改动**：
+  - 后端 `SUPPORTED_ASSETS` 扩展到 ~20 个常见 ETF（VTI、IWM、VEA、VWO、SCHD、VYM、ARKK、SOXX、XLK、XLE、IBIT、GLD、TLT、IEF、AGG、BND、AVUV、VXUS）。
+  - 前端 select 改成 grouped（美股大盘 / 行业 / 国际 / 债券 / 商品 / 加密）。
+  - 验证：每个新标的至少跑一次完整 5 年回测，看缓存层和指标计算都正常。
+- **注意**：QQQ/VOO/SPY 是高度相关的同类资产，扩展后会暴露各种被掩盖的边角问题（高波动 ETF 在 RSI/grid 策略下的表现、债券 ETF 的低回撤导致 drawdown_boost 几乎不触发）。
+
+### C2 暴露费率和滑点参数
+
+- **现状**：后端支持 `fee_rate` / `slippage_rate`，但前端 params 里没有对应控件，`config.params.get("feeRate", 0)` 永远拿到 0。
+- **价值**：中-高。机构 / 专业用户会问"如果我每次买入有 0.1% 滑点会怎样"。零成本回测让人怀疑数据真实性。
+- **成本**：1 小时。
+- **改动**：参数面板加两个 RangeControl（费率 0-0.5%，滑点 0-0.5%），写进 `config.params` 即可，后端无需改。
+
+### C3 URL state 同步
+
+- **现状**：用户做完一次"QQQ + composite_score + 2018-2024"的完美回测，没法把链接发给朋友。刷新页面也丢失（虽然 localStorage 部分恢复）。
+- **价值**：中-高。增长机制：用户分享配置 = 免费传播。
+- **成本**：半天。
+- **方案**：把 symbol / strategyType / startDate / endDate / preset / 主要 params 序列化到 URL search params。`useEffect` 双向同步。复杂参数（comparison strategies）可以省略或单独加。
+
+### C4 指标 hover 解释
+
+- **现状**：指标卡只有标签 + 数字。"持仓最大回撤"、"夏普比率"、"索提诺比率"、"相对一次性"对非专业用户都是黑话。
+- **价值**：中。降低门槛，提高用户对工具的信任。
+- **成本**：2 小时。
+- **方案**：每个指标卡加 `<span title="...">i</span>` 或用 lucide `Info` icon + tooltip。文案：
+  - 持仓最大回撤：从"已经买入的资产"高点到低点的最大百分比跌幅
+  - 夏普比率：(收益 - 无风险利率) / 总波动。> 1 不错，> 2 优秀
+  - 索提诺比率：只用下行波动算分母，对"上行波动"不惩罚。比夏普更适合定投者
+  - 相对固定：如果你照本策略投，比每周固定金额多赚（或少赚）多少
+  - 相对一次性：如果你期初一次性投入同样总预算，本策略多赚（或少赚）多少
+
+### C5 日期范围快捷验证
+
+- **现状**：start > end 不会被前端拦下，等后端报错才提示。日期超过 yfinance 最早数据点（QQQ 1999-03、SPY 1993-01）时会拿到很短的回测但不警告。
+- **价值**：低-中。健壮性。
+- **成本**：1 小时。
+- **方案**：前端加 `min`/`max` HTML 限制 + 提交前 startDate < endDate 校验，并显示 "数据从 XXX 起可用" 的灰色提示。
+
+### C6 错误重试体验改进
+
+- **现状**：rate-limited 错误显示一行红字 + 重试按钮。用户不知道还要等多久才能重试，频繁点击只会再次触发。
+- **价值**：中。yfinance 限流是 5 分钟级别，体验非常差。
+- **成本**：2 小时。
+- **方案**：
+  - rate_limited 错误带一个 60 秒倒计时按钮（按钮上显示剩余秒数）。
+  - 倒计时结束自动 retry 一次，再失败再倒计时。
+
+### C7 优化任务的 cancel 触发收窄（架构建议 G）
+
+- **现状**：`useEffect` 依赖 `config`，只要任意 params 变就 cancel 任务。用户在 5 分钟优化跑到 80% 时随手拖了一下滑块就会全部白跑。
+- **价值**：中。当前行为太激进。
+- **成本**：1 小时。
+- **方案**：把 cancel 的依赖收窄为 `[symbol, strategyType, startDate, endDate]`。其它参数变化只刷新 backtest，不取消优化。
+
+### C8 优化结果在前端不会被参数变更"隐藏"
+
+- **现状**：现在 `setOptimization(null)` 在 useEffect 依赖 `config` 时就清空。用户应用了推荐参数后立刻丢失结果。
+- **价值**：中。
+- **成本**：30 分钟。
+- **方案**：把"应用推荐参数"做成一个明确的"接受"按钮，状态切换为"已应用 + 显示原优化结果"，不要 silent 清空。
+
+### C9 暗色模式细节
+
+- **现状**：暗色模式整体不错，但若干小问题：
+  - lucide icons 默认还是黑色，在深色背景上对比度不足。
+  - 优化进度条 `progress-track` 在暗色下是 `#1e293b`，有点看不清。
+  - 图表的 `#64748b` 文字标签在暗色背景下偏暗。
+  - 暗色下"快捷周期"按钮 active 状态绿色不够亮。
+- **价值**：低。
+- **成本**：1 小时。
+- **方案**：用 ECharts 主题接口（`echarts.registerTheme`）做一个 dark theme，所有 chart 在 dark 模式下传 theme="dark"。
+
+### C10 CSV 导出体验
+
+- **现状**：导出是单一 CSV 把所有 series 混在一起靠 `series` 列区分。用户用 Excel 打开后还要 pivot 一次。
+- **价值**：低-中。
+- **成本**：1 小时。
+- **方案**：要么按 series 分文件打 zip，要么改成宽表（每个 series 一组列）。
+
+---
+
+## P3 — 新功能 / 产品差异化（按节奏选 1-2 个做）
+
+这一档是真正影响产品定位的。建议每个迭代选 1 个，不要全做。
+
+### D1 滚动窗口表现（task-list #33）⭐ 推荐先做
+
+- **价值**：高。直接回答"这策略在不同年份是否一致"——单一收益数字回答不了的问题。
+- **成本**：1 天。
+- **改动**：后端在 backtest 路径里多算一组 rolling-3y annualized return。前端加一张图。
+- **差异化**：DCA 工具普遍只给汇总指标，给"时间剖面"立刻拉开差距。
+- **注意**：3 年窗口在 5 年回测里只能取 2 个点，需要至少 5+ 年才有意义。前端要根据回测长度动态选 1y/3y。
+
+### D2 多标的组合定投（task-list #34）
+
+- **价值**：高。从单标的工具变组合管理工具，定位级跃迁。
+- **成本**：3-4 天（前端 + 后端都要大改）。
+- **思路**：
+  - 后端 `BacktestRequest` 改成 `assets: list[{symbol: str, weight: float}]`（单标的等价于 weight=1.0）。
+  - 每个标的独立跑 backtest，最后汇总组合级别 metrics。
+  - 组合评分策略可以"先按标的算 score 再加权"或"用组合整体的 drawdown/MA"两种语义，需要决策。
+  - 前端加组合编辑器（饼图 + 权重滑块）、组合视图（堆叠柱、各标的贡献对比）。
+- **风险**：UI 复杂度激增。建议先做"等权多标的"，权重编辑作为 follow-up。
+
+### D3 蒙特卡洛模拟（新提出）⭐⭐ 强差异化
+
+- **价值**：很高。回测看的是"过去发生了什么"，蒙特卡洛回答"未来可能发生什么"。
+- **成本**：1-2 天。
+- **方案**：
+  - 用历史价格的对数收益率拟合 mu / sigma（或更高级的 GBM / regime-switching）。
+  - 生成 1000 条未来 5 年价格路径。
+  - 在每条路径上跑当前策略和固定 DCA。
+  - 展示：终值的中位数 / 5/95 分位 / "策略战胜固定 DCA 的概率"。
+- **差异化**：市面上没有 DCA 工具做这个。
+- **风险**：用户可能误以为"模拟 = 预测"。需要明确文案"这是基于历史波动率的概率分布，不是预测"。
+
+### D4 参数敏感度热力图（新提出）
+
+- **价值**：中-高。"参数自动调优"找出最佳一组，但用户不知道为什么。热力图直观展示"哪个参数变化最影响结果"。
+- **成本**：1 天。
+- **方案**：固定其他参数，对单个参数做 grid search（10-20 个值），画一条线（X=参数值，Y=年化）。每个可调参数一张迷你图，整体一个 3x3 的小图墙。
+- **差异化**：让"调参"从盲调变可视化。
+
+### D5 压力测试（task-list #25）
+
+- **价值**：中。心理价值高，但工程量适中。
+- **成本**：1.5 天。
+- **方案**：用户输入"未来 1/3/6 个月跌 X%"，系统在当前价格序列后面 append 模拟价格段，跑策略评价，展示推演的买入计划和最大浮亏。
+- **风险**：模拟价格的形状（一次性跌、缓慢跌、V 型）会显著影响结果，需要 UI 让用户选择。
+
+### D6 策略日记（task-list #26）
+
+- **价值**：长期最高。解决 DCA 的真敌人——执行力。
+- **成本**：3-5 天（含 SQLite 表设计、UI、月度复盘报告）。
+- **触发条件**：当工具有了核心粘性（比如 D1 + 几个 D 系列）后再加。早期加会冷启动数据不够。
+
+### D7 历史滚动 Sharpe / 滚动相关性（新提出）
+
+- **价值**：中。专业用户喜欢的"指标的指标"。
+- **成本**：半天。
+- **方案**：rolling 12 月 Sharpe / rolling 12 月 portfolio vs 标的相关系数图。看"策略的表现稳不稳定"和"策略和买入并持有的差异是否在拉开"。
+
+### D8 策略组合（meta-strategy）
+
+- **价值**：中。"我同时跑跌幅加码和 RSI 情绪，每周各分配一半预算"。
+- **成本**：1 天。
+- **方案**：composite score 已经做"信号合成"，再加一个"金额分配合成"——把每周预算按权重分给多个策略各自决策。
+- **差异化**：让用户自己组装策略组合。
+
+### D9 实盘对账模式
+
+- **价值**：中。用户输入实际买入记录（券商 CSV），系统对比"实际 vs 策略推荐"的差距。
+- **成本**：2-3 天。
+- **方案**：导入 CSV → 解析 → 在所有图表上叠加"实际买入"曲线 → 季度复盘报告。
+- **差异化**：把工具从"事前推荐"扩展到"事后复盘"。
+
+---
+
+## 实验性 / 高风险高收益（不一定值得做，但值得想）
+
+### E1 集成 macro 数据
+
+- VIX / 联储利率 / 收益率曲线 / 失业率 → 做 macro-aware 策略。技术上拉 FRED API。
+- 风险：数据源依赖、维护成本。
+- 价值：差异化但用户群窄。
+
+### E2 LLM 解读 + 智能问答
+
+- "为什么本周建议投 120 美元而不是 100？"用 LLM 综合 marketState + signals + reasons 生成自然语言解读。
+- 风险：成本（API call）、幻觉、对工具基调的破坏。
+- 价值：降低非专业用户门槛。
+- 建议：作为可选 sidebar，不强推。
+
+### E3 加密资产支持
+
+- BTC / ETH 的 yfinance 也覆盖。但波动率 + 流动性 + 假期模式（24/7 vs 5/2）和 ETF 完全不同。
+- 风险：需要重新校准所有阈值（30% drawdown 在 BTC 是常态）。
+- 价值：用户群完全不同。
+- 建议：作为独立 mode（"crypto mode"）而不是混在 ETF 列表里。
+
+### E4 "教学回放"
+
+- 用户看 2020-03 那段：暂停、解释信号、让用户预测下一周策略会怎么决策、给出实际答案。
+- 价值：教育，让用户理解"为什么策略这样选"。
+- 成本：UI 复杂，但内容可以慢慢加。
+
+### E5 公开排行榜
+
+- 用户的策略+参数可以提交到公开榜单，按 5/10 年回测排行。
+- 风险：数据隐私、刷榜、过拟合鼓励。
+- 价值：社区效应。
+- 建议：远期选项。
+
+---
+
+## 工程质量 / 运维（不论做不做新功能都要持续做）
+
+### Q1 测试覆盖率
+
+- 后端 45 个用例，但没有覆盖率统计。先 `pytest --cov=app --cov-report=term-missing` 看一遍。
+- 估计 strategies.py 覆盖良好（80%+），data.py 不足（缺真实 yfinance 错误注入），main.py 仅入口被覆盖。
+- 目标：90%+ on strategies.py / backtester.py / optimizer.py，70%+ on main.py / data.py。
+
+### Q2 前端 E2E 测试
+
+- 用 Playwright 写 3-5 个关键流程：切策略 + 调参 + 看回测结果、跑稳健调优、压力场景、CSV 导出。
+- 即使每周跑一次也能在大改之后兜底。
+- 成本：1 天搭起来，每个用例 30 分钟。
+
+### Q3 结构化日志
+
+- 当前后端日志四散在 `server.err.log` / `server.out.log` / `server.job.log` / `uvicorn.log`。看不出来谁在做什么。
+- 改成 stdlib `logging` + JSON formatter。每个请求带 request_id。
+- 成本：半天。
+
+### Q4 健康检查 + 简单监控
+
+- `GET /api/health` 返回 `{ status, dataCacheSize, uptimeSeconds }`。
+- 优化任务的 dict 长期累积（`optimization_jobs._jobs`），加一个定时清理（保留最近 100 条）。
+- 成本：1 小时。
+
+### Q5 价格缓存清理策略
+
+- 当前 SQLite 的 PriceBar 表无限制累积。10 个标的 × 10 年 ≈ 25k 行，没问题；但如果有人开了 50 个标的的话会涨。
+- 加一个简单 TTL 或 LRU 清理脚本。
+- 触发条件：标的数量超过 30 个时再做。
+
+### Q6 部署文档
+
+- 至少写一份 `docs/deployment.md`，覆盖：
+  - 单机 Docker 部署
+  - 反向代理（nginx 示例）
+  - HTTPS / 域名
+  - 数据卷持久化
+  - 升级流程（数据库迁移当前没做，要么明确"不破坏 schema"，要么引入 alembic）
+
+### Q7 安全扫描
+
+- `pip-audit` / `npm audit` 跑一遍，看依赖有没有 CVE。CI 加上每周一次扫描。
+- 当前 yfinance 依赖链（含 lxml、html5lib 等）有过历史 CVE，值得跟踪。
+
+---
+
+## 文档收尾
+
+### M1 README 升级
+
+- 当前 README 是 v0.2 时点的快照。本次 P0/P1/P2 修复后应当更新：
+  - 明确"已包含分红再投资（auto_adjust）"
+  - 添加"无风险利率可配置"功能说明
+  - "Assumptions & Limitations" 段补充"warmup 期间会显示提示"
+  - 加一个 GIF / 截图，展示工作台样子（README 现在纯文字）
+
+### M2 整理 user-guide.md 和 task-list.md 的关系
+
+- 当前 task-list.md 已经成了"代码审查 + 修复历史档案"，混合了 P0/P1/P2 已修和 P3 待办。
+- 建议拆成：
+  - `docs/CHANGELOG.md`（按时间线记录已修复条目，链到 change-log/*.md）
+  - `docs/ROADMAP.md`（这份文档，按优先级记录待做条目）
+  - `docs/user-guide.md` 保留并继续更新
+
+### M3 写一份 ARCHITECTURE.md
+
+- 一页纸说清楚：数据流（yfinance → SQLite cache → DcaBacktester → API → React），关键决策（为什么选 ECharts、为什么 Pydantic v2、为什么 SQLite 不 Postgres），扩展点（怎么加新策略、怎么加新指标、怎么加新图表）。
+- 价值：未来接手者能在 30 分钟内进入状态。
+
+---
+
+## 个人推荐的执行顺序
+
+如果只能从这份文档里挑 5 件事做完，我会选：
+
+1. **A4 GitHub Actions CI**（1 小时）——投资回报最高的工程基础。
+2. **B1 拆 main.tsx**（1 天）——任何后续前端改动都要受益。
+3. **C1 支持更多标的**（1-2 天）——用户面价值最高的功能。
+4. **D1 滚动窗口表现**（1 天）——差异化、低成本、高价值的产品功能。
+5. **A1 + A3 lint/format/test 套件**（1 天）——长期质量底线。
+
+剩下的按节奏选。**最值得多花时间想清楚的是 D2（多标的组合）和 D3（蒙特卡洛）**，这两个能把工具从"研究工具"升级到"决策助手"，但工程量大、设计成本高，建议先做出 D1 把团队配合磨合好再上。
+
+---
+
+## 不建议做的事情
+
+- **支持自定义策略 DSL / 用户写代码定义策略**：复杂度爆炸，当前用户群也不需要。
+- **加更多 cosmetic 功能**（动画过渡、品牌化、3D 图表）：当前体验已经超过同类工具，进一步打磨边际收益低。
+- **真实交易 API 接入**：不在产品定位内（disclaimer 明确说"不自动下单"），也是合规炸药。
+- **完整用户系统（注册/登录）**：当前是本地工具定位，加用户系统就要做服务端、隐私、密码安全，工程量爆炸。如果有云端部署需求再考虑。
+
+---
+
+## 总结
+
+这次代码审查的三轮工作（P0 5 项 + P1 3 项 + P2 6 项）已经把"代码层面的债务"清干净了。从这里开始，**工程基础（CI、测试、Docker）和架构债（拆 main.tsx、优化器并行）应该是下个月的主线**。功能层面，**滚动窗口 + 多标的 + 蒙特卡洛**是最能拉开差距的三个方向。
+
+任何一项开工都建议先开 issue / 写设计稿，别上来就写代码。这份文档可以作为讨论的起点。

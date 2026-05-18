@@ -29,7 +29,7 @@ from app.strategies import evaluate_prepared_strategy, evaluate_strategy, prepar
 from app.strategy_definitions import COMMON_PARAMETERS, STRATEGIES
 
 
-app = FastAPI(title="DCA Strategy Assistant", version="0.2.0")
+app = FastAPI(title="DCA Strategy Assistant", version="0.3.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -109,8 +109,12 @@ def _fixed_config(config: StrategyConfig) -> StrategyConfig:
         strategyType="fixed_dca",
         baseAmount=config.baseAmount,
         frequency=config.frequency,
+        # min strictly less than max is enforced by StrategyConfig; we still
+        # want a "no dynamic adjustment" baseline, so keep them effectively
+        # equal with a negligible delta. The fixed_dca strategy ignores
+        # these multipliers anyway.
         minMultiplier=1,
-        maxMultiplier=1,
+        maxMultiplier=1.0001,
         params={},
     )
 
@@ -122,6 +126,7 @@ def _cached_fixed_backtest(
     end: date,
     base_amount: float,
     frequency: str,
+    risk_free_rate: float,
 ) -> tuple[tuple, BacktestMetrics]:
     prices, _, _ = get_price_history(symbol, start, end)
     events, metrics = DcaBacktester(prices).run(
@@ -131,11 +136,12 @@ def _cached_fixed_backtest(
             baseAmount=base_amount,
             frequency=frequency,
             minMultiplier=1,
-            maxMultiplier=1,
+            maxMultiplier=1.0001,
             params={},
         ),
         start,
         end,
+        risk_free_rate=risk_free_rate,
     )
     return tuple(events), metrics
 
@@ -282,6 +288,7 @@ def backtest(request: BacktestRequest) -> dict:
         prepared = prepare_market(prices, request.config)
         fee_rate = float(request.config.params.get("feeRate", 0))
         slippage_rate = float(request.config.params.get("slippageRate", 0))
+        risk_free_rate = request.riskFreeRate
         events, metrics = backtester.run(
             request.config.strategyType,
             request.config,
@@ -290,6 +297,7 @@ def backtest(request: BacktestRequest) -> dict:
             fee_rate=fee_rate,
             slippage_rate=slippage_rate,
             prepared=prepared,
+            risk_free_rate=risk_free_rate,
         )
         if fee_rate == 0 and slippage_rate == 0:
             fixed_events_tuple, fixed_metrics = _cached_fixed_backtest(
@@ -298,6 +306,7 @@ def backtest(request: BacktestRequest) -> dict:
                 end,
                 request.config.baseAmount,
                 request.config.frequency,
+                risk_free_rate,
             )
             fixed_events = list(fixed_events_tuple)
         else:
@@ -308,6 +317,7 @@ def backtest(request: BacktestRequest) -> dict:
                 end,
                 fee_rate=fee_rate,
                 slippage_rate=slippage_rate,
+                risk_free_rate=risk_free_rate,
             )
         lump_sum_events, lump_sum_metrics = backtester.run_lump_sum(
             fixed_metrics.totalInvested,
@@ -316,6 +326,7 @@ def backtest(request: BacktestRequest) -> dict:
             request.config.frequency,
             fee_rate=fee_rate,
             slippage_rate=slippage_rate,
+            risk_free_rate=risk_free_rate,
         )
         metrics = _with_comparison_metrics(metrics, fixed_metrics, lump_sum_metrics)
         recommendation = evaluate_prepared_strategy(request.config.strategyType, request.config, prepared)
@@ -335,6 +346,7 @@ def backtest(request: BacktestRequest) -> dict:
                 fee_rate=float(comparison_config.params.get("feeRate", 0)),
                 slippage_rate=float(comparison_config.params.get("slippageRate", 0)),
                 prepared=comparison_prepared,
+                risk_free_rate=risk_free_rate,
             )
             comparisons.append(
                 StrategyComparison(

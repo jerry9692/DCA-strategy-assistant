@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 SUPPORTED_ASSETS = {
@@ -55,6 +55,19 @@ class StrategyConfig(BaseModel):
     maxMultiplier: float = Field(default=1.2, gt=0)
     params: dict[str, Any] = Field(default_factory=dict)
 
+    @model_validator(mode="after")
+    def _validate_multiplier_bounds(self) -> "StrategyConfig":
+        # Reject configs where the lower bound is at or above the upper
+        # bound. Otherwise the strategy would silently lock the buy amount
+        # below baseAmount on every signal, even when the strategy thinks
+        # it should buy more.
+        if self.minMultiplier >= self.maxMultiplier:
+            raise ValueError(
+                f"minMultiplier ({self.minMultiplier}) must be strictly less than "
+                f"maxMultiplier ({self.maxMultiplier})."
+            )
+        return self
+
 
 class StrategyDecision(BaseModel):
     date: str
@@ -64,9 +77,18 @@ class StrategyDecision(BaseModel):
     score: float
     rawSignals: dict[str, float | int | str | None]
     reasons: list[str]
+    warmup: bool = False
 
 
 class ContributionEvent(BaseModel):
+    # frozen=True so events that flow through @lru_cache (see
+    # main._cached_fixed_backtest) cannot be mutated in place. This keeps
+    # the cache safe from any downstream code that might otherwise edit
+    # an event's drawdownPct, multiplier, etc. and silently corrupt
+    # later cache hits. _with_cashflow_adjusted_drawdowns uses
+    # model_copy() which still works on frozen models.
+    model_config = {"frozen": True}
+
     date: str
     price: float
     amount: float
@@ -139,6 +161,12 @@ class BacktestRequest(BaseModel):
     startDate: date | None = None
     endDate: date | None = None
     comparisonStrategyTypes: list[str] = Field(default_factory=list, max_length=3)
+    riskFreeRate: float = Field(
+        default=0.04,
+        ge=0,
+        le=0.5,
+        description="Annualized risk-free rate used for Sharpe/Sortino. Default 4% reflects roughly the 2024 short-term US treasury yield.",
+    )
 
 
 class RecommendationRequest(BaseModel):

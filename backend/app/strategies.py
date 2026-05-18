@@ -22,6 +22,22 @@ def _row_float(row: pd.Series, key: str, default: float) -> float:
     return float(value)
 
 
+def _row_optional_float(row: pd.Series, key: str) -> float | None:
+    """Return the row value as a float, or None if the indicator is NaN.
+
+    Used by strategy signals so they can distinguish 'indicator is still
+    warming up' (return None and let the caller fall back to neutral with a
+    warmup flag) from 'indicator computed normally'.
+    """
+
+    if key not in row:
+        return None
+    value = row.get(key)
+    if value is None or pd.isna(value):
+        return None
+    return float(value)
+
+
 def _settings(config: StrategyConfig) -> IndicatorSettings:
     return IndicatorSettings(
         high_window=int(_param(config, "lookbackDays", 252)),
@@ -53,58 +69,73 @@ def _latest_row(frame: pd.DataFrame, as_of: pd.Timestamp | None = None) -> tuple
     return idx, usable.iloc[-1]
 
 
-def _signal_drawdown(row: pd.Series, config: StrategyConfig) -> tuple[float, str]:
+WARMUP_REASON = "指标预热不足，本期按基础金额执行。"
+
+
+def _signal_drawdown(row: pd.Series, config: StrategyConfig) -> tuple[float, str, bool]:
+    raw = _row_optional_float(row, "drawdown_pct")
+    if raw is None:
+        return 0.5, WARMUP_REASON, True
     max_drawdown = float(_param(config, "maxDrawdownPct", 30))
-    drawdown_depth = max(0.0, -_row_float(row, "drawdown_pct", 0) / 100)
+    drawdown_depth = max(0.0, -raw / 100)
     score = clamp(drawdown_depth / max(max_drawdown / 100, 0.0001), 0, 1)
-    return score, f"近窗口回撤 {drawdown_depth * 100:.1f}%，回撤越深投入越高。"
+    return score, f"近窗口回撤 {drawdown_depth * 100:.1f}%，回撤越深投入越高。", False
 
 
-def _signal_ma(row: pd.Series, config: StrategyConfig) -> tuple[float, str]:
+def _signal_ma(row: pd.Series, config: StrategyConfig) -> tuple[float, str, bool]:
+    raw = _row_optional_float(row, "sma_deviation_pct")
+    if raw is None:
+        return 0.5, WARMUP_REASON, True
     threshold = float(_param(config, "deviationPct", 15))
-    deviation = _row_float(row, "sma_deviation_pct", 0)
-    cheapness = clamp(0.5 - deviation / max(2 * threshold, 0.0001), 0, 1)
-    direction = "低于" if deviation < 0 else "高于"
-    return cheapness, f"价格{direction}均线 {abs(deviation):.1f}%，按均线偏离调整投入。"
+    cheapness = clamp(0.5 - raw / max(2 * threshold, 0.0001), 0, 1)
+    direction = "低于" if raw < 0 else "高于"
+    return cheapness, f"价格{direction}均线 {abs(raw):.1f}%，按均线偏离调整投入。", False
 
 
-def _signal_percentile(row: pd.Series) -> tuple[float, str]:
-    percentile = _row_float(row, "percentile", 50)
-    cheapness = clamp(1 - percentile / 100, 0, 1)
-    return cheapness, f"当前价格位于历史 {percentile:.0f}% 分位，分位越低投入越高。"
+def _signal_percentile(row: pd.Series) -> tuple[float, str, bool]:
+    raw = _row_optional_float(row, "percentile")
+    if raw is None:
+        return 0.5, WARMUP_REASON, True
+    cheapness = clamp(1 - raw / 100, 0, 1)
+    return cheapness, f"当前价格位于历史 {raw:.0f}% 分位，分位越低投入越高。", False
 
 
-def _signal_rsi(row: pd.Series, config: StrategyConfig) -> tuple[float, str]:
-    rsi_value = _row_float(row, "rsi", 50)
+def _signal_rsi(row: pd.Series, config: StrategyConfig) -> tuple[float, str, bool]:
+    raw = _row_optional_float(row, "rsi")
+    if raw is None:
+        return 0.5, WARMUP_REASON, True
     oversold = float(_param(config, "oversold", 30))
     overbought = float(_param(config, "overbought", 70))
-    cheapness = clamp((overbought - rsi_value) / max(1, overbought - oversold), 0, 1)
-    return cheapness, f"RSI 为 {rsi_value:.1f}，越接近超卖区投入越高。"
+    cheapness = clamp((overbought - raw) / max(1, overbought - oversold), 0, 1)
+    return cheapness, f"RSI 为 {raw:.1f}，越接近超卖区投入越高。", False
 
 
-def _signal_grid(row: pd.Series, config: StrategyConfig) -> tuple[float, int, str]:
+def _signal_grid(row: pd.Series, config: StrategyConfig) -> tuple[float, int, str, bool]:
     close = _row_float(row, "close", 0)
-    low = _row_float(row, "rolling_low", close)
-    high = _row_float(row, "grid_high", close)
+    low_raw = _row_optional_float(row, "rolling_low")
+    high_raw = _row_optional_float(row, "grid_high")
+    if low_raw is None or high_raw is None:
+        grid_count = max(1, int(_param(config, "gridCount", 8)))
+        return 0.5, (grid_count // 2) + 1, WARMUP_REASON, True
     grid_count = max(1, int(_param(config, "gridCount", 8)))
-    if high <= low:
+    if high_raw <= low_raw:
         position = 0.5
     else:
-        position = clamp((close - low) / (high - low), 0, 1)
+        position = clamp((close - low_raw) / (high_raw - low_raw), 0, 1)
     bucket = int(clamp(position, 0, 0.9999) * grid_count) + 1
     cheapness = 1 - position
-    return cheapness, bucket, f"价格处于滚动区间第 {bucket}/{grid_count} 档，越靠低档投入越高。"
+    return cheapness, bucket, f"价格处于滚动区间第 {bucket}/{grid_count} 档，越靠低档投入越高。", False
 
 
 def _raw_signals(row: pd.Series, config: StrategyConfig) -> dict[str, float | int | str | None]:
-    grid_score, bucket, _ = _signal_grid(row, config)
+    grid_score, bucket, _, _ = _signal_grid(row, config)
     return {
         "price": round(_row_float(row, "close", 0), 4),
         "sma": None if pd.isna(row.get("sma")) else round(float(row.get("sma")), 4),
         "smaDeviationPct": None if pd.isna(row.get("sma_deviation_pct")) else round(float(row.get("sma_deviation_pct")), 4),
         "drawdownPct": None if pd.isna(row.get("drawdown_pct")) else round(float(row.get("drawdown_pct")), 4),
-        "percentile": round(_row_float(row, "percentile", 50), 4),
-        "rsi": round(_row_float(row, "rsi", 50), 4),
+        "percentile": None if pd.isna(row.get("percentile")) else round(float(row.get("percentile")), 4),
+        "rsi": None if pd.isna(row.get("rsi")) else round(float(row.get("rsi")), 4),
         "gridBucket": bucket,
         "gridScore": round(grid_score, 4),
     }
@@ -129,53 +160,73 @@ def evaluate_prepared_strategy(
     idx, row = _latest_row(frame, as_of)
 
     reasons: list[str] = []
+    warmup = False
     if strategy_type == "fixed_dca":
         score = 0.5
         amount = round(config.baseAmount, 2)
         multiplier = 1.0
         reasons.append("固定定投策略：本期投入基础金额，不根据市场状态调整。")
     elif strategy_type == "drawdown_boost":
-        score, reason = _signal_drawdown(row, config)
+        score, reason, warmup = _signal_drawdown(row, config)
         amount, multiplier = _bounded_amount(config, score)
         reasons.append(reason)
     elif strategy_type == "ma_deviation":
-        score, reason = _signal_ma(row, config)
+        score, reason, warmup = _signal_ma(row, config)
         amount, multiplier = _bounded_amount(config, score)
         reasons.append(reason)
     elif strategy_type == "historical_percentile":
-        score, reason = _signal_percentile(row)
+        score, reason, warmup = _signal_percentile(row)
         amount, multiplier = _bounded_amount(config, score)
         reasons.append(reason)
     elif strategy_type == "rsi_sentiment":
-        score, reason = _signal_rsi(row, config)
+        score, reason, warmup = _signal_rsi(row, config)
         amount, multiplier = _bounded_amount(config, score)
         reasons.append(reason)
     elif strategy_type == "grid_weighted":
-        score, _, reason = _signal_grid(row, config)
-        if bool(_param(config, "smooth", True)):
+        score, _, reason, warmup = _signal_grid(row, config)
+        if not warmup and bool(_param(config, "smooth", True)):
             score = clamp(score * 0.85 + 0.5 * 0.15, 0, 1)
             reason += " 已启用平滑，避免相邻网格导致金额剧烈跳变。"
         amount, multiplier = _bounded_amount(config, score)
         reasons.append(reason)
     elif strategy_type == "composite_score":
+        drawdown_score, drawdown_reason, drawdown_warmup = _signal_drawdown(row, config)
+        ma_score, ma_reason, ma_warmup = _signal_ma(row, config)
+        percentile_score, percentile_reason, percentile_warmup = _signal_percentile(row)
+        rsi_score, rsi_reason, rsi_warmup = _signal_rsi(row, config)
+        grid_score, _, grid_reason, grid_warmup = _signal_grid(row, config)
         components = [
-            (*_signal_drawdown(row, config), float(_param(config, "drawdownWeight", 1))),
-            (*_signal_ma(row, config), float(_param(config, "maWeight", 1))),
-            (*_signal_percentile(row), float(_param(config, "percentileWeight", 1))),
-            (*_signal_rsi(row, config), float(_param(config, "rsiWeight", 1))),
+            (drawdown_score, drawdown_reason, float(_param(config, "drawdownWeight", 1)), drawdown_warmup),
+            (ma_score, ma_reason, float(_param(config, "maWeight", 1)), ma_warmup),
+            (percentile_score, percentile_reason, float(_param(config, "percentileWeight", 1)), percentile_warmup),
+            (rsi_score, rsi_reason, float(_param(config, "rsiWeight", 1)), rsi_warmup),
+            (grid_score, grid_reason, float(_param(config, "gridWeight", 1)), grid_warmup),
         ]
-        grid_score, _, grid_reason = _signal_grid(row, config)
-        components.append((grid_score, grid_reason, float(_param(config, "gridWeight", 1))))
-        total_weight = sum(max(0, item[2]) for item in components)
+        # Drop NaN-only signals from the weighted average so a half-warmed
+        # market doesn't get pulled toward neutral by inactive signals.
+        active = [item for item in components if item[2] > 0 and not item[3]]
+        total_weight = sum(item[2] for item in active)
         if total_weight <= 0:
             score = 0.5
-            reasons.append("组合评分权重全为 0，回退为中性倍率。")
+            warmup = True
+            if all(item[3] for item in components):
+                reasons.append(WARMUP_REASON)
+            else:
+                reasons.append("组合评分权重全为 0，回退为中性倍率。")
         else:
-            score = sum(item[0] * max(0, item[2]) for item in components) / total_weight
-            reasons.extend([item[1] for item in components if item[2] > 0])
+            score = sum(item[0] * item[2] for item in active) / total_weight
+            reasons.extend([item[1] for item in active])
+            inactive_warmup = [item for item in components if item[2] > 0 and item[3]]
+            if inactive_warmup:
+                warmup = False  # at least one signal computed
+                reasons.append(f"{len(inactive_warmup)} 个子信号预热不足，本期已自动剔除。")
         amount, multiplier = _bounded_amount(config, score)
     else:
         raise ValueError(f"Unsupported strategy type: {strategy_type}")
+
+    if warmup:
+        amount = round(config.baseAmount, 2)
+        multiplier = 1.0
 
     raw = _raw_signals(row, config)
     raw["strategyType"] = strategy_type
@@ -187,4 +238,5 @@ def evaluate_prepared_strategy(
         score=round(float(score), 4),
         rawSignals=raw,
         reasons=reasons,
+        warmup=warmup,
     )

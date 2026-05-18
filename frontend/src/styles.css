@@ -419,6 +419,17 @@ select {
   margin: 14px 0;
 }
 
+.warmup-banner {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .reason-row span {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -942,6 +953,12 @@ input[type="range"] {
   background: #3f0d16;
   border-color: #9f1239;
   color: #fecdd3;
+}
+
+.app-shell[data-theme="dark"] .warmup-banner {
+  background: #2a1c08;
+  border-color: #b45309;
+  color: #fcd34d;
 }
 
 .app-shell[data-theme="dark"] .chart-block,

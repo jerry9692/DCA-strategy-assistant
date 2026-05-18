@@ -40,7 +40,7 @@ SQLModel.metadata.create_all(engine)
 def validate_symbol(symbol: str) -> str:
     normalized = symbol.upper()
     if normalized not in SUPPORTED_ASSETS:
-        raise PriceDataError("v0.1 only supports QQQ, VOO and SPY.", code="invalid_symbol", retryable=False)
+        raise PriceDataError("v0.3 only supports QQQ, VOO and SPY.", code="invalid_symbol", retryable=False)
     return normalized
 
 
@@ -77,6 +77,11 @@ def _save_prices(symbol: str, frame: pd.DataFrame) -> None:
 
 def _download(symbol: str, start: date, end: date) -> pd.DataFrame:
     # yfinance end date is exclusive; add one day so requested end is included.
+    # auto_adjust=True returns dividend-and-split adjusted close. That price
+    # series is mathematically equivalent to "reinvest every cash dividend on
+    # the ex-date at that day's close", so backtests built on it already
+    # include dividend reinvestment in their return, annualized return and
+    # drawdown numbers. The user-facing docs reflect this assumption.
     data = yf.download(
         symbol,
         start=start.isoformat(),
@@ -102,6 +107,21 @@ def _close_series(data: pd.DataFrame) -> pd.Series:
                     return close.iloc[:, 0]
                 return close
         raise PriceDataError("Yahoo Finance response did not include close prices.", code="missing_close", retryable=True)
+
+    if "Close" not in data.columns:
+        # Defensive: yfinance has been observed to drop the "Close" column
+        # under certain auto_adjust + repair combinations and only emit
+        # "Adj Close". Fall back to that rather than crashing with KeyError.
+        if "Adj Close" in data.columns:
+            close = data["Adj Close"]
+            if isinstance(close, pd.DataFrame):
+                return close.iloc[:, 0]
+            return close
+        raise PriceDataError(
+            "Yahoo Finance response did not include close prices.",
+            code="missing_close",
+            retryable=True,
+        )
 
     close = data["Close"]
     if isinstance(close, pd.DataFrame):

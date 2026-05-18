@@ -16,6 +16,31 @@ def fixture_prices(values):
     return pd.DataFrame({"close": values}, index=index)
 
 
+def test_strategy_config_rejects_inverted_multiplier_bounds():
+    """Regression test for code-review #8.
+
+    Without this validation the API would accept minMultiplier >=
+    maxMultiplier and silently lock buys at or below baseAmount, which
+    completely breaks the dynamic-DCA narrative shown in the UI.
+    """
+
+    with pytest.raises(ValueError, match="minMultiplier"):
+        StrategyConfig(
+            strategyType="composite_score",
+            baseAmount=100,
+            minMultiplier=1.5,
+            maxMultiplier=1.0,
+        )
+
+    with pytest.raises(ValueError, match="minMultiplier"):
+        StrategyConfig(
+            strategyType="composite_score",
+            baseAmount=100,
+            minMultiplier=1.0,
+            maxMultiplier=1.0,
+        )
+
+
 def test_fixed_dca_returns_base_amount():
     prices = fixture_prices([100, 101, 102, 103, 104])
     config = StrategyConfig(strategyType="fixed_dca", baseAmount=125, minMultiplier=0.2, maxMultiplier=2.5)
@@ -55,8 +80,9 @@ def test_backtester_runs_weekly_events():
     config = StrategyConfig(strategyType="fixed_dca", baseAmount=100, frequency="weekly")
     events, metrics = DcaBacktester(prices).run("fixed_dca", config, pd.Timestamp("2020-01-01").date(), pd.Timestamp("2020-03-31").date())
     assert events
-    assert metrics.buyCount == len(events)
-    assert metrics.totalInvested == 100 * len(events)
+    buys = [event for event in events if event.amount > 0]
+    assert metrics.buyCount == len(buys)
+    assert metrics.totalInvested == 100 * len(buys)
 
 
 def test_ma_deviation_invests_more_below_average_than_above():
@@ -130,8 +156,12 @@ def test_composite_all_zero_weights_falls_back_to_neutral():
         params={"drawdownWeight": 0, "maWeight": 0, "percentileWeight": 0, "rsiWeight": 0, "gridWeight": 0},
     )
     decision = evaluate_strategy("composite_score", config, prices)
+    # No active signal means we fall back to a neutral, base-amount buy and
+    # flag the decision as warmup so the UI can highlight it.
     assert decision.score == 0.5
-    assert decision.recommendedAmount == 135
+    assert decision.warmup is True
+    assert decision.multiplier == 1.0
+    assert decision.recommendedAmount == 100
 
 
 def test_empty_price_frame_raises_clear_error():
@@ -178,6 +208,51 @@ def test_schedule_supports_biweekly_events():
     assert pd.Timestamp("2020-01-06") in schedule
     assert pd.Timestamp("2020-01-20") in schedule
     assert pd.Timestamp("2020-02-03") in schedule
+
+
+def test_weekend_start_does_not_double_buy_on_next_monday():
+    """Regression test for the duplicate-buy bug.
+
+    When a backtest starts on a weekend, the calendar schedule contains both
+    that weekend day and the following Monday (the W-MON anchor). Both map to
+    the same trading day. The backtester must record only one buy for that
+    Monday, otherwise totals, shares and metrics get inflated.
+    """
+
+    prices = pd.DataFrame(
+        {"close": [100, 101, 102, 103, 104, 105, 106, 107, 108, 109]},
+        index=pd.bdate_range("2021-05-24", periods=10),
+    )
+    config = StrategyConfig(strategyType="fixed_dca", baseAmount=100, frequency="weekly")
+    events, metrics = DcaBacktester(prices).run(
+        "fixed_dca",
+        config,
+        pd.Timestamp("2021-05-23").date(),  # Sunday
+        pd.Timestamp("2021-06-11").date(),
+    )
+    buy_dates = [event.date for event in events if event.amount > 0]
+    assert len(buy_dates) == len(set(buy_dates)), f"unexpected duplicate buys: {buy_dates}"
+    assert metrics.buyCount == len(buy_dates)
+    assert metrics.totalInvested == 100 * len(buy_dates)
+
+
+def test_lump_sum_weekend_start_does_not_double_track_initial_buy():
+    prices = pd.DataFrame(
+        {"close": [100, 101, 102, 103, 104, 105, 106, 107, 108, 109]},
+        index=pd.bdate_range("2021-05-24", periods=10),
+    )
+    events, metrics = DcaBacktester(prices).run_lump_sum(
+        1000,
+        pd.Timestamp("2021-05-23").date(),  # Sunday
+        pd.Timestamp("2021-06-11").date(),
+        "weekly",
+    )
+    dates = [event.date for event in events]
+    assert len(dates) == len(set(dates)), f"unexpected duplicate events: {dates}"
+    # First (and only) real buy still happens on the first usable trading day.
+    assert events[0].amount == 1000
+    assert all(event.amount == 0 for event in events[1:])
+    assert metrics.buyCount == 1
 
 
 def test_chart_prices_filters_with_timestamp_boundary():
@@ -299,8 +374,81 @@ def test_signal_reasons_do_not_render_nan_for_short_windows():
     config = StrategyConfig(strategyType="composite_score", baseAmount=100)
     decision = evaluate_prepared_strategy("composite_score", config, prepared)
     assert "nan" not in " ".join(decision.reasons).lower()
-    assert decision.rawSignals["percentile"] == 50
-    assert decision.rawSignals["rsi"] == 50
+    # When the indicators have not warmed up yet, expose the warmup flag
+    # rather than silently swapping in default values.
+    assert decision.warmup is True
+    assert decision.rawSignals["percentile"] is None
+    assert decision.rawSignals["rsi"] is None
+
+
+def test_drawdown_boost_warmup_falls_back_to_base_amount_with_clear_reason():
+    """Regression test for the silent-warmup issue from the code review.
+
+    Before the fix, drawdown_boost without enough lookback returned score=0,
+    pinned the multiplier to minMultiplier, and emitted '近窗口回撤 0.0%'
+    as if the market were genuinely overheated. Users had no way to tell
+    that the strategy was actually starved of data.
+    """
+
+    prepared = pd.DataFrame(
+        {
+            "close": [100],
+            "drawdown_pct": [float("nan")],
+            "sma_deviation_pct": [float("nan")],
+            "percentile": [float("nan")],
+            "rsi": [float("nan")],
+            "rolling_low": [float("nan")],
+            "grid_high": [float("nan")],
+        },
+        index=pd.to_datetime(["2020-01-01"]),
+    )
+    config = StrategyConfig(
+        strategyType="drawdown_boost",
+        baseAmount=100,
+        minMultiplier=0.8,
+        maxMultiplier=1.2,
+    )
+    decision = evaluate_prepared_strategy("drawdown_boost", config, prepared)
+    assert decision.warmup is True
+    assert decision.multiplier == 1.0
+    assert decision.recommendedAmount == 100
+    assert decision.score == 0.5
+    assert "0.0%" not in " ".join(decision.reasons)
+    assert any("预热" in reason for reason in decision.reasons)
+
+
+def test_composite_partial_warmup_uses_only_active_signals():
+    """If some sub-signals are still warming up but at least one is ready,
+    the composite strategy should use only the ready ones and stay informative
+    rather than dragging the score back to neutral."""
+
+    prepared = pd.DataFrame(
+        {
+            "close": [100],
+            # drawdown is the only fully-warmed signal in this fixture.
+            "drawdown_pct": [-20.0],
+            "sma_deviation_pct": [float("nan")],
+            "percentile": [float("nan")],
+            "rsi": [float("nan")],
+            "rolling_low": [float("nan")],
+            "grid_high": [float("nan")],
+        },
+        index=pd.to_datetime(["2020-01-01"]),
+    )
+    config = StrategyConfig(
+        strategyType="composite_score",
+        baseAmount=100,
+        minMultiplier=0.8,
+        maxMultiplier=1.2,
+        params={"maxDrawdownPct": 30},
+    )
+    decision = evaluate_prepared_strategy("composite_score", config, prepared)
+    # One signal active, four warming up: not flagged as warmup, but the
+    # caller sees an explicit note about how many were skipped.
+    assert decision.warmup is False
+    assert any("子信号预热不足" in reason for reason in decision.reasons)
+    # 20% drawdown vs a 30% trigger gives score ~0.67, well above neutral.
+    assert decision.score > 0.5
 
 
 def test_annualized_return_uses_money_weighted_dca_result():
@@ -328,6 +476,43 @@ def test_lump_sum_invests_total_budget_once_and_tracks_value():
     assert metrics.totalInvested == 1000
     assert metrics.buyCount == 1
     assert metrics.endingValue > 1000
+
+
+def test_metrics_use_period_end_close_for_ending_value():
+    """Regression test for code-review #6.
+
+    A backtest whose endDate is a few weeks after the last scheduled buy
+    used to leave endingValue stuck at the last buy-day close. After the
+    fix, endingValue tracks the close on the last trading day on or
+    before endDate.
+    """
+
+    # Prices climb steadily; last weekly buy is around day 60. Include
+    # weekday-only data through 2020-04-15 so endDate=2020-04-15 sits
+    # well after the last weekly schedule point of late March.
+    prices = pd.DataFrame(
+        {"close": [100 + i * 0.5 for i in range(75)]},
+        index=pd.bdate_range("2020-01-06", periods=75),
+    )
+    config = StrategyConfig(strategyType="fixed_dca", baseAmount=100, frequency="weekly")
+    events, metrics = DcaBacktester(prices).run(
+        "fixed_dca",
+        config,
+        pd.Timestamp("2020-01-06").date(),
+        pd.Timestamp("2020-04-15").date(),
+    )
+    last_event = events[-1]
+    last_buy = next(event for event in reversed(events) if event.amount > 0)
+    # The mark-to-market event has amount=0 and sits strictly after the
+    # last real buy.
+    assert last_event.amount == 0
+    assert last_event.date > last_buy.date
+    # endingValue follows the mark-to-market close, not the last buy.
+    assert metrics.endingValue == round(last_event.totalShares * last_event.price, 2)
+    assert metrics.endingValue != round(last_buy.totalShares * last_buy.price, 2)
+    # Buy count and total invested still reflect actual buys only.
+    assert metrics.buyCount == sum(1 for event in events if event.amount > 0)
+    assert metrics.totalInvested == max(event.totalInvested for event in events)
 
 
 def test_cashflow_adjusted_drawdown_detects_price_drop_between_buys():
@@ -379,8 +564,8 @@ def test_cached_fixed_backtest_reuses_same_parameter_result(monkeypatch):
     start = pd.Timestamp("2020-01-01").date()
     end = pd.Timestamp("2020-01-31").date()
 
-    _cached_fixed_backtest("QQQ", start, end, 100, "weekly")
-    _cached_fixed_backtest("QQQ", start, end, 100, "weekly")
+    _cached_fixed_backtest("QQQ", start, end, 100, "weekly", 0.04)
+    _cached_fixed_backtest("QQQ", start, end, 100, "weekly", 0.04)
 
     assert calls == 1
     _cached_fixed_backtest.cache_clear()
@@ -511,6 +696,42 @@ def test_optimizer_baseline_does_not_bypass_dca_like_search_space(monkeypatch):
     assert result.recommendedConfig.maxMultiplier <= 1.5
     assert all(candidate.config.minMultiplier >= 0.6 for candidate in result.candidates)
     assert all(candidate.config.maxMultiplier <= 1.5 for candidate in result.candidates)
+
+
+def test_optimizer_average_metrics_skips_none_versus_fixed(monkeypatch):
+    """Regression test: scenarios where the fixed-DCA baseline is empty
+    return versusFixedPct=None. _average_metrics must not silently treat
+    those as 0% (a perfect tie), because a fragile candidate that "ties"
+    on every empty scenario would otherwise float to the top.
+    """
+
+    from app.optimizer import _average_metrics
+
+    healthy = BacktestMetrics(
+        totalInvested=1000,
+        endingValue=1100,
+        returnPct=10,
+        annualizedReturnPct=8,
+        maxDrawdownPct=-5,
+        buyCount=10,
+        avgContribution=100,
+        versusFixedPct=8,
+    )
+    no_baseline = BacktestMetrics(
+        totalInvested=1000,
+        endingValue=1100,
+        returnPct=10,
+        annualizedReturnPct=8,
+        maxDrawdownPct=-5,
+        buyCount=10,
+        avgContribution=100,
+        versusFixedPct=None,
+    )
+
+    averaged = _average_metrics([healthy, no_baseline])
+
+    # Average should ignore the None baseline, not pull it toward 4 (= (8+0)/2).
+    assert averaged.versusFixedPct == 8
 
 
 def test_robust_score_penalizes_single_scenario_blowup():

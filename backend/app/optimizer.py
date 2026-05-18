@@ -73,6 +73,12 @@ def _average_metrics(items: list[BacktestMetrics]) -> BacktestMetrics:
     def avg(key: str) -> float:
         return round(sum(float(getattr(item, key) or 0) for item in items) / len(items), 2)
 
+    def avg_optional(key: str) -> float | None:
+        values = [getattr(item, key) for item in items if getattr(item, key) is not None]
+        if not values:
+            return None
+        return round(sum(float(value) for value in values) / len(values), 2)
+
     sharpe_items = [item.sharpeRatio for item in items if item.sharpeRatio is not None]
     sortino_items = [item.sortinoRatio for item in items if item.sortinoRatio is not None]
     return BacktestMetrics(
@@ -83,7 +89,11 @@ def _average_metrics(items: list[BacktestMetrics]) -> BacktestMetrics:
         maxDrawdownPct=avg("maxDrawdownPct"),
         buyCount=round(sum(item.buyCount for item in items) / len(items)),
         avgContribution=avg("avgContribution"),
-        versusFixedPct=avg("versusFixedPct"),
+        # versusFixedPct can be None on scenarios where the fixed-DCA
+        # baseline is empty. Treating None as zero would silently mark
+        # those scenarios as "tied with fixed DCA" and could push a fragile
+        # candidate to the top of the leaderboard.
+        versusFixedPct=avg_optional("versusFixedPct"),
         versusLumpSumPct=None,
         sharpeRatio=round(sum(sharpe_items) / len(sharpe_items), 2) if sharpe_items else None,
         sortinoRatio=round(sum(sortino_items) / len(sortino_items), 2) if sortino_items else None,
@@ -200,7 +210,7 @@ def _fixed_for_scenario(backtester: DcaBacktester, scenario: Scenario, config: S
             baseAmount=config.baseAmount,
             frequency=config.frequency,
             minMultiplier=1,
-            maxMultiplier=1,
+            maxMultiplier=1.0001,
             params={},
         ),
         scenario.start,

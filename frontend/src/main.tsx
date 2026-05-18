@@ -26,6 +26,7 @@ type Decision = {
   score: number;
   rawSignals: Record<string, number | string | null>;
   reasons: string[];
+  warmup?: boolean;
 };
 type Contribution = {
   date: string;
@@ -378,6 +379,11 @@ function accountDrawdown(event: Contribution) {
   return event.accountDrawdownPct ?? event.drawdownPct;
 }
 
+function pairSeries<T extends { date: string }>(events: T[] | undefined, valueOf: (event: T) => number | null | undefined) {
+  if (!events) return [];
+  return events.map((event) => [event.date, valueOf(event)]);
+}
+
 async function readJson<T>(res: Response): Promise<T> {
   const text = await res.text();
   const payload = text ? JSON.parse(text) : null;
@@ -416,7 +422,7 @@ function ErrorFallback({ onReset }: { onReset: () => void }) {
   return (
     <main className="app-shell">
       <section className="fatal-error">
-        <p className="eyebrow">DCA Strategy Assistant v0.2</p>
+        <p className="eyebrow">DCA Strategy Assistant v0.3</p>
         <h1>界面渲染遇到问题</h1>
         <p className="muted">当前数据没有丢失，可以先恢复界面再重试。</p>
         <button type="button" onClick={onReset}>
@@ -487,6 +493,9 @@ function App() {
   const [activeScenarioId, setActiveScenarioId] = useState<string | null>(String(savedSettings?.activeScenarioId ?? "") || null);
   const [comparisonStrategyTypes, setComparisonStrategyTypes] = useState<string[]>(
     Array.isArray(savedSettings?.comparisonStrategyTypes) ? savedSettings.comparisonStrategyTypes : ["drawdown_boost", "ma_deviation"]
+  );
+  const [riskFreeRate, setRiskFreeRate] = useState<number>(
+    typeof savedSettings?.riskFreeRate === "number" ? savedSettings.riskFreeRate : 0.04
   );
 
   const selectedStrategy = useMemo(() => strategies.find((item) => item.type === strategyType), [strategies, strategyType]);
@@ -587,10 +596,11 @@ function App() {
         params,
         presetMode,
         activeScenarioId,
-        comparisonStrategyTypes: comparisonTypes
+        comparisonStrategyTypes: comparisonTypes,
+        riskFreeRate
       })
     );
-  }, [activeScenarioId, baseAmount, comparisonTypes, darkMode, endDate, frequency, maxMultiplier, minMultiplier, params, presetMode, selectedStrategy, startDate, strategyType, symbol]);
+  }, [activeScenarioId, baseAmount, comparisonTypes, darkMode, endDate, frequency, maxMultiplier, minMultiplier, params, presetMode, riskFreeRate, selectedStrategy, startDate, strategyType, symbol]);
 
   useEffect(() => {
     if (!selectedStrategy) return;
@@ -605,7 +615,8 @@ function App() {
           startDate,
           endDate,
           config,
-          comparisonStrategyTypes: comparisonTypes
+          comparisonStrategyTypes: comparisonTypes,
+          riskFreeRate
         })
       })
         .then(async (res) => {
@@ -620,7 +631,7 @@ function App() {
         .finally(() => setLoading(false));
     }, 450);
     return () => window.clearTimeout(handle);
-  }, [symbol, startDate, endDate, config, selectedStrategy, refreshNonce, comparisonTypes]);
+  }, [symbol, startDate, endDate, config, selectedStrategy, refreshNonce, comparisonTypes, riskFreeRate]);
 
   useEffect(() => {
     if (!optimizationJob || !optimizationActive) return;
@@ -788,7 +799,9 @@ function App() {
         {
           name: "买入点",
           type: "scatter",
-          data: result?.contributions.map((event) => [event.date, event.price]) ?? [],
+          // The mark-to-market event at the end of the range has amount=0
+          // and isn't a real buy, so don't draw a green dot for it.
+          data: result?.contributions.filter((event) => event.amount > 0).map((event) => [event.date, event.price]) ?? [],
           symbolSize: 6,
           itemStyle: { color: "#059669" }
         }
@@ -801,17 +814,17 @@ function App() {
       tooltip: { trigger: "axis" },
       legend: { top: 0, textStyle: { color: "#475569" } },
       grid: { left: 46, right: 20, top: 36, bottom: 34 },
-      xAxis: { type: "category", data: result?.contributions.map((event) => event.date) ?? [], axisLabel: { color: "#64748b" } },
+      xAxis: { type: "time", axisLabel: { color: "#64748b" } },
       yAxis: [
         { type: "value", name: "组合价值", axisLabel: { color: "#64748b" } },
         { type: "value", name: "投入金额", axisLabel: { color: "#64748b" } }
       ],
       series: [
-        { name: "本策略投入", type: "bar", yAxisIndex: 1, data: result?.contributions.map((event) => event.amount) ?? [], itemStyle: { color: "#0f766e" } },
-        { name: "固定投入", type: "bar", yAxisIndex: 1, data: result?.fixedContributions.map((event) => event.amount) ?? [], itemStyle: { color: "#94a3b8", opacity: 0.5 } },
-        { name: "本策略价值", type: "line", yAxisIndex: 0, data: result?.contributions.map((event) => event.portfolioValue) ?? [], showSymbol: false, lineStyle: { color: "#7c3aed", width: 2 } },
-        { name: "固定DCA价值", type: "line", yAxisIndex: 0, data: result?.fixedContributions.map((event) => event.portfolioValue) ?? [], showSymbol: false, lineStyle: { color: "#64748b", width: 2, type: "dashed" } },
-        { name: "一次性买入", type: "line", yAxisIndex: 0, data: result?.lumpSumContributions.map((event) => event.portfolioValue) ?? [], showSymbol: false, lineStyle: { color: "#dc2626", width: 2, type: "dotted" } }
+        { name: "本策略投入", type: "bar", yAxisIndex: 1, data: pairSeries(result?.contributions, (event) => event.amount), itemStyle: { color: "#0f766e" } },
+        { name: "固定投入", type: "bar", yAxisIndex: 1, data: pairSeries(result?.fixedContributions, (event) => event.amount), itemStyle: { color: "#94a3b8", opacity: 0.5 } },
+        { name: "本策略价值", type: "line", yAxisIndex: 0, data: pairSeries(result?.contributions, (event) => event.portfolioValue), showSymbol: false, lineStyle: { color: "#7c3aed", width: 2 } },
+        { name: "固定DCA价值", type: "line", yAxisIndex: 0, data: pairSeries(result?.fixedContributions, (event) => event.portfolioValue), showSymbol: false, lineStyle: { color: "#64748b", width: 2, type: "dashed" } },
+        { name: "一次性买入", type: "line", yAxisIndex: 0, data: pairSeries(result?.lumpSumContributions, (event) => event.portfolioValue), showSymbol: false, lineStyle: { color: "#dc2626", width: 2, type: "dotted" } }
       ]
     }),
     [result]
@@ -837,14 +850,14 @@ function App() {
       tooltip: { trigger: "axis" },
       legend: { top: 0, textStyle: { color: "#475569" } },
       grid: { left: 46, right: 20, top: 36, bottom: 34 },
-      xAxis: { type: "category", data: result?.contributions.map((event) => event.date) ?? [], axisLabel: { color: "#64748b" } },
+      xAxis: { type: "time", axisLabel: { color: "#64748b" } },
       yAxis: { type: "value", max: 0, axisLabel: { color: "#64748b", formatter: "{value}%" } },
       series: [
         {
           name: "本策略账户回撤",
           type: "line",
           showSymbol: false,
-          data: result?.contributions.map(accountDrawdown) ?? [],
+          data: pairSeries(result?.contributions, accountDrawdown),
           areaStyle: { color: "rgba(124, 58, 237, 0.08)" },
           lineStyle: { color: "#7c3aed", width: 2 }
         },
@@ -852,14 +865,14 @@ function App() {
           name: `${item.name}账户回撤`,
           type: "line",
           showSymbol: false,
-          data: item.contributions.map(accountDrawdown),
+          data: pairSeries(item.contributions, accountDrawdown),
           lineStyle: { color: ["#0f766e", "#2563eb", "#d97706"][index % 3], width: 2 }
         })) ?? []),
         {
           name: "固定DCA账户回撤",
           type: "line",
           showSymbol: false,
-          data: result?.fixedContributions.map(accountDrawdown) ?? [],
+          data: pairSeries(result?.fixedContributions, accountDrawdown),
           lineStyle: { color: "#64748b", width: 2, type: "dashed" }
         }
       ]
@@ -872,7 +885,7 @@ function App() {
       tooltip: { trigger: "axis" },
       legend: { top: 0, textStyle: { color: "#475569" } },
       grid: { left: 46, right: 20, top: 36, bottom: 34 },
-      xAxis: { type: "category", data: result?.contributions.map((event) => event.date) ?? [], axisLabel: { color: "#64748b" } },
+      xAxis: { type: "time", axisLabel: { color: "#64748b" } },
       yAxis: [
         { type: "value", min: 0, max: 1, axisLabel: { color: "#64748b" } },
         { type: "value", axisLabel: { color: "#64748b", formatter: "{value}x" } }
@@ -882,7 +895,7 @@ function App() {
           name: "策略评分",
           type: "line",
           showSymbol: false,
-          data: result?.contributions.map((event) => event.score) ?? [],
+          data: pairSeries(result?.contributions, (event) => event.score),
           lineStyle: { color: "#2563eb", width: 2 }
         },
         {
@@ -890,7 +903,7 @@ function App() {
           type: "line",
           yAxisIndex: 1,
           showSymbol: false,
-          data: result?.contributions.map((event) => event.multiplier) ?? [],
+          data: pairSeries(result?.contributions, (event) => event.multiplier),
           lineStyle: { color: "#0f766e", width: 2 }
         }
       ]
@@ -903,28 +916,28 @@ function App() {
       tooltip: { trigger: "axis" },
       legend: { top: 0, textStyle: { color: "#475569" } },
       grid: { left: 46, right: 20, top: 42, bottom: 34 },
-      xAxis: { type: "category", data: result?.contributions.map((event) => event.date) ?? [], axisLabel: { color: "#64748b" } },
+      xAxis: { type: "time", axisLabel: { color: "#64748b" } },
       yAxis: { type: "value", name: "组合价值", axisLabel: { color: "#64748b" } },
       series: [
         {
           name: result ? strategyNameByType.get(result.strategyType) ?? "本策略" : selectedStrategy?.name ?? "本策略",
           type: "line",
           showSymbol: false,
-          data: result?.contributions.map((event) => event.portfolioValue) ?? [],
+          data: pairSeries(result?.contributions, (event) => event.portfolioValue),
           lineStyle: { color: "#7c3aed", width: 2 }
         },
         ...(result?.strategyComparisons.map((item, index) => ({
           name: item.name,
           type: "line",
           showSymbol: false,
-          data: item.contributions.map((event) => event.portfolioValue),
+          data: pairSeries(item.contributions, (event) => event.portfolioValue),
           lineStyle: { color: ["#0f766e", "#2563eb", "#d97706"][index % 3], width: 2 }
         })) ?? []),
         {
           name: "固定DCA",
           type: "line",
           showSymbol: false,
-          data: result?.fixedContributions.map((event) => event.portfolioValue) ?? [],
+          data: pairSeries(result?.fixedContributions, (event) => event.portfolioValue),
           lineStyle: { color: "#64748b", width: 2, type: "dashed" }
         }
       ]
@@ -952,7 +965,7 @@ function App() {
     <main className="app-shell" data-theme={darkMode ? "dark" : "light"}>
       <header className="topbar">
         <div>
-          <p className="eyebrow">DCA Strategy Assistant v0.2</p>
+          <p className="eyebrow">DCA Strategy Assistant v0.3</p>
           <h1>定投策略工作台</h1>
         </div>
         <div className="topbar-actions">
@@ -1137,6 +1150,12 @@ function App() {
               <b>
                 SMA50 ${metric(result.marketState.sma50)} · SMA200 ${metric(result.marketState.sma200)} · 距 SMA200 {metric(result.marketState.distanceToSma200Pct, "%")}
               </b>
+            </div>
+          )}
+
+          {decision?.warmup && (
+            <div className="warmup-banner">
+              指标预热不足，本期按基础金额执行；等历史数据足够后才会启用动态调整。
             </div>
           )}
 
@@ -1348,6 +1367,15 @@ function App() {
               onChange={(value) => { setParams((current) => ({ ...current, [param.key]: value })); markCustom(); }}
             />
           ))}
+          <RangeControl
+            label="无风险利率"
+            value={Number((riskFreeRate * 100).toFixed(2))}
+            min={0}
+            max={10}
+            step={0.25}
+            onChange={(value) => { setRiskFreeRate(value / 100); markCustom(); }}
+          />
+          <p className="strategy-note">夏普/索提诺比率以此为基准。默认 4% 接近 2024 年美国短期国债收益率，2020 年前后实际更接近 0-2%。</p>
           <div className="optimizer-card">
             <strong>稳健参数建议</strong>
             <span>跨多个市场阶段搜索更稳定的参数。默认限制为最低 0.6-0.8x、最高 1.2-1.5x，不把功能变成择时交易。</span>

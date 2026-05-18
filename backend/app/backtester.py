@@ -13,6 +13,52 @@ def _next_trading_day(prices: pd.DataFrame, scheduled: pd.Timestamp) -> pd.Times
     return available[0]
 
 
+def _last_trading_day_on_or_before(prices: pd.DataFrame, target: pd.Timestamp) -> pd.Timestamp | None:
+    available = prices.index[prices.index <= target]
+    if len(available) == 0:
+        return None
+    return available[-1]
+
+
+def _mark_to_market_event(
+    prices: pd.DataFrame,
+    end: date,
+    last_event: ContributionEvent,
+    shares: float,
+    invested: float,
+) -> ContributionEvent | None:
+    """Append a synthetic amount=0 event at the last trading day of the
+    backtest range so endingValue / maxDrawdownPct / IRR reflect price
+    movement between the final buy and the end of the requested window.
+
+    Without this, a backtest that ends weeks after the last scheduled
+    buy day silently keeps the portfolio value frozen at the buy-day
+    close, understating both upside and downside that happened after.
+    """
+
+    target = pd.Timestamp(end)
+    last_day = _last_trading_day_on_or_before(prices, target)
+    if last_day is None:
+        return None
+    last_buy_day = pd.Timestamp(last_event.date)
+    if last_day <= last_buy_day:
+        return None
+
+    price = round(float(prices.loc[last_day, "close"]), 4)
+    return ContributionEvent(
+        date=last_day.date().isoformat(),
+        price=price,
+        amount=0.0,
+        shares=0.0,
+        totalShares=round(shares, 8),
+        totalInvested=round(invested, 2),
+        portfolioValue=round(shares * price, 2),
+        multiplier=last_event.multiplier,
+        score=last_event.score,
+        reasons=[],
+    )
+
+
 def _schedule(start: date, end: date, frequency: str) -> pd.DatetimeIndex:
     rules = {
         "weekly": "W-MON",
@@ -23,6 +69,27 @@ def _schedule(start: date, end: date, frequency: str) -> pd.DatetimeIndex:
     start_point = pd.DatetimeIndex([pd.Timestamp(start)])
     anchored = pd.date_range(start=pd.Timestamp(start), end=pd.Timestamp(end), freq=rule)
     return start_point.union(anchored)
+
+
+def _trade_day_schedule(prices: pd.DataFrame, start: date, end: date, frequency: str) -> pd.DatetimeIndex:
+    """Map calendar-date schedule to actual trading days and deduplicate.
+
+    Without this dedup step, a calendar schedule that contains both a weekend
+    starting date and the very next Monday (the W-MON anchor) would map to the
+    same trading day twice, causing the same buy to be recorded twice.
+    """
+
+    seen: set[pd.Timestamp] = set()
+    trade_days: list[pd.Timestamp] = []
+    for scheduled in _schedule(start, end, frequency):
+        trade_day = _next_trading_day(prices, scheduled)
+        if trade_day is None or trade_day.date() > end:
+            continue
+        if trade_day in seen:
+            continue
+        seen.add(trade_day)
+        trade_days.append(trade_day)
+    return pd.DatetimeIndex(trade_days)
 
 
 def _simple_annualized_return(ending: float, total_invested: float, years: float) -> float:
@@ -126,7 +193,7 @@ def _money_weighted_annualized_return(events: list[ContributionEvent]) -> float 
     return ((low + high) / 2) * 100
 
 
-def _metrics(events: list[ContributionEvent], first_date: date, last_date: date) -> BacktestMetrics:
+def _metrics(events: list[ContributionEvent], first_date: date, last_date: date, risk_free_rate: float = 0.04) -> BacktestMetrics:
     if not events:
         return BacktestMetrics(
             totalInvested=0,
@@ -145,7 +212,7 @@ def _metrics(events: list[ContributionEvent], first_date: date, last_date: date)
     if annualized is None:
         annualized = _simple_annualized_return(ending, total_invested, years)
     buy_count = sum(1 for event in events if event.amount > 0)
-    sharpe, sortino = _risk_adjusted_ratios(events)
+    sharpe, sortino = _risk_adjusted_ratios(events, risk_free_rate=risk_free_rate)
     return BacktestMetrics(
         totalInvested=round(total_invested, 2),
         endingValue=round(ending, 2),
@@ -174,18 +241,16 @@ class DcaBacktester:
         fee_rate: float = 0,
         slippage_rate: float = 0,
         prepared: pd.DataFrame | None = None,
+        risk_free_rate: float = 0.04,
     ) -> tuple[list[ContributionEvent], BacktestMetrics]:
         if strategy_type == "fixed_dca":
-            return self._run_fixed(config, start, end, fee_rate, slippage_rate)
+            return self._run_fixed(config, start, end, fee_rate, slippage_rate, risk_free_rate=risk_free_rate)
 
         prepared = prepared if prepared is not None else prepare_market(self.prices, config)
         shares = 0.0
         invested = 0.0
         events: list[ContributionEvent] = []
-        for scheduled in _schedule(start, end, config.frequency):
-            trade_day = _next_trading_day(self.prices, scheduled)
-            if trade_day is None or trade_day.date() > end:
-                continue
+        for trade_day in _trade_day_schedule(self.prices, start, end, config.frequency):
             decision = evaluate_prepared_strategy(strategy_type, config, prepared, trade_day)
             execution_price = decision.price * (1 + slippage_rate)
             net_amount = decision.recommendedAmount * (1 - fee_rate)
@@ -207,8 +272,12 @@ class DcaBacktester:
                     reasons=[],
                 )
             )
+        if events:
+            mtm = _mark_to_market_event(self.prices, end, events[-1], shares, invested)
+            if mtm is not None:
+                events.append(mtm)
         events = _with_cashflow_adjusted_drawdowns(events)
-        return events, _metrics(events, start, end)
+        return events, _metrics(events, start, end, risk_free_rate=risk_free_rate)
 
     def _run_fixed(
         self,
@@ -217,14 +286,12 @@ class DcaBacktester:
         end: date,
         fee_rate: float = 0,
         slippage_rate: float = 0,
+        risk_free_rate: float = 0.04,
     ) -> tuple[list[ContributionEvent], BacktestMetrics]:
         shares = 0.0
         invested = 0.0
         events: list[ContributionEvent] = []
-        for scheduled in _schedule(start, end, config.frequency):
-            trade_day = _next_trading_day(self.prices, scheduled)
-            if trade_day is None or trade_day.date() > end:
-                continue
+        for trade_day in _trade_day_schedule(self.prices, start, end, config.frequency):
             price = round(float(self.prices.loc[trade_day, "close"]), 4)
             execution_price = price * (1 + slippage_rate)
             net_amount = config.baseAmount * (1 - fee_rate)
@@ -245,8 +312,12 @@ class DcaBacktester:
                     reasons=[],
                 )
             )
+        if events:
+            mtm = _mark_to_market_event(self.prices, end, events[-1], shares, invested)
+            if mtm is not None:
+                events.append(mtm)
         events = _with_cashflow_adjusted_drawdowns(events)
-        return events, _metrics(events, start, end)
+        return events, _metrics(events, start, end, risk_free_rate=risk_free_rate)
 
     def run_lump_sum(
         self,
@@ -256,18 +327,16 @@ class DcaBacktester:
         frequency: str,
         fee_rate: float = 0,
         slippage_rate: float = 0,
+        risk_free_rate: float = 0.04,
     ) -> tuple[list[ContributionEvent], BacktestMetrics]:
         if total_amount <= 0:
-            return [], _metrics([], start, end)
+            return [], _metrics([], start, end, risk_free_rate=risk_free_rate)
 
         events: list[ContributionEvent] = []
         first_trade_day: pd.Timestamp | None = None
         shares = 0.0
         invested = round(total_amount, 2)
-        for scheduled in _schedule(start, end, frequency):
-            trade_day = _next_trading_day(self.prices, scheduled)
-            if trade_day is None or trade_day.date() > end:
-                continue
+        for trade_day in _trade_day_schedule(self.prices, start, end, frequency):
             price = round(float(self.prices.loc[trade_day, "close"]), 4)
             amount = 0.0
             bought = 0.0
@@ -292,5 +361,9 @@ class DcaBacktester:
                     reasons=[],
                 )
             )
+        if events:
+            mtm = _mark_to_market_event(self.prices, end, events[-1], shares, invested)
+            if mtm is not None:
+                events.append(mtm)
         events = _with_cashflow_adjusted_drawdowns(events)
-        return events, _metrics(events, start, end)
+        return events, _metrics(events, start, end, risk_free_rate=risk_free_rate)
