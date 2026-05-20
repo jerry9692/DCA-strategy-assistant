@@ -1,6 +1,5 @@
 from app.models import ParameterOption, StrategyDefinition, StrategyParameter
 
-
 COMMON_PARAMETERS = [
     StrategyParameter(
         key="baseAmount",
@@ -59,7 +58,9 @@ STRATEGIES = [
         name="跌幅加码",
         description="相对近期高点回撤越大，投入倍率越高。",
         parameters=[
-            StrategyParameter(key="lookbackDays", label="高点窗口", type="number", default=252, min=20, max=1260, step=10),
+            StrategyParameter(
+                key="lookbackDays", label="高点窗口", type="number", default=252, min=20, max=1260, step=10
+            ),
             StrategyParameter(key="maxDrawdownPct", label="满额回撤", type="range", default=30, min=5, max=60, step=1),
         ],
     ),
@@ -77,7 +78,9 @@ STRATEGIES = [
         name="历史分位",
         description="价格处在历史低分位多投，高分位少投。",
         parameters=[
-            StrategyParameter(key="percentileWindow", label="分位窗口", type="number", default=756, min=60, max=1600, step=20),
+            StrategyParameter(
+                key="percentileWindow", label="分位窗口", type="number", default=756, min=60, max=1600, step=20
+            ),
         ],
     ),
     StrategyDefinition(
@@ -95,7 +98,9 @@ STRATEGIES = [
         name="网格加权定投",
         description="按价格所在网格区间调节买入金额，只买入不卖出。",
         parameters=[
-            StrategyParameter(key="gridWindow", label="网格窗口", type="number", default=252, min=60, max=1260, step=10),
+            StrategyParameter(
+                key="gridWindow", label="网格窗口", type="number", default=252, min=60, max=1260, step=10
+            ),
             StrategyParameter(key="gridCount", label="网格档数", type="number", default=8, min=3, max=20, step=1),
             StrategyParameter(key="smooth", label="平滑金额", type="toggle", default=True),
         ],
@@ -107,7 +112,9 @@ STRATEGIES = [
         parameters=[
             StrategyParameter(key="drawdownWeight", label="回撤权重", type="range", default=1, min=0, max=3, step=0.1),
             StrategyParameter(key="maWeight", label="均线权重", type="range", default=1, min=0, max=3, step=0.1),
-            StrategyParameter(key="percentileWeight", label="分位权重", type="range", default=1, min=0, max=3, step=0.1),
+            StrategyParameter(
+                key="percentileWeight", label="分位权重", type="range", default=1, min=0, max=3, step=0.1
+            ),
             StrategyParameter(key="rsiWeight", label="RSI 权重", type="range", default=1, min=0, max=3, step=0.1),
             StrategyParameter(key="gridWeight", label="网格权重", type="range", default=1, min=0, max=3, step=0.1),
         ],

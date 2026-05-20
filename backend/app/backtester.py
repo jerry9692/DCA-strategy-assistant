@@ -98,7 +98,9 @@ def _simple_annualized_return(ending: float, total_invested: float, years: float
     return ((ending / total_invested) ** (1 / years) - 1) * 100
 
 
-def _risk_adjusted_ratios(events: list[ContributionEvent], risk_free_rate: float = 0.04) -> tuple[float | None, float | None]:
+def _risk_adjusted_ratios(
+    events: list[ContributionEvent], risk_free_rate: float = 0.04
+) -> tuple[float | None, float | None]:
     if len(events) < 3:
         return None, None
 
@@ -121,11 +123,11 @@ def _risk_adjusted_ratios(events: list[ContributionEvent], risk_free_rate: float
     period_risk_free = (1 + risk_free_rate) ** (1 / periods_per_year) - 1
     excess = pd.Series([item - period_risk_free for item in returns], dtype="float64")
     std = float(excess.std(ddof=1))
-    sharpe = None if std <= 0 else float(excess.mean() / std * (periods_per_year ** 0.5))
+    sharpe = None if std <= 0 else float(excess.mean() / std * (periods_per_year**0.5))
 
     downside = excess[excess < 0]
     downside_std = float(downside.std(ddof=1)) if len(downside) >= 2 else 0.0
-    sortino = None if downside_std <= 0 else float(excess.mean() / downside_std * (periods_per_year ** 0.5))
+    sortino = None if downside_std <= 0 else float(excess.mean() / downside_std * (periods_per_year**0.5))
     return (
         round(sharpe, 2) if sharpe is not None else None,
         round(sortino, 2) if sortino is not None else None,
@@ -150,10 +152,7 @@ def _with_cashflow_adjusted_drawdowns(events: list[ContributionEvent]) -> list[C
         peak = max(peak, curve)
         drawdowns.append((curve / peak - 1) * 100 if peak > 0 else 0.0)
 
-    return [
-        event.model_copy(update={"drawdownPct": round(drawdown, 2)})
-        for event, drawdown in zip(events, drawdowns)
-    ]
+    return [event.model_copy(update={"drawdownPct": round(drawdown, 2)}) for event, drawdown in zip(events, drawdowns)]
 
 
 def _money_weighted_annualized_return(events: list[ContributionEvent]) -> float | None:
@@ -193,7 +192,9 @@ def _money_weighted_annualized_return(events: list[ContributionEvent]) -> float 
     return ((low + high) / 2) * 100
 
 
-def _metrics(events: list[ContributionEvent], first_date: date, last_date: date, risk_free_rate: float = 0.04) -> BacktestMetrics:
+def _metrics(
+    events: list[ContributionEvent], first_date: date, last_date: date, risk_free_rate: float = 0.04
+) -> BacktestMetrics:
     if not events:
         return BacktestMetrics(
             totalInvested=0,

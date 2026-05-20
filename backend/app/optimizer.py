@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, timedelta
 from itertools import product
 from statistics import median
-from typing import Any, Callable
+from typing import Any
 
 import pandas as pd
 
@@ -21,7 +22,6 @@ from app.models import (
     StrategyConfig,
 )
 from app.strategies import prepare_market
-
 
 COMMON_MIN_MULTIPLIERS = [0.6, 0.7, 0.8]
 COMMON_MAX_MULTIPLIERS = [1.2, 1.3, 1.4, 1.5]
@@ -131,7 +131,9 @@ def _robust_score(scenario_scores: list[float], scenario_metrics: list[BacktestM
     return center - worst_gap * 0.5 - penalty
 
 
-def _copy_config(base: StrategyConfig, params: dict[str, Any], min_multiplier: float, max_multiplier: float) -> StrategyConfig:
+def _copy_config(
+    base: StrategyConfig, params: dict[str, Any], min_multiplier: float, max_multiplier: float
+) -> StrategyConfig:
     return StrategyConfig(
         strategyType=base.strategyType,
         baseAmount=base.baseAmount,
@@ -148,15 +150,27 @@ def _candidate_configs(base: StrategyConfig) -> tuple[list[StrategyConfig], int]
 
     grids: list[dict[str, Any]]
     if base.strategyType == "drawdown_boost":
-        grids = [{"lookbackDays": lookback, "maxDrawdownPct": drawdown} for lookback, drawdown in product([126, 252, 504], [15, 25, 35, 50])]
+        grids = [
+            {"lookbackDays": lookback, "maxDrawdownPct": drawdown}
+            for lookback, drawdown in product([126, 252, 504], [15, 25, 35, 50])
+        ]
     elif base.strategyType == "ma_deviation":
-        grids = [{"maWindow": window, "deviationPct": deviation} for window, deviation in product([100, 150, 200, 250, 300], [8, 12, 15, 20, 30])]
+        grids = [
+            {"maWindow": window, "deviationPct": deviation}
+            for window, deviation in product([100, 150, 200, 250, 300], [8, 12, 15, 20, 30])
+        ]
     elif base.strategyType == "historical_percentile":
         grids = [{"percentileWindow": window} for window in [252, 504, 756, 1008, 1260]]
     elif base.strategyType == "rsi_sentiment":
-        grids = [{"rsiWindow": window, "oversold": oversold, "overbought": overbought} for window, oversold, overbought in product([10, 14, 21, 30], [25, 30, 35], [65, 70, 75])]
+        grids = [
+            {"rsiWindow": window, "oversold": oversold, "overbought": overbought}
+            for window, oversold, overbought in product([10, 14, 21, 30], [25, 30, 35], [65, 70, 75])
+        ]
     elif base.strategyType == "grid_weighted":
-        grids = [{"gridWindow": window, "gridCount": count, "smooth": smooth} for window, count, smooth in product([126, 252, 504, 756], [5, 8, 12, 16], [True, False])]
+        grids = [
+            {"gridWindow": window, "gridCount": count, "smooth": smooth}
+            for window, count, smooth in product([126, 252, 504, 756], [5, 8, 12, 16], [True, False])
+        ]
     elif base.strategyType == "composite_score":
         grids = COMPOSITE_WEIGHT_PRESETS
     else:
@@ -202,7 +216,9 @@ def _scenarios(start: date, end: date) -> list[Scenario]:
     ]
 
 
-def _fixed_for_scenario(backtester: DcaBacktester, scenario: Scenario, config: StrategyConfig) -> BacktestMetrics | None:
+def _fixed_for_scenario(
+    backtester: DcaBacktester, scenario: Scenario, config: StrategyConfig
+) -> BacktestMetrics | None:
     fixed_events, fixed_metrics = backtester.run(
         "fixed_dca",
         StrategyConfig(
@@ -252,7 +268,9 @@ def optimize_parameters(
     start = request.startDate or (end - timedelta(days=365 * 5))
     candidates, skipped_count = _candidate_configs(request.config)
     if progress_callback:
-        progress_callback({"evaluatedCount": 0, "totalCount": len(candidates), "currentScenario": "准备验证场景", "bestSoFar": None})
+        progress_callback(
+            {"evaluatedCount": 0, "totalCount": len(candidates), "currentScenario": "准备验证场景", "bestSoFar": None}
+        )
     scenario_defs = _scenarios(start, end)
     max_end = max(item.end for item in scenario_defs)
     min_start = min(item.start for item in scenario_defs) - timedelta(days=365 * 3)
@@ -260,8 +278,7 @@ def optimize_parameters(
     prices, _, _ = get_price_history(symbol, min_start, max_end)
     backtester = DcaBacktester(prices)
     fixed_by_scenario = {
-        scenario.id: _fixed_for_scenario(backtester, scenario, request.config)
-        for scenario in scenario_defs
+        scenario.id: _fixed_for_scenario(backtester, scenario, request.config) for scenario in scenario_defs
     }
 
     unavailable_scenarios = sum(1 for metrics in fixed_by_scenario.values() if metrics is None)
@@ -309,7 +326,9 @@ def optimize_parameters(
             )
         if not scenario_results:
             return None
-        total_score = _robust_score(scores, metrics_for_summary) if request.objective == "robust_return" else median(scores)
+        total_score = (
+            _robust_score(scores, metrics_for_summary) if request.objective == "robust_return" else median(scores)
+        )
         return OptimizationCandidate(
             rank=0,
             score=round(total_score, 2),

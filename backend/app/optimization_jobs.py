@@ -6,8 +6,8 @@ from uuid import uuid4
 
 from app.models import (
     OptimizationCandidate,
-    OptimizationJobStatus,
     OptimizationJobState,
+    OptimizationJobStatus,
     OptimizationRequest,
     OptimizationResult,
 )

@@ -132,7 +132,9 @@ def _raw_signals(row: pd.Series, config: StrategyConfig) -> dict[str, float | in
     return {
         "price": round(_row_float(row, "close", 0), 4),
         "sma": None if pd.isna(row.get("sma")) else round(float(row.get("sma")), 4),
-        "smaDeviationPct": None if pd.isna(row.get("sma_deviation_pct")) else round(float(row.get("sma_deviation_pct")), 4),
+        "smaDeviationPct": None
+        if pd.isna(row.get("sma_deviation_pct"))
+        else round(float(row.get("sma_deviation_pct")), 4),
         "drawdownPct": None if pd.isna(row.get("drawdown_pct")) else round(float(row.get("drawdown_pct")), 4),
         "percentile": None if pd.isna(row.get("percentile")) else round(float(row.get("percentile")), 4),
         "rsi": None if pd.isna(row.get("rsi")) else round(float(row.get("rsi")), 4),

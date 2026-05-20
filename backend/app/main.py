@@ -1,33 +1,32 @@
 from datetime import date, timedelta
 from functools import lru_cache
+from pathlib import Path
 
+import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import pandas as pd
+from fastapi.staticfiles import StaticFiles
 
 from app.backtester import DcaBacktester
 from app.data import PriceDataError, get_price_history, validate_symbol
 from app.models import (
+    SUPPORTED_ASSETS,
     Asset,
     BacktestMetrics,
     BacktestRequest,
-    BacktestResult,
     MarketState,
-    PricePoint,
     OptimizationJobCreateResponse,
     OptimizationJobStatus,
     OptimizationRequest,
     OptimizationResult,
     RecommendationRequest,
-    SUPPORTED_ASSETS,
-    StrategyConfig,
     StrategyComparison,
+    StrategyConfig,
 )
 from app.optimization_jobs import cancel_optimization_job, create_optimization_job, get_optimization_job
 from app.optimizer import optimize_parameters
 from app.strategies import evaluate_prepared_strategy, evaluate_strategy, prepare_market
 from app.strategy_definitions import COMMON_PARAMETERS, STRATEGIES
-
 
 app = FastAPI(title="DCA Strategy Assistant", version="0.3.0")
 
@@ -46,7 +45,9 @@ def _raise_api_error(exc: Exception) -> None:
             status_code=400,
             detail={"message": exc.message, "code": exc.code, "retryable": exc.retryable},
         ) from exc
-    raise HTTPException(status_code=400, detail={"message": str(exc), "code": "request_failed", "retryable": False}) from exc
+    raise HTTPException(
+        status_code=400, detail={"message": str(exc), "code": "request_failed", "retryable": False}
+    ) from exc
 
 
 @app.get("/api/assets", response_model=list[Asset])
@@ -92,7 +93,9 @@ def create_optimization(request: OptimizationRequest) -> OptimizationJobCreateRe
 def optimization_status(job_id: str) -> OptimizationJobStatus:
     status = get_optimization_job(job_id)
     if status is None:
-        raise HTTPException(status_code=404, detail={"message": "调优任务不存在。", "code": "job_not_found", "retryable": False})
+        raise HTTPException(
+            status_code=404, detail={"message": "调优任务不存在。", "code": "job_not_found", "retryable": False}
+        )
     return status
 
 
@@ -100,7 +103,9 @@ def optimization_status(job_id: str) -> OptimizationJobStatus:
 def cancel_optimization(job_id: str) -> OptimizationJobStatus:
     status = cancel_optimization_job(job_id)
     if status is None:
-        raise HTTPException(status_code=404, detail={"message": "调优任务不存在。", "code": "job_not_found", "retryable": False})
+        raise HTTPException(
+            status_code=404, detail={"message": "调优任务不存在。", "code": "job_not_found", "retryable": False}
+        )
     return status
 
 
@@ -151,10 +156,7 @@ def _chart_prices(prices, start: date, max_points: int = 360) -> list[dict]:
     if len(visible) > max_points:
         step = max(1, len(visible) // max_points)
         visible = visible.iloc[::step]
-    return [
-        {"date": idx.date().isoformat(), "close": round(float(row["close"]), 4)}
-        for idx, row in visible.iterrows()
-    ]
+    return [{"date": idx.date().isoformat(), "close": round(float(row["close"]), 4)} for idx, row in visible.iterrows()]
 
 
 def _account_drawdowns(events, scheduled_budget: float | None = None) -> list[float]:
@@ -382,3 +384,12 @@ def backtest(request: BacktestRequest) -> dict:
         }
     except Exception as exc:
         _raise_api_error(exc)
+
+
+# --- Static file serving for Docker / production builds ---
+# When the frontend is built (npm run build → frontend/dist/), mount it so
+# the same uvicorn process can serve both the API and the SPA. In dev mode
+# (Vite dev server on :5173) this path doesn't exist and is simply skipped.
+_FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+if _FRONTEND_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=str(_FRONTEND_DIST), html=True), name="spa")

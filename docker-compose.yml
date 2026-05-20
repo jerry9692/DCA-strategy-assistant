@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - dca-data:/app/backend/data
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+
+volumes:
+  dca-data:

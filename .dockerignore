@@ -1,0 +1,13 @@
+.git
+.venv
+backend/.venv
+backend/data
+backend/__pycache__
+backend/server.*.log
+backend/uvicorn.log
+frontend/node_modules
+frontend/dist
+.pytest_cache
+.playwright-mcp
+.vscode
+docs

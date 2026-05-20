@@ -1,0 +1,42 @@
+[project]
+name = "dca-strategy-assistant"
+version = "0.3.0"
+requires-python = ">=3.10"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+src = ["backend"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+    "E501",    # line too long — handled by formatter
+    "B008",    # function call in default argument (FastAPI Depends pattern)
+    "B905",    # zip-without-explicit-strict — existing code is intentional
+    "RUF001",  # ambiguous unicode — false positive on Chinese punctuation
+    "RUF005",  # list concatenation vs spread — existing style is fine
+    "RUF007",  # zip-instead-of-pairwise — readability preference
+    "RUF012",  # mutable class variable — Pydantic models use this
+    "SIM108",  # ternary vs if-else — readability preference
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pyright]
+pythonVersion = "3.10"
+include = ["backend/app", "backend/tests"]
+# Start with "off" so CI doesn't block. Tighten to "basic" once the
+# ~95 pandas-related type narrowing issues are resolved incrementally.
+typeCheckingMode = "off"
+reportMissingImports = true
+reportMissingTypeStubs = false
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]

@@ -3,7 +3,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-
 SUPPORTED_ASSETS = {
     "QQQ": "Invesco QQQ Trust",
     "VOO": "Vanguard S&P 500 ETF",
@@ -63,8 +62,7 @@ class StrategyConfig(BaseModel):
         # it should buy more.
         if self.minMultiplier >= self.maxMultiplier:
             raise ValueError(
-                f"minMultiplier ({self.minMultiplier}) must be strictly less than "
-                f"maxMultiplier ({self.maxMultiplier})."
+                f"minMultiplier ({self.minMultiplier}) must be strictly less than maxMultiplier ({self.maxMultiplier})."
             )
         return self
 

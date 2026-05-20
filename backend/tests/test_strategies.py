@@ -72,13 +72,18 @@ def test_composite_weights_change_score():
         baseAmount=100,
         params={"drawdownWeight": 3, "maWeight": 0, "percentileWeight": 0, "rsiWeight": 0, "gridWeight": 0},
     )
-    assert evaluate_strategy("composite_score", drawdown_heavy, prices).score != evaluate_strategy("composite_score", base, prices).score
+    assert (
+        evaluate_strategy("composite_score", drawdown_heavy, prices).score
+        != evaluate_strategy("composite_score", base, prices).score
+    )
 
 
 def test_backtester_runs_weekly_events():
     prices = fixture_prices([100 + i * 0.1 for i in range(120)])
     config = StrategyConfig(strategyType="fixed_dca", baseAmount=100, frequency="weekly")
-    events, metrics = DcaBacktester(prices).run("fixed_dca", config, pd.Timestamp("2020-01-01").date(), pd.Timestamp("2020-03-31").date())
+    events, metrics = DcaBacktester(prices).run(
+        "fixed_dca", config, pd.Timestamp("2020-01-01").date(), pd.Timestamp("2020-03-31").date()
+    )
     assert events
     buys = [event for event in events if event.amount > 0]
     assert metrics.buyCount == len(buys)
@@ -847,7 +852,9 @@ def _wait_for_job(job_id: str, wanted: set[str], timeout: float = 1.0):
 def test_optimization_job_completes_with_result(monkeypatch):
     def fake_optimize(request, progress_callback=None, should_cancel=None):
         if progress_callback:
-            progress_callback({"evaluatedCount": 1, "totalCount": 2, "currentScenario": "当前选择区间", "bestSoFar": None})
+            progress_callback(
+                {"evaluatedCount": 1, "totalCount": 2, "currentScenario": "当前选择区间", "bestSoFar": None}
+            )
             progress_callback({"evaluatedCount": 2, "totalCount": 2, "currentScenario": None, "bestSoFar": None})
         return _job_result(request)
 

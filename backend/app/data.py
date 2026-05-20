@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pandas as pd
 import yfinance as yf
-from yfinance.exceptions import YFRateLimitError
 from sqlmodel import Field, Session, SQLModel, create_engine, select
+from yfinance.exceptions import YFRateLimitError
 
 from app.models import SUPPORTED_ASSETS
 
@@ -106,7 +106,9 @@ def _close_series(data: pd.DataFrame) -> pd.Series:
                 if isinstance(close, pd.DataFrame):
                     return close.iloc[:, 0]
                 return close
-        raise PriceDataError("Yahoo Finance response did not include close prices.", code="missing_close", retryable=True)
+        raise PriceDataError(
+            "Yahoo Finance response did not include close prices.", code="missing_close", retryable=True
+        )
 
     if "Close" not in data.columns:
         # Defensive: yfinance has been observed to drop the "Close" column

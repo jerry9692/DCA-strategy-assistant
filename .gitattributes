@@ -1,0 +1,25 @@
+# Normalize line endings to LF on commit, checkout as native.
+* text=auto
+
+# Force LF for scripts and config that break on CRLF.
+*.py text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.sh text eol=lf
+
+# Keep Windows scripts as CRLF.
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary files.
+*.sqlite binary
+*.db binary
+*.png binary
+*.jpg binary
+*.ico binary
