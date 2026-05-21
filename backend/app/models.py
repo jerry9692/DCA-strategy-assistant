@@ -98,6 +98,12 @@ class ContributionEvent(BaseModel):
     score: float
     reasons: list[str]
     drawdownPct: float = 0
+    # Set by main._chart_contributions when building the API response.
+    # Distinct from drawdownPct (the holding-cost-curve drawdown computed
+    # by the backtester) — accountDrawdownPct accounts for unspent budget
+    # so users can see the pessimistic "if I'd held this much cash"
+    # number on charts.
+    accountDrawdownPct: float | None = None
 
 
 class BacktestMetrics(BaseModel):
@@ -171,6 +177,18 @@ class RecommendationRequest(BaseModel):
     symbol: str = "QQQ"
     config: StrategyConfig = Field(default_factory=StrategyConfig)
     asOf: date | None = None
+
+
+class RecommendationResponse(BaseModel):
+    symbol: str
+    decision: StrategyDecision
+    dataSource: str
+    cacheStatus: str
+
+
+class StrategyDefinitionsResponse(BaseModel):
+    commonParameters: list[StrategyParameter]
+    strategies: list[StrategyDefinition]
 
 
 class OptimizationRequest(BaseModel):

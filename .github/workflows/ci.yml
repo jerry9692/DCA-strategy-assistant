@@ -32,8 +32,19 @@ jobs:
         env:
           PYTHONPATH: backend
 
+      # Re-export the OpenAPI schema and fail if the committed copy is
+      # out of date. Forces every backend model change to land alongside
+      # a refreshed openapi.json (and, by extension, regenerated frontend
+      # types — the frontend job below regenerates and diffs those).
+      - name: OpenAPI schema is up to date
+        working-directory: backend
+        run: |
+          python export_openapi.py
+          git diff --exit-code openapi.json
+
   frontend:
     runs-on: ubuntu-latest
+    needs: backend
     steps:
       - uses: actions/checkout@v4
 
@@ -57,4 +68,15 @@ jobs:
 
       - name: ESLint
         working-directory: frontend
-        run: npx eslint src || true  # non-blocking until B1 hooks cleanup
+        run: npx eslint src
+
+      # Regenerate the API types from the committed openapi.json (which
+      # the backend job already verified is up to date) and fail if the
+      # checked-in api.generated.ts has drifted. Closes the loop on B4:
+      # a backend model change can no longer slip through without the
+      # frontend types catching up.
+      - name: Generated API types are up to date
+        working-directory: frontend
+        run: |
+          npm run generate:api
+          git diff --exit-code src/api.generated.ts

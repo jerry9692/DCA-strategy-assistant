@@ -1,5 +1,7 @@
 # DCA Strategy Assistant — 下阶段路线图（2026 Q3+）
 
+---# DCA Strategy Assistant — 下阶段路线图（2026 Q3+）
+
 代码审查（2026-05-18 P0/P1/P2 三轮）已经把 #1-#10 + 架构 F 的全部 bug 和健壮性条目清零。从这里开始的工作分成两条线：
 
 - **稳态线**：把项目从"能跑的研究工具"升级为"可被同事/朋友/外部用户使用的产品"。重点是工程质量、可部署、可观测。
@@ -7,128 +9,116 @@
 
 下面按 P0 → P1 → P2 → P3 → 实验排，每一项都给出**价值 / 成本 / 触发条件**三个判断维度，方便取舍。
 
----
+> **进度（2026-05-21 更新）**：P0（工程基础底线 A1-A6）和 P1（必修的架构债 B1-B4）
+> 已经全部落地，含一轮审查后的回归修复（B2 cache key 从 `id()` 改为语义键、
+> B4 让 `types.ts` 真正消费 `api.generated.ts`、CI 加 OpenAPI 漂移检查并把
+> ESLint 改回阻塞）。详见 [`change-log/2026-05-21-fix-roadmap-p0-p1.md`](./change-log/2026-05-21-fix-roadmap-p0-p1.md)。
+> 下一档主线是 P2（C1 多标的、C2 费率滑点、D1 滚动窗口）。
 
-## P0 — 工程基础底线（建议本周内做）
+#### P0 — 工程基础底线（建议本周内做）
 
 这一档不是产品功能，是没了它就会咬人的最小工程基础。当前项目缺这一块的程度让代码审查能找到的 bug 还会继续来。
 
-### A1 引入 ruff + black + 后端 pre-commit
+> ✅ 全部完成（2026-05-21）。
 
-- **现状**：纯靠人眼。代码风格已经有不一致（未用的 import、空行间距、对长行的偏好）。
-- **价值**：高。下次代码审查不会再被风格问题干扰，能聚焦真正的 bug。
-- **成本**：1 小时。`ruff check --fix` + `ruff format`，提交一个"风格统一"PR。
-- **配置**：`pyproject.toml` 加 ruff section，行长 110，目标 py310。
+### A1 ✅ 引入 ruff + black + 后端 pre-commit
 
-### A2 后端加 mypy 或 pyright
+`pyproject.toml` 已配置 ruff（行长 120，启用 E/F/W/I/UP/B/SIM/RUF）。CI 会跑 `ruff check` 和 `ruff format --check`。
 
-- **现状**：Pydantic v2 + 类型注解写得很好，但没 type checker 兜底。`evaluate_prepared_strategy` 里的 NaN 默认值这种坑，类型检查能在写时发现。
-- **价值**：中-高。一次性投入，长期受益。
-- **成本**：半天（包含修复初次扫描的告警）。建议从 `--strict-optional` 起步，逐步收紧。
+### A2 ✅ 后端加 mypy 或 pyright
 
-### A3 前端加 ESLint + Prettier + Vitest
+选用 pyright，`pyproject.toml` 已加 section。当前 `typeCheckingMode = "off"` 起步，避免 ~95 个 pandas 相关类型窄化告警一次性堵 CI；后续按模块逐步收紧到 "basic"。
 
-- **现状**：1438 行 `main.tsx` 没有任何静态分析或测试。改一行可能改坏五处。
-- **价值**：高。前端是用户唯一的接触面，回归代价大。
-- **成本**：半天。Vitest 本地跑、ESLint 配 `react-hooks/exhaustive-deps` 能立刻发现两处依赖数组缺漏。
-- **顺手做**：先给 `pairSeries`、`accountDrawdown`、`exportBacktestCsv` 加单元测试。
+### A3 ✅ 前端加 ESLint + Prettier + Vitest
 
-### A4 GitHub Actions CI
+`eslint.config.js` + `.prettierrc` + `frontend/src/utils.test.ts` 三件套到位。`pairSeries`、`accountDrawdown`、`metric`、`csvEscape` 已被覆盖（13 个用例）。CI 上 ESLint 已经是阻塞步骤。
 
-- **现状**：本地 `pytest` + `tsc --noEmit` 才能验证。任何人提 PR 没有自动化保障。
-- **价值**：高。是工程协作的最低门槛。
-- **成本**：1 小时。一个 yaml：在 push/PR 时跑 `pytest backend/tests` + `npx tsc --noEmit` + 前端 build。
-- **附加**：把 `pytest --cov` 跑起来，覆盖率上传到 Codecov（可选）。
+### A4 ✅ GitHub Actions CI
 
-### A5 Dockerfile + docker-compose
+`.github/workflows/ci.yml` 双 job：
 
-- **现状**：只有 `start-dev.bat` / `.ps1`。Mac/Linux 用户无法运行。
-- **价值**：中。本地用户面拓宽 + 可以一行命令分享给朋友试用 + 为未来云端部署铺路。
-- **成本**：2 小时。多阶段构建：Python 后端 + Node 前端，nginx 起静态。
-- **触发条件**：有人想分享给非 Windows 用户、或想跑在 home server 上时立刻做。
+- backend：ruff lint + format check + pytest + OpenAPI schema 漂移检查
+- frontend：tsc --noEmit + eslint + vitest + 生成 API 类型漂移检查
+- frontend `needs: backend`，前端在后端通过后才跑
 
-### A6 仓库基础健全
+### A5 ✅ Dockerfile + docker-compose
 
-- `LICENSE` 文件还没有（README 写了 MIT 但没文件）。
-- `.gitattributes` 设置 LF 统一。
-- `CONTRIBUTING.md` 给一个最小开发流程文档。
-- 把 `backend/server.err.log` / `server.out.log` / `server.job.log` / `uvicorn.log` 加进 `.gitignore` 并删除已提交的（如果有）。
+多阶段构建（Node 编译前端 → Python 起 uvicorn 同时服务 API 和静态文件）。`docker-compose.yml` 持久化 `backend/data` 卷。
+
+### A6 ✅ 仓库基础健全
+
+- `LICENSE`（MIT）已建
+- `.gitattributes` 设 LF 统一，`.bat` / `.ps1` 保留 CRLF
+- `CONTRIBUTING.md` 给了最小开发流程文档
+- `.gitignore` 排除了 `backend/server.*.log`、`uvicorn.log`、`yfinance-cache/`
 
 ---
 
-## P1 — 必修的架构债（建议本月内做）
+---
+
+#### P1 — 必修的架构债（建议本月内做）
 
 这一档的项目已经在多次代码审查里被点过名，再不做就会拖慢所有功能开发。
 
-### B1 拆 `frontend/src/main.tsx`（架构建议 D）
+> ✅ B1-B4 全部完成（2026-05-21）。其中 B2 和 B4 经过一轮审查发现初版有遗留问题，
+> 已修复，详见 [`change-log/2026-05-21-fix-roadmap-p0-p1.md`](./change-log/2026-05-21-fix-roadmap-p0-p1.md)。
 
-- **现状**：1438 行单文件，App 组件里塞了 17 个 useState、4 个 useMemo、5 个 useEffect。
-- **价值**：高。下次想加任何新页面（多标的组合、压力测试、定投日历）都需要先拆。
-- **成本**：1 天。不重写逻辑，只搬代码。
-- **拆分建议**：
-  
-  ```
-  src/
-  ├── App.tsx                    # 顶层 layout、theme、error boundary
-  ├── api/
-  │   ├── client.ts              # readJson、toUiError
-  │   └── types.ts               # 所有 type Decision / Backtest / ...
-  ├── hooks/
-  │   ├── useBacktest.ts         # 防抖 + 请求 + state
-  │   ├── useOptimization.ts     # job 创建 + 轮询 + 取消
-  │   └── useSettings.ts         # localStorage 加载/持久化
-  ├── panels/
-  │   ├── ControlStrip.tsx       # 顶部控制栏 + 快捷周期 + 压力场景
-  │   ├── StrategyList.tsx       # 左侧策略列表 + showdown picker
-  │   ├── ParamPanel.tsx         # 右侧参数面板 + 自动调优入口
-  │   ├── RecommendationCard.tsx # 中部建议卡 + 市场状态 + reasons + warmup
-  │   ├── MetricsGrid.tsx        # 指标卡 + 固定/lump 基准
-  │   └── OptimizationPanel.tsx  # 稳健参数建议 + 进度条
-  ├── charts/
-  │   ├── PriceChart.tsx
-  │   ├── ContributionChart.tsx
-  │   ├── DrawdownChart.tsx
-  │   ├── SignalChart.tsx
-  │   └── ShowdownChart.tsx
-  └── utils/
-      ├── series.ts              # pairSeries、accountDrawdown
-      ├── csv.ts                 # exportBacktestCsv
-      └── format.ts              # metric、isoDate、yearsBefore
-  ```
-- **顺手收益**：tree shaking 改善、HMR 速度变快、跑 Vitest 写 hook 单测可行。
+### B1 ✅ 拆 `frontend/src/main.tsx`
 
-### B2 优化器并行化或缓存（架构建议 B）
+1438 行单文件 → 11 行（只剩 ErrorBoundary + createRoot）。逻辑分层：
 
-- **现状**：grid search 最坏 600 候选 × 9 场景 = 5400 次 backtest，单线程串行。每个候选都重新 `prepare_market` 一次。
-- **价值**：中-高。一次稳健调优要几十秒到几分钟，用户耐心耗光就放弃了。
-- **成本**：半天。
-- **方案 A（先做）**：`prepare_market` 只跟 `IndicatorSettings`（5 个窗口）有关，多个候选共用同一份 prepared。给 `prepare_market` 加 `@lru_cache(maxsize=64)`（key 用 settings tuple + price hash）。预计减 60-80% 时间。
-- **方案 B（再做）**：`concurrent.futures.ProcessPoolExecutor` 按候选分发。预计再减 50-75%，但要解决 `pd.DataFrame` 跨进程序列化成本——所以建议先做 A 再观察是否需要 B。
+- `App.tsx`（376 行）— 顶层 layout + JSX
+- `hooks/useBacktest.ts`（362 行）— 17 个 useState、5 个 useEffect 集中管理
+- `hooks/useChartOptions.ts`（161 行）— 5 张图表配置
+- `utils.ts`（141 行）— 数据处理 + CSV 导出
+- `types.ts`（98 行）— 类型集中（B4 之后从 `api.generated.ts` re-export）
+- `api.ts`（33 行）— `readJson` + `toUiError`
+- `components/`（4 个组件）
 
-### B3 策略注册表（架构建议 E）
+未做完的小尾巴（属于 P2 范围，下次顺手做）：
 
-- **现状**：`evaluate_prepared_strategy` 里 7 段 if/elif；新加策略要改 3 处（注册表 + 派发 + warmup 处理）。
-- **价值**：中。当前策略稳定，但下次加策略（比如 P3 的 Bollinger / 波动率定投）必受益。
-- **成本**：半天。
-- **方案**：
-  
-  ```python
-  StrategyHandler = Callable[[pd.Series, StrategyConfig], "SignalResult"]
-  STRATEGY_HANDLERS: dict[str, StrategyHandler] = {
-      "drawdown_boost": _drawdown_handler,
-      "ma_deviation": _ma_handler,
-      ...
-  }
-  ```
-  
-  `evaluate_prepared_strategy` 变成 ~20 行调度逻辑。`composite_score` 仍特殊处理（聚合多个 handler）。
+- `OptimizationPanel` 还在 `App.tsx` 末尾（建议挪到 `panels/OptimizationPanel.tsx`）
+- `useBacktest.ts::config` 仍触发激进 cancel（架构 G）
+- 几处 `eslint-disable react-hooks/exhaustive-deps`，长期可用 useReducer 收成几个 reducer
 
-### B4 OpenAPI 类型同步（架构建议 C）
+### B2 ✅ 优化器并行化或缓存
 
-- **现状**：`models.py` 改一处，`main.tsx` 顶部 60 行 type 也要手动改。
-- **价值**：中。schema 改动不频繁，但每次都得记得双改，已经踩过坑。
-- **成本**：3 小时。
-- **方案**：`openapi-typescript` 生成 `frontend/src/api/generated.ts`，加 `npm run gen:api` 脚本。CI 跑一遍验证生成产物没漂移。
+实现的是 roadmap 方案 A（`prepare_market` 加缓存）。多进程方案没做，因为 DataFrame
+跨进程序列化成本不低，先看缓存能省多少更稳妥。
+
+**初版用 `id(prices)` 做 key 触发了脏读**——CPython 复用对象地址会让两个完全
+不同的价格序列共享同一个缓存条目。本次修正：
+
+- 缓存键改成 `(prices.shape, index[0], index[-1], close[0], close[-1], settings)` 语义键
+- `main.py` 在 `backtest()` / `recommendation()` 入口调用 `clear_prepare_cache()`，
+  把缓存生命周期收敛到单次请求，避免长期运行下 dict 无限增长
+
+新增 2 条回归测试守住这条路径（详见 change-log）。
+
+### B3 ✅ 策略注册表
+
+`strategies.py` 用 `@register_strategy(name)` 装饰器注册 7 个策略，
+`evaluate_prepared_strategy` 通过 `get_strategy(name)` 派发。
+之前那段 7 段 if/elif 不再存在。
+
+加第 8 个策略只需要写一个被装饰的函数，验证了"扩展点干净"目标。
+
+### B4 ✅ OpenAPI 类型同步
+
+后端 `export_openapi.py` 导出 schema → `openapi-typescript` 生成
+`frontend/src/api.generated.ts`，前端 `types.ts` 完全从生成产物 re-export。
+
+**初版只生成了文件但前端没人引用**，本次修正：
+
+- `/api/strategies`、`/api/recommendations/run`、`/api/backtests/run` 全部加
+  `response_model`，OpenAPI schema 真正暴露 `BacktestResult`、`StrategyDecision` 等
+- `frontend/src/types.ts` 改成从 `api.generated.ts` re-export，几个字段做精确 narrowing
+- CI 加 schema/类型漂移检查：后端 schema 改了但 `openapi.json` 没回写、或前端类型
+  没重新生成，CI 直接 fail
+
+下次后端模型变化会被 CI 强制要求同步 OpenAPI 和前端类型。
+
+---
 
 ---
 
@@ -410,17 +400,19 @@
 
 ---
 
-## 个人推荐的执行顺序
+#### 个人推荐的执行顺序
 
-如果只能从这份文档里挑 5 件事做完，我会选：
+P0（A1-A6）+ P1（B1-B4）已经全部落地（2026-05-21）。下一阶段从 P2 开始挑：
 
-1. **A4 GitHub Actions CI**（1 小时）——投资回报最高的工程基础。
-2. **B1 拆 main.tsx**（1 天）——任何后续前端改动都要受益。
-3. **C1 支持更多标的**（1-2 天）——用户面价值最高的功能。
-4. **D1 滚动窗口表现**（1 天）——差异化、低成本、高价值的产品功能。
-5. **A1 + A3 lint/format/test 套件**（1 天）——长期质量底线。
+1. **C2 暴露费率和滑点参数**（1 小时）——开发量最低，零成本回测让人怀疑数据真实性的痛点马上消失。
+2. **C1 支持更多标的**（1-2 天）——用户面价值最高的功能。
+3. **D1 滚动窗口表现**（1 天）——差异化、低成本、高价值的产品功能。
+4. **C3 URL state 同步**（半天）——用户分享配置 = 免费传播。
+5. **C4 指标 hover 解释**（2 小时）——降低非专业用户门槛。
 
-剩下的按节奏选。**最值得多花时间想清楚的是 D2（多标的组合）和 D3（蒙特卡洛）**，这两个能把工具从"研究工具"升级到"决策助手"，但工程量大、设计成本高，建议先做出 D1 把团队配合磨合好再上。
+剩下的按节奏选。**最值得多花时间想清楚的是 D2（多标的组合）和 D3（蒙特卡洛）**，
+这两个能把工具从"研究工具"升级到"决策助手"，但工程量大、设计成本高，
+建议先做出 D1 把团队配合磨合好再上。
 
 ---
 
