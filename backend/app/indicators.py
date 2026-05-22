@@ -36,7 +36,7 @@ def rolling_percentile(close: pd.Series, window: int) -> pd.Series:
     return close.rolling(window, min_periods=min_periods).apply(pct_rank, raw=True).fillna(50)
 
 
-@dataclass
+@dataclass(frozen=True)
 class IndicatorSettings:
     high_window: int = 252
     ma_window: int = 200

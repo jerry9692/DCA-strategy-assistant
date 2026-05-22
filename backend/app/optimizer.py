@@ -21,7 +21,7 @@ from app.models import (
     OptimizationScenarioResult,
     StrategyConfig,
 )
-from app.strategies import prepare_market
+from app.strategies import clear_prepare_cache, prepare_market
 
 COMMON_MIN_MULTIPLIERS = [0.6, 0.7, 0.8]
 COMMON_MAX_MULTIPLIERS = [1.2, 1.3, 1.4, 1.5]
@@ -267,6 +267,10 @@ def optimize_parameters(
     end = request.endDate or date.today()
     start = request.startDate or (end - timedelta(days=365 * 5))
     candidates, skipped_count = _candidate_configs(request.config)
+
+    # Clear the prepare_market cache so stale entries from a previous
+    # optimization (with a different prices DataFrame) don't leak in.
+    clear_prepare_cache()
     if progress_callback:
         progress_callback(
             {"evaluatedCount": 0, "totalCount": len(candidates), "currentScenario": "准备验证场景", "bestSoFar": None}

@@ -8,7 +8,13 @@ from app.main import _cached_fixed_backtest, _chart_contributions, _chart_prices
 from app.models import BacktestMetrics, ContributionEvent, OptimizationRequest, OptimizationResult, StrategyConfig
 from app.optimization_jobs import cancel_optimization_job, create_optimization_job, get_optimization_job
 from app.optimizer import OptimizationCancelled, _robust_score, optimize_parameters
-from app.strategies import evaluate_prepared_strategy, evaluate_strategy
+from app.strategies import (
+    _prepare_cache,
+    clear_prepare_cache,
+    evaluate_prepared_strategy,
+    evaluate_strategy,
+    prepare_market,
+)
 
 
 def fixture_prices(values):
@@ -39,6 +45,56 @@ def test_strategy_config_rejects_inverted_multiplier_bounds():
             minMultiplier=1.0,
             maxMultiplier=1.0,
         )
+
+
+def test_prepare_market_cache_does_not_collide_when_python_recycles_object_ids():
+    """Regression test: an earlier implementation used `id(prices)` as
+    part of the cache key, which silently returned stale indicators
+    whenever CPython recycled an object address. The semantic key
+    (shape + first/last index + first/last close + IndicatorSettings)
+    should distinguish two different price series even when they happen
+    to land at the same memory address.
+    """
+
+    clear_prepare_cache()
+    # Use a series with real ups and downs so RSI actually moves out of
+    # the fillna(50) neutral default.
+    rising = fixture_prices([100 + (i * 1.0) - (0.3 if i % 5 == 0 else 0.0) for i in range(70)])
+    rising_prepared = prepare_market(rising, StrategyConfig(strategyType="rsi_sentiment", baseAmount=100))
+    rising_sma_tail = float(rising_prepared["sma"].iloc[-1])
+    rising_dd_tail = float(rising_prepared["drawdown_pct"].iloc[-1])
+
+    # Drop references so CPython is free to recycle the object id.
+    del rising, rising_prepared
+
+    falling = fixture_prices([200 - (i * 1.0) + (0.3 if i % 5 == 0 else 0.0) for i in range(70)])
+    falling_prepared = prepare_market(falling, StrategyConfig(strategyType="rsi_sentiment", baseAmount=100))
+    falling_sma_tail = float(falling_prepared["sma"].iloc[-1])
+    falling_dd_tail = float(falling_prepared["drawdown_pct"].iloc[-1])
+
+    # If the cache had keyed on id() and the address was recycled, both
+    # series would yield identical indicators. With the semantic key
+    # they must clearly differ: rising prices end above their SMA and
+    # near their rolling high (drawdown ≈ 0), falling prices end below
+    # their SMA and far from the rolling high.
+    assert rising_sma_tail != falling_sma_tail
+    assert rising_dd_tail != falling_dd_tail
+    assert rising_dd_tail > -1.0  # rising series ends near rolling high
+    assert falling_dd_tail < -30.0  # falling series ends well below high
+
+
+def test_prepare_market_cache_returns_same_object_on_hit():
+    """Cache hit must return the exact same DataFrame instance — not a
+    re-computed copy — otherwise the cache provides no speedup.
+    """
+
+    clear_prepare_cache()
+    prices = fixture_prices([100 + i for i in range(50)])
+    config = StrategyConfig(strategyType="composite_score", baseAmount=100)
+    first = prepare_market(prices, config)
+    second = prepare_market(prices, config)
+    assert first is second
+    assert len(_prepare_cache) == 1
 
 
 def test_fixed_dca_returns_base_amount():
@@ -266,7 +322,7 @@ def test_chart_prices_filters_with_timestamp_boundary():
         index=pd.to_datetime(["2021-09-30", "2021-10-01", "2021-10-04"]),
     )
     chart = _chart_prices(prices, pd.Timestamp("2021-10-01").date())
-    assert [point["date"] for point in chart] == ["2021-10-01", "2021-10-04"]
+    assert [point.date for point in chart] == ["2021-10-01", "2021-10-04"]
 
 
 def test_chart_contributions_account_drawdown_reflects_cash_reserve():
@@ -326,8 +382,8 @@ def test_chart_contributions_account_drawdown_reflects_cash_reserve():
     dynamic = _chart_contributions(dynamic_events, scheduled_budget=100)
     fixed = _chart_contributions(fixed_events, scheduled_budget=100)
 
-    assert dynamic[1]["accountDrawdownPct"] == -8
-    assert fixed[1]["accountDrawdownPct"] == -10
+    assert dynamic[1].accountDrawdownPct == -8
+    assert fixed[1].accountDrawdownPct == -10
 
 
 def test_chart_contributions_account_drawdown_does_not_assume_borrowing():
@@ -360,7 +416,7 @@ def test_chart_contributions_account_drawdown_does_not_assume_borrowing():
 
     chart = _chart_contributions(events, scheduled_budget=100)
 
-    assert chart[1]["accountDrawdownPct"] == -10
+    assert chart[1].accountDrawdownPct == -10
 
 
 def test_signal_reasons_do_not_render_nan_for_short_windows():

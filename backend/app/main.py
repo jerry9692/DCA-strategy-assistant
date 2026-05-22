@@ -14,18 +14,23 @@ from app.models import (
     Asset,
     BacktestMetrics,
     BacktestRequest,
+    BacktestResult,
+    ContributionEvent,
     MarketState,
     OptimizationJobCreateResponse,
     OptimizationJobStatus,
     OptimizationRequest,
     OptimizationResult,
+    PricePoint,
     RecommendationRequest,
+    RecommendationResponse,
     StrategyComparison,
     StrategyConfig,
+    StrategyDefinitionsResponse,
 )
 from app.optimization_jobs import cancel_optimization_job, create_optimization_job, get_optimization_job
 from app.optimizer import optimize_parameters
-from app.strategies import evaluate_prepared_strategy, evaluate_strategy, prepare_market
+from app.strategies import clear_prepare_cache, evaluate_prepared_strategy, evaluate_strategy, prepare_market
 from app.strategy_definitions import COMMON_PARAMETERS, STRATEGIES
 
 app = FastAPI(title="DCA Strategy Assistant", version="0.3.0")
@@ -55,20 +60,28 @@ def assets() -> list[Asset]:
     return [Asset(symbol=symbol, name=name) for symbol, name in SUPPORTED_ASSETS.items()]
 
 
-@app.get("/api/strategies")
-def strategies() -> dict:
-    return {"commonParameters": COMMON_PARAMETERS, "strategies": STRATEGIES}
+@app.get("/api/strategies", response_model=StrategyDefinitionsResponse)
+def strategies() -> StrategyDefinitionsResponse:
+    return StrategyDefinitionsResponse(commonParameters=COMMON_PARAMETERS, strategies=STRATEGIES)
 
 
-@app.post("/api/recommendations/run")
-def recommendation(request: RecommendationRequest):
+@app.post("/api/recommendations/run", response_model=RecommendationResponse)
+def recommendation(request: RecommendationRequest) -> RecommendationResponse:
     try:
+        # The prepare_market cache key is semantic (DataFrame shape +
+        # endpoint timestamps + endpoint closes), so it stays correct
+        # across requests. We still clear at the request boundary to keep
+        # the dict from growing unboundedly under long-running uvicorn
+        # workers — a single recommendation only needs one entry.
+        clear_prepare_cache()
         symbol = validate_symbol(request.symbol)
         end = request.asOf or date.today()
         start = end - timedelta(days=365 * 10)
         prices, data_source, cache_status = get_price_history(symbol, start, end)
         decision = evaluate_strategy(request.config.strategyType, request.config, prices)
-        return {"symbol": symbol, "decision": decision, "dataSource": data_source, "cacheStatus": cache_status}
+        return RecommendationResponse(
+            symbol=symbol, decision=decision, dataSource=data_source, cacheStatus=cache_status
+        )
     except Exception as exc:
         _raise_api_error(exc)
 
@@ -151,12 +164,14 @@ def _cached_fixed_backtest(
     return tuple(events), metrics
 
 
-def _chart_prices(prices, start: date, max_points: int = 360) -> list[dict]:
+def _chart_prices(prices, start: date, max_points: int = 360) -> list[PricePoint]:
     visible = prices.loc[prices.index >= pd.Timestamp(start)]
     if len(visible) > max_points:
         step = max(1, len(visible) // max_points)
         visible = visible.iloc[::step]
-    return [{"date": idx.date().isoformat(), "close": round(float(row["close"]), 4)} for idx, row in visible.iterrows()]
+    return [
+        PricePoint(date=idx.date().isoformat(), close=round(float(row["close"]), 4)) for idx, row in visible.iterrows()
+    ]
 
 
 def _account_drawdowns(events, scheduled_budget: float | None = None) -> list[float]:
@@ -185,19 +200,10 @@ def _account_drawdowns(events, scheduled_budget: float | None = None) -> list[fl
     return [round(item, 2) for item in drawdowns]
 
 
-def _chart_contributions(events, scheduled_budget: float | None = None) -> list[dict]:
+def _chart_contributions(events, scheduled_budget: float | None = None) -> list[ContributionEvent]:
     account_drawdowns = _account_drawdowns(events, scheduled_budget)
     return [
-        {
-            "date": event.date,
-            "price": event.price,
-            "amount": event.amount,
-            "portfolioValue": event.portfolioValue,
-            "multiplier": event.multiplier,
-            "score": event.score,
-            "drawdownPct": event.drawdownPct,
-            "accountDrawdownPct": account_drawdown,
-        }
+        event.model_copy(update={"accountDrawdownPct": account_drawdown})
         for event, account_drawdown in zip(events, account_drawdowns)
     ]
 
@@ -277,9 +283,15 @@ def _market_state(prices: pd.DataFrame, end: date) -> MarketState:
     )
 
 
-@app.post("/api/backtests/run")
-def backtest(request: BacktestRequest) -> dict:
+@app.post("/api/backtests/run", response_model=BacktestResult)
+def backtest(request: BacktestRequest) -> BacktestResult:
     try:
+        # Bound the prepare_market cache lifetime to one request: a single
+        # backtest run with comparison strategies needs at most a handful
+        # of entries (one per distinct IndicatorSettings x distinct prices
+        # frame), and clearing at the boundary keeps the dict from
+        # accumulating across thousands of requests.
+        clear_prepare_cache()
         symbol = validate_symbol(request.symbol)
         end = request.endDate or date.today()
         start = request.startDate or (end - timedelta(days=365 * 5))
@@ -358,30 +370,30 @@ def backtest(request: BacktestRequest) -> dict:
                     contributions=comparison_events,
                 )
             )
-        return {
-            "symbol": symbol,
-            "strategyType": request.config.strategyType,
-            "recommendation": recommendation.model_dump(),
-            "metrics": metrics.model_dump(),
-            "fixedMetrics": fixed_metrics.model_dump(),
-            "lumpSumMetrics": lump_sum_metrics.model_dump(),
-            "marketState": _market_state(prices, end).model_dump(),
-            "contributions": _chart_contributions(events, request.config.baseAmount),
-            "fixedContributions": _chart_contributions(fixed_events, request.config.baseAmount),
-            "lumpSumContributions": _chart_contributions(lump_sum_events),
-            "strategyComparisons": [
-                {
-                    "strategyType": item.strategyType,
-                    "name": item.name,
-                    "metrics": item.metrics.model_dump(),
-                    "contributions": _chart_contributions(item.contributions, request.config.baseAmount),
-                }
+        return BacktestResult(
+            symbol=symbol,
+            strategyType=request.config.strategyType,
+            recommendation=recommendation,
+            metrics=metrics,
+            fixedMetrics=fixed_metrics,
+            lumpSumMetrics=lump_sum_metrics,
+            marketState=_market_state(prices, end),
+            contributions=_chart_contributions(events, request.config.baseAmount),
+            fixedContributions=_chart_contributions(fixed_events, request.config.baseAmount),
+            lumpSumContributions=_chart_contributions(lump_sum_events),
+            strategyComparisons=[
+                StrategyComparison(
+                    strategyType=item.strategyType,
+                    name=item.name,
+                    metrics=item.metrics,
+                    contributions=_chart_contributions(item.contributions, request.config.baseAmount),
+                )
                 for item in comparisons
             ],
-            "priceSeries": _chart_prices(prices, start),
-            "dataSource": data_source,
-            "cacheStatus": cache_status,
-        }
+            priceSeries=_chart_prices(prices, start),
+            dataSource=data_source,
+            cacheStatus=cache_status,
+        )
     except Exception as exc:
         _raise_api_error(exc)
 

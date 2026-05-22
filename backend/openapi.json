@@ -1,0 +1,1454 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "DCA Strategy Assistant",
+    "version": "0.3.0"
+  },
+  "paths": {
+    "/api/assets": {
+      "get": {
+        "summary": "Assets",
+        "operationId": "assets_api_assets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Asset"
+                  },
+                  "type": "array",
+                  "title": "Response Assets Api Assets Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/strategies": {
+      "get": {
+        "summary": "Strategies",
+        "operationId": "strategies_api_strategies_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StrategyDefinitionsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/recommendations/run": {
+      "post": {
+        "summary": "Recommendation",
+        "operationId": "recommendation_api_recommendations_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecommendationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/optimizations/run": {
+      "post": {
+        "summary": "Optimization",
+        "operationId": "optimization_api_optimizations_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OptimizationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptimizationResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/optimizations/jobs": {
+      "post": {
+        "summary": "Create Optimization",
+        "operationId": "create_optimization_api_optimizations_jobs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OptimizationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptimizationJobCreateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/optimizations/jobs/{job_id}": {
+      "get": {
+        "summary": "Optimization Status",
+        "operationId": "optimization_status_api_optimizations_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptimizationJobStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Cancel Optimization",
+        "operationId": "cancel_optimization_api_optimizations_jobs__job_id__delete",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptimizationJobStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backtests/run": {
+      "post": {
+        "summary": "Backtest",
+        "operationId": "backtest_api_backtests_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BacktestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Asset": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "default": "USD"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "name"
+        ],
+        "title": "Asset"
+      },
+      "BacktestMetrics": {
+        "properties": {
+          "totalInvested": {
+            "type": "number",
+            "title": "Totalinvested"
+          },
+          "endingValue": {
+            "type": "number",
+            "title": "Endingvalue"
+          },
+          "returnPct": {
+            "type": "number",
+            "title": "Returnpct"
+          },
+          "annualizedReturnPct": {
+            "type": "number",
+            "title": "Annualizedreturnpct"
+          },
+          "maxDrawdownPct": {
+            "type": "number",
+            "title": "Maxdrawdownpct"
+          },
+          "buyCount": {
+            "type": "integer",
+            "title": "Buycount"
+          },
+          "avgContribution": {
+            "type": "number",
+            "title": "Avgcontribution"
+          },
+          "versusFixedPct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versusfixedpct"
+          },
+          "versusLumpSumPct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versuslumpsumpct"
+          },
+          "sharpeRatio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharperatio"
+          },
+          "sortinoRatio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sortinoratio"
+          }
+        },
+        "type": "object",
+        "required": [
+          "totalInvested",
+          "endingValue",
+          "returnPct",
+          "annualizedReturnPct",
+          "maxDrawdownPct",
+          "buyCount",
+          "avgContribution"
+        ],
+        "title": "BacktestMetrics"
+      },
+      "BacktestRequest": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol",
+            "default": "QQQ"
+          },
+          "config": {
+            "$ref": "#/components/schemas/StrategyConfig"
+          },
+          "startDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startdate"
+          },
+          "endDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enddate"
+          },
+          "comparisonStrategyTypes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Comparisonstrategytypes"
+          },
+          "riskFreeRate": {
+            "type": "number",
+            "maximum": 0.5,
+            "minimum": 0.0,
+            "title": "Riskfreerate",
+            "description": "Annualized risk-free rate used for Sharpe/Sortino. Default 4% reflects roughly the 2024 short-term US treasury yield.",
+            "default": 0.04
+          }
+        },
+        "type": "object",
+        "title": "BacktestRequest"
+      },
+      "BacktestResult": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "strategyType": {
+            "type": "string",
+            "title": "Strategytype"
+          },
+          "recommendation": {
+            "$ref": "#/components/schemas/StrategyDecision"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/BacktestMetrics"
+          },
+          "fixedMetrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BacktestMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lumpSumMetrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BacktestMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "marketState": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MarketState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contributions": {
+            "items": {
+              "$ref": "#/components/schemas/ContributionEvent"
+            },
+            "type": "array",
+            "title": "Contributions"
+          },
+          "fixedContributions": {
+            "items": {
+              "$ref": "#/components/schemas/ContributionEvent"
+            },
+            "type": "array",
+            "title": "Fixedcontributions"
+          },
+          "lumpSumContributions": {
+            "items": {
+              "$ref": "#/components/schemas/ContributionEvent"
+            },
+            "type": "array",
+            "title": "Lumpsumcontributions"
+          },
+          "strategyComparisons": {
+            "items": {
+              "$ref": "#/components/schemas/StrategyComparison"
+            },
+            "type": "array",
+            "title": "Strategycomparisons"
+          },
+          "priceSeries": {
+            "items": {
+              "$ref": "#/components/schemas/PricePoint"
+            },
+            "type": "array",
+            "title": "Priceseries"
+          },
+          "dataSource": {
+            "type": "string",
+            "title": "Datasource"
+          },
+          "cacheStatus": {
+            "type": "string",
+            "title": "Cachestatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "strategyType",
+          "recommendation",
+          "metrics",
+          "contributions",
+          "priceSeries",
+          "dataSource",
+          "cacheStatus"
+        ],
+        "title": "BacktestResult"
+      },
+      "ContributionEvent": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "price": {
+            "type": "number",
+            "title": "Price"
+          },
+          "amount": {
+            "type": "number",
+            "title": "Amount"
+          },
+          "shares": {
+            "type": "number",
+            "title": "Shares",
+            "description": "Shares bought in this contribution event, not cumulative shares."
+          },
+          "totalShares": {
+            "type": "number",
+            "title": "Totalshares"
+          },
+          "totalInvested": {
+            "type": "number",
+            "title": "Totalinvested"
+          },
+          "portfolioValue": {
+            "type": "number",
+            "title": "Portfoliovalue"
+          },
+          "multiplier": {
+            "type": "number",
+            "title": "Multiplier"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          },
+          "drawdownPct": {
+            "type": "number",
+            "title": "Drawdownpct",
+            "default": 0
+          },
+          "accountDrawdownPct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accountdrawdownpct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "price",
+          "amount",
+          "shares",
+          "totalShares",
+          "totalInvested",
+          "portfolioValue",
+          "multiplier",
+          "score",
+          "reasons"
+        ],
+        "title": "ContributionEvent"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "MarketState": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "tone": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down",
+              "neutral"
+            ],
+            "title": "Tone"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "sma50": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sma50"
+          },
+          "sma200": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sma200"
+          },
+          "distanceToSma200Pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distancetosma200Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "tone",
+          "summary"
+        ],
+        "title": "MarketState"
+      },
+      "OptimizationCandidate": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "config": {
+            "$ref": "#/components/schemas/StrategyConfig"
+          },
+          "scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/OptimizationScenarioMetrics"
+            },
+            "type": "array",
+            "title": "Scenarios"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/BacktestMetrics"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rank",
+          "score",
+          "config",
+          "scenarios",
+          "summary"
+        ],
+        "title": "OptimizationCandidate"
+      },
+      "OptimizationJobCreateResponse": {
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "title": "Jobid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "jobId"
+        ],
+        "title": "OptimizationJobCreateResponse"
+      },
+      "OptimizationJobStatus": {
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "title": "Jobid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status"
+          },
+          "progress": {
+            "type": "number",
+            "title": "Progress",
+            "default": 0
+          },
+          "evaluatedCount": {
+            "type": "integer",
+            "title": "Evaluatedcount",
+            "default": 0
+          },
+          "totalCount": {
+            "type": "integer",
+            "title": "Totalcount",
+            "default": 0
+          },
+          "currentScenario": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currentscenario"
+          },
+          "bestSoFar": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OptimizationCandidate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OptimizationResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "jobId",
+          "status"
+        ],
+        "title": "OptimizationJobStatus"
+      },
+      "OptimizationRequest": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol",
+            "default": "QQQ"
+          },
+          "config": {
+            "$ref": "#/components/schemas/StrategyConfig"
+          },
+          "startDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startdate"
+          },
+          "endDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enddate"
+          },
+          "objective": {
+            "type": "string",
+            "enum": [
+              "robust_return",
+              "max_return",
+              "min_drawdown"
+            ],
+            "title": "Objective",
+            "default": "robust_return"
+          }
+        },
+        "type": "object",
+        "title": "OptimizationRequest"
+      },
+      "OptimizationResult": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "objective": {
+            "type": "string",
+            "enum": [
+              "robust_return",
+              "max_return",
+              "min_drawdown"
+            ],
+            "title": "Objective"
+          },
+          "baselineConfig": {
+            "$ref": "#/components/schemas/StrategyConfig"
+          },
+          "recommendedConfig": {
+            "$ref": "#/components/schemas/StrategyConfig"
+          },
+          "baselineSummary": {
+            "$ref": "#/components/schemas/BacktestMetrics"
+          },
+          "recommendedSummary": {
+            "$ref": "#/components/schemas/BacktestMetrics"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/OptimizationCandidate"
+            },
+            "type": "array",
+            "title": "Candidates"
+          },
+          "scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/OptimizationScenarioResult"
+            },
+            "type": "array",
+            "title": "Scenarios"
+          },
+          "searchedCount": {
+            "type": "integer",
+            "title": "Searchedcount"
+          },
+          "skippedCount": {
+            "type": "integer",
+            "title": "Skippedcount"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "objective",
+          "baselineConfig",
+          "recommendedConfig",
+          "baselineSummary",
+          "recommendedSummary",
+          "candidates",
+          "scenarios",
+          "searchedCount",
+          "skippedCount"
+        ],
+        "title": "OptimizationResult"
+      },
+      "OptimizationScenarioMetrics": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date",
+            "title": "Startdate"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date",
+            "title": "Enddate"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/BacktestMetrics"
+          },
+          "fixedMetrics": {
+            "$ref": "#/components/schemas/BacktestMetrics"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "startDate",
+          "endDate",
+          "metrics",
+          "fixedMetrics",
+          "score"
+        ],
+        "title": "OptimizationScenarioMetrics"
+      },
+      "OptimizationScenarioResult": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date",
+            "title": "Startdate"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date",
+            "title": "Enddate"
+          },
+          "baselineMetrics": {
+            "$ref": "#/components/schemas/BacktestMetrics"
+          },
+          "recommendedMetrics": {
+            "$ref": "#/components/schemas/BacktestMetrics"
+          },
+          "fixedMetrics": {
+            "$ref": "#/components/schemas/BacktestMetrics"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "startDate",
+          "endDate",
+          "baselineMetrics",
+          "recommendedMetrics",
+          "fixedMetrics"
+        ],
+        "title": "OptimizationScenarioResult"
+      },
+      "ParameterOption": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "value"
+        ],
+        "title": "ParameterOption"
+      },
+      "PricePoint": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "close": {
+            "type": "number",
+            "title": "Close"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "close"
+        ],
+        "title": "PricePoint"
+      },
+      "RecommendationRequest": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol",
+            "default": "QQQ"
+          },
+          "config": {
+            "$ref": "#/components/schemas/StrategyConfig"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asof"
+          }
+        },
+        "type": "object",
+        "title": "RecommendationRequest"
+      },
+      "RecommendationResponse": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/StrategyDecision"
+          },
+          "dataSource": {
+            "type": "string",
+            "title": "Datasource"
+          },
+          "cacheStatus": {
+            "type": "string",
+            "title": "Cachestatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "decision",
+          "dataSource",
+          "cacheStatus"
+        ],
+        "title": "RecommendationResponse"
+      },
+      "StrategyComparison": {
+        "properties": {
+          "strategyType": {
+            "type": "string",
+            "title": "Strategytype"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/BacktestMetrics"
+          },
+          "contributions": {
+            "items": {
+              "$ref": "#/components/schemas/ContributionEvent"
+            },
+            "type": "array",
+            "title": "Contributions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "strategyType",
+          "name",
+          "metrics",
+          "contributions"
+        ],
+        "title": "StrategyComparison"
+      },
+      "StrategyConfig": {
+        "properties": {
+          "strategyType": {
+            "type": "string",
+            "title": "Strategytype",
+            "default": "composite_score"
+          },
+          "baseAmount": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Baseamount",
+            "default": 100
+          },
+          "frequency": {
+            "type": "string",
+            "enum": [
+              "weekly",
+              "biweekly",
+              "monthly"
+            ],
+            "title": "Frequency",
+            "default": "weekly"
+          },
+          "minMultiplier": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Minmultiplier",
+            "default": 0.8
+          },
+          "maxMultiplier": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Maxmultiplier",
+            "default": 1.2
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params"
+          }
+        },
+        "type": "object",
+        "title": "StrategyConfig"
+      },
+      "StrategyDecision": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "price": {
+            "type": "number",
+            "title": "Price"
+          },
+          "recommendedAmount": {
+            "type": "number",
+            "title": "Recommendedamount"
+          },
+          "multiplier": {
+            "type": "number",
+            "title": "Multiplier"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "rawSignals": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Rawsignals"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          },
+          "warmup": {
+            "type": "boolean",
+            "title": "Warmup",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "price",
+          "recommendedAmount",
+          "multiplier",
+          "score",
+          "rawSignals",
+          "reasons"
+        ],
+        "title": "StrategyDecision"
+      },
+      "StrategyDefinition": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/StrategyParameter"
+            },
+            "type": "array",
+            "title": "Parameters"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "name",
+          "description",
+          "parameters"
+        ],
+        "title": "StrategyDefinition"
+      },
+      "StrategyDefinitionsResponse": {
+        "properties": {
+          "commonParameters": {
+            "items": {
+              "$ref": "#/components/schemas/StrategyParameter"
+            },
+            "type": "array",
+            "title": "Commonparameters"
+          },
+          "strategies": {
+            "items": {
+              "$ref": "#/components/schemas/StrategyDefinition"
+            },
+            "type": "array",
+            "title": "Strategies"
+          }
+        },
+        "type": "object",
+        "required": [
+          "commonParameters",
+          "strategies"
+        ],
+        "title": "StrategyDefinitionsResponse"
+      },
+      "StrategyParameter": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "number",
+              "range",
+              "select",
+              "toggle"
+            ],
+            "title": "Type"
+          },
+          "default": {
+            "title": "Default"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/ParameterOption"
+            },
+            "type": "array",
+            "title": "Options"
+          },
+          "help": {
+            "type": "string",
+            "title": "Help",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "type",
+          "default"
+        ],
+        "title": "StrategyParameter"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

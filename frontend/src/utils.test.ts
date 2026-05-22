@@ -1,29 +1,5 @@
 import { describe, it, expect } from "vitest";
-
-// Inline copies of utility functions from main.tsx for unit testing.
-// Once B1 (split main.tsx) is done, these will import from src/utils/*.ts.
-
-function pairSeries<T extends { date: string }>(
-  events: T[] | undefined,
-  valueOf: (event: T) => number | null | undefined,
-) {
-  if (!events) return [];
-  return events.map((event) => [event.date, valueOf(event)]);
-}
-
-function accountDrawdown(event: { accountDrawdownPct?: number; drawdownPct: number }) {
-  return event.accountDrawdownPct ?? event.drawdownPct;
-}
-
-function metric(value: number | null | undefined, suffix = "") {
-  if (value === null || value === undefined || Number.isNaN(value)) return "-";
-  return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}${suffix}`;
-}
-
-function csvEscape(value: number | string | null | undefined) {
-  const text = value === null || value === undefined ? "" : String(value);
-  return `"${text.replace(/"/g, '""')}"`;
-}
+import { pairSeries, accountDrawdown, metric, csvEscape } from "./utils";
 
 describe("pairSeries", () => {
   it("returns empty array for undefined events", () => {
@@ -44,11 +20,15 @@ describe("pairSeries", () => {
 
 describe("accountDrawdown", () => {
   it("prefers accountDrawdownPct when present", () => {
-    expect(accountDrawdown({ accountDrawdownPct: -5, drawdownPct: -10 })).toBe(-5);
+    expect(accountDrawdown({ drawdownPct: -10, accountDrawdownPct: -5 })).toBe(-5);
   });
 
   it("falls back to drawdownPct when accountDrawdownPct is undefined", () => {
     expect(accountDrawdown({ drawdownPct: -8 })).toBe(-8);
+  });
+
+  it("falls back to drawdownPct when accountDrawdownPct is null", () => {
+    expect(accountDrawdown({ drawdownPct: -3, accountDrawdownPct: null })).toBe(-3);
   });
 });
 
