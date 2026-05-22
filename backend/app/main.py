@@ -182,11 +182,18 @@ def _cached_fixed_backtest(
     return tuple(events), metrics
 
 
-def _chart_prices(prices, start: date, max_points: int = 360) -> list[PricePoint]:
+def _chart_prices(prices, start: date) -> list[PricePoint]:
+    """Return every trading day in the visible window as a chart point.
+
+    We used to subsample (`step = len // 360`) to keep payloads small,
+    but that caused buy-point scatter dots to appear off the price
+    line whenever a buy day landed on a sampled-out trading day:
+    the line would interpolate around the gap, while the scatter
+    point sat at the real close. ECharts has no trouble drawing a
+    decade of daily closes (~2500 points), and the JSON payload is
+    still well under 100 KB, so the simplification is worth it.
+    """
     visible = prices.loc[prices.index >= pd.Timestamp(start)]
-    if len(visible) > max_points:
-        step = max(1, len(visible) // max_points)
-        visible = visible.iloc[::step]
     return [
         PricePoint(date=idx.date().isoformat(), close=round(float(row["close"]), 4)) for idx, row in visible.iterrows()
     ]
