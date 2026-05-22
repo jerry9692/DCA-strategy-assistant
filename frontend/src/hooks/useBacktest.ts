@@ -159,6 +159,7 @@ export function useBacktest() {
   // Auto-run backtest
   useEffect(() => {
     if (!selectedStrategy) return;
+    let cancelled = false;
     const handle = window.setTimeout(() => {
       setLoading(true);
       setError(null);
@@ -169,14 +170,30 @@ export function useBacktest() {
       })
         .then((res) => readJson<Backtest>(res))
         .then((data) => {
+          // Drop the result if a newer request superseded this one
+          // while it was in flight. Without this guard a slow earlier
+          // request (e.g. with comparison strategies) can race past a
+          // faster later request and re-populate strategyComparisons
+          // after the user already unchecked them, so the chart shows
+          // ghost lines.
+          if (cancelled) return;
           setResult(data);
           setQuickDecision(null);
           setQuickData(null);
         })
-        .catch((err) => setError(toUiError(err)))
-        .finally(() => setLoading(false));
+        .catch((err) => {
+          if (cancelled) return;
+          setError(toUiError(err));
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setLoading(false);
+        });
     }, 450);
-    return () => window.clearTimeout(handle);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
   }, [symbol, startDate, endDate, config, selectedStrategy, refreshNonce, comparisonTypes, riskFreeRate]);
 
   // Poll optimization job

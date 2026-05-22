@@ -10,7 +10,7 @@ export function useChartOptions(
   const priceOption = useMemo(
     () => ({
       tooltip: { trigger: "axis" },
-      grid: { left: 42, right: 18, top: 24, bottom: 34 },
+      grid: { left: 64, right: 18, top: 24, bottom: 34 },
       xAxis: { type: "time", axisLabel: { color: "#64748b" } },
       yAxis: { type: "value", scale: true, axisLabel: { color: "#64748b" } },
       series: [
@@ -37,7 +37,7 @@ export function useChartOptions(
     () => ({
       tooltip: { trigger: "axis" },
       legend: { top: 0, textStyle: { color: "#475569" } },
-      grid: { left: 46, right: 20, top: 36, bottom: 34 },
+      grid: { left: 64, right: 20, top: 36, bottom: 34 },
       xAxis: { type: "time", axisLabel: { color: "#64748b" } },
       yAxis: [
         { type: "value", name: "组合价值", axisLabel: { color: "#64748b" } },
@@ -58,7 +58,7 @@ export function useChartOptions(
     () => ({
       tooltip: { trigger: "axis" },
       legend: { top: 0, textStyle: { color: "#475569" } },
-      grid: { left: 46, right: 20, top: 36, bottom: 34 },
+      grid: { left: 64, right: 20, top: 36, bottom: 34 },
       xAxis: { type: "time", axisLabel: { color: "#64748b" } },
       yAxis: { type: "value", max: 0, axisLabel: { color: "#64748b" } },
       series: [
@@ -93,7 +93,7 @@ export function useChartOptions(
     () => ({
       tooltip: { trigger: "axis" },
       legend: { top: 0, textStyle: { color: "#475569" } },
-      grid: { left: 46, right: 20, top: 36, bottom: 34 },
+      grid: { left: 64, right: 20, top: 36, bottom: 34 },
       xAxis: { type: "time", axisLabel: { color: "#64748b" } },
       yAxis: [
         { type: "value", min: 0, max: 1, axisLabel: { color: "#64748b" } },
@@ -124,7 +124,7 @@ export function useChartOptions(
     () => ({
       tooltip: { trigger: "axis" },
       legend: { top: 0, textStyle: { color: "#475569" } },
-      grid: { left: 46, right: 20, top: 42, bottom: 34 },
+      grid: { left: 64, right: 20, top: 42, bottom: 34 },
       xAxis: { type: "time", axisLabel: { color: "#64748b" } },
       yAxis: { type: "value", name: "组合价值", axisLabel: { color: "#64748b" } },
       series: [

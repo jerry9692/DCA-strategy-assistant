@@ -24,5 +24,9 @@ type ChartOption = echarts.ComposeOption<
 >;
 
 export default function Chart({ option, height }: { option: ChartOption | object; height: number }) {
-  return <EChartsReactCore echarts={echarts} option={option} style={{ height }} />;
+  // notMerge=true so reducing series count (e.g. unchecking a strategy
+  // comparison) actually removes the old series. With the default merge
+  // behavior ECharts keeps stale series around, leaving ghost lines on
+  // the chart after the underlying data already dropped them.
+  return <EChartsReactCore echarts={echarts} option={option} notMerge style={{ height }} />;
 }
