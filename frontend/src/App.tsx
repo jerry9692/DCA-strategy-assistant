@@ -120,7 +120,7 @@ export function App() {
         </label>
       </section>
 
-      {state.error && <ErrorBanner error={state.error} onRetry={state.refresh} />}
+      {state.error && <ErrorBanner error={state.error} onRetry={state.retryError} />}
 
       {state.assetRange && (
         <p className="muted data-range-hint">{state.assetRange.symbol} 数据可用范围 {state.assetRange.minDate} 至 {state.assetRange.maxDate}</p>

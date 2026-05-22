@@ -51,6 +51,7 @@ export function useBacktest() {
   const [optimizationLoading, setOptimizationLoading] = useState(false);
   const [error, setError] = useState<UiError | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [metadataNonce, setMetadataNonce] = useState(0);
   const [showAllReasons, setShowAllReasons] = useState(false);
   const [presetMode, setPresetMode] = useState<PresetMode>((savedSettings?.presetMode as PresetMode) ?? "balanced");
   const [activeScenarioId, setActiveScenarioId] = useState<string | null>(String(savedSettings?.activeScenarioId ?? "") || null);
@@ -95,6 +96,7 @@ export function useBacktest() {
     [strategyType, baseAmount, frequency, minMultiplier, maxMultiplier, params, feeRate, slippageRate],
   );
   const optimizationActive = optimizationJob?.status === "queued" || optimizationJob?.status === "running";
+  const metadataReady = assets.length > 0 && strategies.length > 0;
 
   // ─── Effects ─────────────────────────────────────────────────────────────
 
@@ -109,8 +111,13 @@ export function useBacktest() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol, strategyType, startDate, endDate, config]);
 
-  // Load assets and strategies on mount
+  // Load assets and strategies. Kept retryable because users commonly
+  // start the Vite frontend before uvicorn is ready; in that case the
+  // first /api/assets + /api/strategies request fails, and a plain
+  // backtest refresh cannot recover because strategy metadata never
+  // loaded.
   useEffect(() => {
+    setError(null);
     Promise.all([fetch(`${API_BASE}/api/assets`).then(readJson<Asset[]>), fetch(`${API_BASE}/api/strategies`).then(readJson<{ strategies: StrategyDef[] }>)])
       .then(([assetData, strategyData]) => {
         setAssets(assetData);
@@ -129,7 +136,7 @@ export function useBacktest() {
       })
       .catch((err) => setError(toUiError(err)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [metadataNonce]);
 
   // Load per-symbol date range whenever the symbol changes. The
   // response drives the `min`/`max` HTML attributes on the date
@@ -401,6 +408,13 @@ export function useBacktest() {
   };
 
   const refresh = () => setRefreshNonce((v) => v + 1);
+  const retryError = () => {
+    if (!metadataReady) {
+      setMetadataNonce((v) => v + 1);
+      return;
+    }
+    refresh();
+  };
 
   // ─── Computed values for UI ──────────────────────────────────────────────
   const activeAsset = assets.find((item) => item.symbol === symbol);
@@ -462,6 +476,7 @@ export function useBacktest() {
     activePeriodId,
     config,
     optimizationActive,
+    metadataReady,
     activeAsset,
     decision,
     reasons,
@@ -479,5 +494,6 @@ export function useBacktest() {
     applyOptimizedConfig,
     toggleComparison,
     refresh,
+    retryError,
   };
 }
