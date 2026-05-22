@@ -60,6 +60,53 @@ def _load_cached(symbol: str, start: date, end: date) -> pd.DataFrame:
     return frame.set_index("date").sort_index()
 
 
+# Hardcoded earliest available date per symbol on Yahoo Finance. Used
+# only when the local SQLite cache is empty for that symbol so the UI
+# can still show a sensible "data starts from" hint without hitting
+# yfinance just to discover the floor.
+_YFINANCE_EARLIEST_AVAILABLE = {
+    "QQQ": date(1999, 3, 10),
+    "SPY": date(1993, 1, 29),
+    "VOO": date(2010, 9, 9),
+}
+
+
+def get_cached_range(symbol: str) -> tuple[date | None, date | None]:
+    """Return (min_date, max_date) of the symbol's cached PriceBars,
+    or (None, None) if the cache is empty.
+    """
+    normalized = validate_symbol(symbol)
+    with Session(engine) as session:
+        min_row = session.exec(
+            select(PriceBar.bar_date).where(PriceBar.symbol == normalized).order_by(PriceBar.bar_date).limit(1)
+        ).first()
+        max_row = session.exec(
+            select(PriceBar.bar_date).where(PriceBar.symbol == normalized).order_by(PriceBar.bar_date.desc()).limit(1)
+        ).first()
+    return min_row, max_row
+
+
+def get_available_range(symbol: str) -> tuple[date, date]:
+    """Return (min_date, max_date) the UI can present as the date-input
+    floor/ceiling.
+
+    Floor: the hardcoded earliest date yfinance has on file for this
+    symbol. The local SQLite cache's earliest entry is *not* used here
+    — that's just where the user happened to start pulling, not what's
+    available. Picking a date before the cache only triggers a one-off
+    yfinance fetch that backfills the cache.
+
+    Ceiling: today's date. The cache might lag a few days behind; when
+    the user picks a date past the cache the backend tries to fetch
+    fresh data from yfinance. The data layer's existing rate-limit /
+    stale-cache errors handle the case where that fetch fails.
+    """
+    normalized = validate_symbol(symbol)
+    floor = _YFINANCE_EARLIEST_AVAILABLE.get(normalized, date(1990, 1, 1))
+    ceiling = date.today()
+    return floor, ceiling
+
+
 def _save_prices(symbol: str, frame: pd.DataFrame) -> None:
     rows = []
     for idx, row in frame.iterrows():

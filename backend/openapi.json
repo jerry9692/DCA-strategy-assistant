@@ -27,6 +27,46 @@
         }
       }
     },
+    "/api/assets/{symbol}/range": {
+      "get": {
+        "summary": "Asset Range",
+        "description": "Return the date range the UI can use as min/max on date inputs.\n\nSourced from the local SQLite cache when populated, falling back\nto a hardcoded earliest-available date per symbol when the cache\nis empty (fresh install). Avoids hitting yfinance just to discover\nthe floor.",
+        "operationId": "asset_range_api_assets__symbol__range_get",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Symbol"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetRange"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/strategies": {
       "get": {
         "summary": "Strategies",
@@ -298,6 +338,31 @@
           "name"
         ],
         "title": "Asset"
+      },
+      "AssetRange": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "minDate": {
+            "type": "string",
+            "format": "date",
+            "title": "Mindate"
+          },
+          "maxDate": {
+            "type": "string",
+            "format": "date",
+            "title": "Maxdate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "minDate",
+          "maxDate"
+        ],
+        "title": "AssetRange"
       },
       "BacktestMetrics": {
         "properties": {

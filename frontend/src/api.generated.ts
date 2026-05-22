@@ -21,6 +21,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/{symbol}/range": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Asset Range
+         * @description Return the date range the UI can use as min/max on date inputs.
+         *
+         *     Sourced from the local SQLite cache when populated, falling back
+         *     to a hardcoded earliest-available date per symbol when the cache
+         *     is empty (fresh install). Avoids hitting yfinance just to discover
+         *     the floor.
+         */
+        get: operations["asset_range_api_assets__symbol__range_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/strategies": {
         parameters: {
             query?: never;
@@ -139,6 +164,21 @@ export interface components {
              * @default USD
              */
             currency: string;
+        };
+        /** AssetRange */
+        AssetRange: {
+            /** Symbol */
+            symbol: string;
+            /**
+             * Mindate
+             * Format: date
+             */
+            minDate: string;
+            /**
+             * Maxdate
+             * Format: date
+             */
+            maxDate: string;
         };
         /** BacktestMetrics */
         BacktestMetrics: {
@@ -584,6 +624,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Asset"][];
+                };
+            };
+        };
+    };
+    asset_range_api_assets__symbol__range_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                symbol: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetRange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

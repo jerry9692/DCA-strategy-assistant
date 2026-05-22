@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { components } from "../api.generated";
 import type {
   Asset,
+  AssetRange,
   Backtest,
   Decision,
   Frequency,
@@ -17,7 +18,7 @@ import type {
 
 type Schemas = components["schemas"];
 import { API_BASE, ASSET_MARKETS, PRESSURE_SCENARIOS, QUICK_BACKTEST_PERIODS, SETTINGS_KEY, defaultStartDate, todayIso } from "../constants";
-import { clampEndDate, normalizeFrequency, presetFor, readSavedSettings, yearsBefore } from "../utils";
+import { clampEndDate, clampToRange, normalizeFrequency, presetFor, readSavedSettings, yearsBefore } from "../utils";
 import { readJson, toUiError } from "../api";
 
 export function useBacktest() {
@@ -25,6 +26,10 @@ export function useBacktest() {
 
   // ─── Core state ──────────────────────────────────────────────────────────
   const [assets, setAssets] = useState<Asset[]>([]);
+  // Per-symbol available date range (cached SQLite extents on the
+  // backend, with hardcoded fallback). Used to set min/max on the
+  // date inputs so users can't pick dates the cache won't cover.
+  const [assetRange, setAssetRange] = useState<AssetRange | null>(null);
   const [strategies, setStrategies] = useState<StrategyDef[]>([]);
   const [darkMode, setDarkMode] = useState(Boolean(savedSettings?.darkMode));
   const [symbol, setSymbol] = useState(String(savedSettings?.symbol ?? "QQQ"));
@@ -126,6 +131,28 @@ export function useBacktest() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Load per-symbol date range whenever the symbol changes. The
+  // response drives the `min`/`max` HTML attributes on the date
+  // inputs and the "data available range" hint, so users can't pick
+  // a window the local cache won't cover. Failures are silent — the
+  // inputs just fall back to no constraint.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE}/api/assets/${symbol}/range`)
+      .then(readJson<AssetRange>)
+      .then((range) => {
+        if (cancelled) return;
+        setAssetRange(range);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAssetRange(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [symbol]);
+
   // Reset params when strategy changes
   useEffect(() => {
     const preset = presetFor(selectedStrategy, presetMode === "custom" ? "balanced" : presetMode);
@@ -148,6 +175,19 @@ export function useBacktest() {
       setActiveScenarioId(null);
     }
   }, [endDate]);
+
+  // Cross-field guard: end must not be before start. Whenever they
+  // get inverted (e.g. user types 1995 into the end input while
+  // start is at 2000, or applies a long quick-period that shifts
+  // start past end), pin end to start so the request stays valid.
+  // Backend validation would catch it, but the UX is much better if
+  // the inputs self-correct rather than throwing a "请求参数不合法".
+  useEffect(() => {
+    if (endDate < startDate) {
+      setEndDate(startDate);
+      setActiveScenarioId(null);
+    }
+  }, [startDate, endDate]);
 
   // Persist settings
   useEffect(() => {
@@ -281,7 +321,13 @@ export function useBacktest() {
   };
 
   const applyBacktestPeriod = (years: number) => {
-    setStartDate(yearsBefore(endDate, years));
+    // Compute candidate start = end - years, then clamp to the
+    // symbol's available range so a 10y shortcut on a 2000 end date
+    // doesn't quietly select 1990 (before QQQ existed). If the floor
+    // would push start past end, give up and pin both to the floor.
+    const candidate = yearsBefore(endDate, years);
+    const clampedStart = clampToRange(candidate, assetRange);
+    setStartDate(clampedStart);
     setActiveScenarioId(null);
   };
 
@@ -366,6 +412,7 @@ export function useBacktest() {
   return {
     // State
     assets,
+    assetRange,
     strategies,
     darkMode,
     setDarkMode,

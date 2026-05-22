@@ -29,6 +29,7 @@ export type ParamValue = string | number | boolean;
 // ─── API types (sourced from generated OpenAPI) ─────────────────────────────
 
 export type Asset = Schemas["Asset"];
+export type AssetRange = Schemas["AssetRange"];
 export type StrategyDef = Schemas["StrategyDefinition"];
 export type Decision = Schemas["StrategyDecision"];
 export type Metrics = Schemas["BacktestMetrics"];

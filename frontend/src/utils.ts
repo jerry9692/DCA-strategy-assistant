@@ -25,6 +25,20 @@ export function clampEndDate(value: string): string {
   return value > todayIso ? todayIso : value;
 }
 
+// Generalized clamp for date inputs that have a per-symbol available
+// range. Used by start and end date controls so picking 1990 on a
+// VOO-only symbol doesn't quietly produce a "cache doesn't cover" error.
+export function clampToRange(
+  value: string,
+  range: { minDate: string; maxDate: string } | null | undefined,
+): string {
+  let result = value;
+  if (range?.minDate && result < range.minDate) result = range.minDate;
+  if (range?.maxDate && result > range.maxDate) result = range.maxDate;
+  if (result > todayIso) result = todayIso;
+  return result;
+}
+
 // ─── Frequency ───────────────────────────────────────────────────────────────
 
 export function normalizeFrequency(value: unknown): Frequency {
