@@ -1077,3 +1077,26 @@ input[type="range"] {
   margin: 4px 0 0;
   padding: 0 12px;
 }
+
+
+/* Info icon next to metric labels. Sits inline with the label,
+   slightly muted so the label still reads first. The native title
+   attribute carries the actual explanation; this is only the
+   visual hook. */
+.metric-hint {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  color: #94a3b8;
+  cursor: help;
+  vertical-align: middle;
+}
+.metric-hint:hover {
+  color: #475569;
+}
+.app-shell[data-theme="dark"] .metric-hint {
+  color: #64748b;
+}
+.app-shell[data-theme="dark"] .metric-hint:hover {
+  color: #cbd5e1;
+}

@@ -210,15 +210,15 @@ export function App() {
 
           {/* Metrics */}
           <div className="metrics-grid">
-            <Metric label="总投入" value={`$${metric(state.result?.metrics.totalInvested)}`} />
-            <Metric label="期末价值" value={`$${metric(state.result?.metrics.endingValue)}`} />
-            <Metric label="收益率" value={metric(state.result?.metrics.returnPct, "%")} />
-            <Metric label="资金年化" value={metric(state.result?.metrics.annualizedReturnPct, "%")} />
-            <Metric label="持仓最大回撤" value={metric(state.result?.metrics.maxDrawdownPct, "%")} />
-            <Metric label="相对固定" value={metric(state.result?.metrics.versusFixedPct, "%")} />
-            <Metric label="相对一次性" value={metric(state.result?.metrics.versusLumpSumPct, "%")} />
-            <Metric label="夏普比率" value={metric(state.result?.metrics.sharpeRatio)} />
-            <Metric label="索提诺比率" value={metric(state.result?.metrics.sortinoRatio)} />
+            <Metric label="总投入" value={`$${metric(state.result?.metrics.totalInvested)}`} hint="区间内累计买入金额，不含滑点和费率扣减。" />
+            <Metric label="期末价值" value={`$${metric(state.result?.metrics.endingValue)}`} hint="区间结束日所有持仓按收盘价计算的市值。" />
+            <Metric label="收益率" value={metric(state.result?.metrics.returnPct, "%")} hint="(期末价值 ÷ 总投入 − 1)，不含时间维度，长短不同的回测之间不可直接比较。" />
+            <Metric label="资金年化" value={metric(state.result?.metrics.annualizedReturnPct, "%")} hint="按现金流加权（IRR）算的年化收益。考虑了每笔买入的时点，比简单(1+收益率)^(1/年)更准确反映 DCA 真实收益。" />
+            <Metric label="持仓最大回撤" value={metric(state.result?.metrics.maxDrawdownPct, "%")} hint="已经买入的资产从历史高点到低点的最大百分比跌幅。注意：不是股价回撤，是组合价值回撤。" />
+            <Metric label="相对固定" value={metric(state.result?.metrics.versusFixedPct, "%")} hint="如果同样区间走固定金额定投，本策略比固定 DCA 多赚（正）或少赚（负）的百分比。" />
+            <Metric label="相对一次性" value={metric(state.result?.metrics.versusLumpSumPct, "%")} hint="如果区间初一次性投入同样总预算并持有到期末，本策略比一次性买入多赚（正）或少赚（负）的百分比。" />
+            <Metric label="夏普比率" value={metric(state.result?.metrics.sharpeRatio)} hint="(收益 − 无风险利率) ÷ 总波动。> 1 不错，> 2 优秀。当前无风险利率从右侧参数面板调整。" />
+            <Metric label="索提诺比率" value={metric(state.result?.metrics.sortinoRatio)} hint="只用下行波动作分母的夏普变体。对'上行波动'不惩罚，更适合定投者关心的'下跌时痛不痛'。" />
           </div>
 
           <div className="fixed-metrics">
@@ -384,10 +384,10 @@ function OptimizationPanel({
         <button type="button" className="secondary-action" onClick={() => applyOptimizedConfig(optimization.recommendedConfig)}>应用推荐参数</button>
       </div>
       <div className="optimization-summary">
-        <Metric label="推荐稳健分" value={metric(optimization.candidates[0]?.score)} />
-        <Metric label="平均年化提升" value={metric(optimization.recommendedSummary.annualizedReturnPct - optimization.baselineSummary.annualizedReturnPct, "%")} />
-        <Metric label="平均回撤变化" value={metric(optimization.recommendedSummary.maxDrawdownPct - optimization.baselineSummary.maxDrawdownPct, "%")} />
-        <Metric label="搜索组合" value={`${optimization.searchedCount}`} />
+        <Metric label="推荐稳健分" value={metric(optimization.candidates[0]?.score)} hint="跨多个市场阶段的综合得分。同时考虑年化、夏普、回撤，并对'某个场景表现特别差'做惩罚，避免推荐脆弱参数。" />
+        <Metric label="平均年化提升" value={metric(optimization.recommendedSummary.annualizedReturnPct - optimization.baselineSummary.annualizedReturnPct, "%")} hint="推荐参数 vs 当前参数，所有验证场景的平均年化差。正值表示推荐参数总体更好。" />
+        <Metric label="平均回撤变化" value={metric(optimization.recommendedSummary.maxDrawdownPct - optimization.baselineSummary.maxDrawdownPct, "%")} hint="推荐参数 vs 当前参数的回撤差。负值表示推荐参数回撤更深，正值表示更小。" />
+        <Metric label="搜索组合" value={`${optimization.searchedCount}`} hint="本次实际验证的参数组合数。每个组合都跑过当前区间和 8 个历史阶段。" />
       </div>
       <div className="config-preview">
         <span>推荐参数</span>

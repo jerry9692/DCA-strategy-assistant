@@ -325,6 +325,28 @@ def test_chart_prices_filters_with_timestamp_boundary():
     assert [point.date for point in chart] == ["2021-10-01", "2021-10-04"]
 
 
+def test_chart_prices_returns_every_trading_day_in_window():
+    """Regression test: a previous version subsampled the price series
+    to ~360 points, which caused buy-point scatter dots to drift off
+    the price line whenever a buy day got sampled out. The chart must
+    return every trading day in the visible window so the price line
+    and buy points share the same X-axis grid.
+    """
+
+    # 600 trading days — more than the old 360-point cap, so the bug
+    # would have triggered subsampling and dropped most of these.
+    prices = pd.DataFrame(
+        {"close": [100 + i * 0.1 for i in range(600)]},
+        index=pd.bdate_range("2020-01-02", periods=600),
+    )
+    chart = _chart_prices(prices, pd.Timestamp("2020-01-02").date())
+    assert len(chart) == 600
+    # Every original date is preserved, no gaps from subsampling.
+    chart_dates = [point.date for point in chart]
+    assert chart_dates[0] == "2020-01-02"
+    assert chart_dates[-1] == prices.index[-1].date().isoformat()
+
+
 def test_chart_contributions_account_drawdown_reflects_cash_reserve():
     dynamic_events = [
         ContributionEvent(
