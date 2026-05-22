@@ -312,6 +312,23 @@ export function App() {
             onChange={(v) => { state.setRiskFreeRate(v / 100); state.markCustom(); }}
           />
           <p className="strategy-note">夏普/索提诺比率以此为基准。默认 4% 接近 2024 年美国短期国债收益率，2020 年前后实际更接近 0-2%。</p>
+          <RangeControl
+            label="交易费率"
+            value={Number((state.feeRate * 100).toFixed(3))}
+            min={0}
+            max={0.5}
+            step={0.01}
+            onChange={(v) => { state.setFeeRate(v / 100); state.markCustom(); }}
+          />
+          <RangeControl
+            label="滑点率"
+            value={Number((state.slippageRate * 100).toFixed(3))}
+            min={0}
+            max={0.5}
+            step={0.01}
+            onChange={(v) => { state.setSlippageRate(v / 100); state.markCustom(); }}
+          />
+          <p className="strategy-note">回测时按比例扣减买入金额并抬高执行价。0% 表示忽略，常见 ETF 在零佣金券商上 0-0.05%。</p>
           <div className="optimizer-card">
             <strong>稳健参数建议</strong>
             <span>跨多个市场阶段搜索更稳定的参数。默认限制为最低 0.6-0.8x、最高 1.2-1.5x，不把功能变成择时交易。</span>

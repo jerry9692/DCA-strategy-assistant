@@ -53,6 +53,13 @@ export function useBacktest() {
     Array.isArray(savedSettings?.comparisonStrategyTypes) ? savedSettings.comparisonStrategyTypes : ["drawdown_boost", "ma_deviation"],
   );
   const [riskFreeRate, setRiskFreeRate] = useState<number>(typeof savedSettings?.riskFreeRate === "number" ? savedSettings.riskFreeRate : 0.04);
+  // Fee and slippage are user preferences (like riskFreeRate), not part
+  // of any strategy's parameter schema, so we keep them as top-level
+  // state and merge them into config.params at request time. Otherwise
+  // they would be wiped whenever the user switches strategy or preset
+  // (which calls setParams(preset.params) and replaces the whole dict).
+  const [feeRate, setFeeRate] = useState<number>(typeof savedSettings?.feeRate === "number" ? savedSettings.feeRate : 0);
+  const [slippageRate, setSlippageRate] = useState<number>(typeof savedSettings?.slippageRate === "number" ? savedSettings.slippageRate : 0);
 
   // ─── Derived state ───────────────────────────────────────────────────────
   const selectedStrategy = useMemo(() => strategies.find((item) => item.type === strategyType), [strategies, strategyType]);
@@ -69,8 +76,18 @@ export function useBacktest() {
     [endDate, startDate],
   );
   const config = useMemo(
-    (): StrategyConfigPayload => ({ strategyType, baseAmount, frequency, minMultiplier, maxMultiplier, params }),
-    [strategyType, baseAmount, frequency, minMultiplier, maxMultiplier, params],
+    (): StrategyConfigPayload => ({
+      strategyType,
+      baseAmount,
+      frequency,
+      minMultiplier,
+      maxMultiplier,
+      // Merge fee/slippage into params at the request boundary so they
+      // travel with the strategy config without bleeding into the
+      // preset's "real" parameter set.
+      params: { ...params, feeRate, slippageRate },
+    }),
+    [strategyType, baseAmount, frequency, minMultiplier, maxMultiplier, params, feeRate, slippageRate],
   );
   const optimizationActive = optimizationJob?.status === "queued" || optimizationJob?.status === "running";
 
@@ -152,9 +169,11 @@ export function useBacktest() {
         activeScenarioId,
         comparisonStrategyTypes: comparisonTypes,
         riskFreeRate,
+        feeRate,
+        slippageRate,
       }),
     );
-  }, [activeScenarioId, baseAmount, comparisonTypes, darkMode, endDate, frequency, maxMultiplier, minMultiplier, params, presetMode, riskFreeRate, selectedStrategy, startDate, strategyType, symbol]);
+  }, [activeScenarioId, baseAmount, comparisonTypes, darkMode, endDate, feeRate, frequency, maxMultiplier, minMultiplier, params, presetMode, riskFreeRate, selectedStrategy, slippageRate, startDate, strategyType, symbol]);
 
   // Auto-run backtest
   useEffect(() => {
@@ -382,6 +401,10 @@ export function useBacktest() {
     setActiveScenarioId,
     riskFreeRate,
     setRiskFreeRate,
+    feeRate,
+    setFeeRate,
+    slippageRate,
+    setSlippageRate,
 
     // Derived
     selectedStrategy,
