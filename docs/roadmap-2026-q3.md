@@ -9,11 +9,16 @@
 
 下面按 P0 → P1 → P2 → P3 → 实验排，每一项都给出**价值 / 成本 / 触发条件**三个判断维度，方便取舍。
 
-> **进度（2026-05-21 更新）**：P0（工程基础底线 A1-A6）和 P1（必修的架构债 B1-B4）
-> 已经全部落地，含一轮审查后的回归修复（B2 cache key 从 `id()` 改为语义键、
-> B4 让 `types.ts` 真正消费 `api.generated.ts`、CI 加 OpenAPI 漂移检查并把
-> ESLint 改回阻塞）。详见 [`change-log/2026-05-21-fix-roadmap-p0-p1.md`](./change-log/2026-05-21-fix-roadmap-p0-p1.md)。
-> 下一档主线是 P2（C1 多标的、C2 费率滑点、D1 滚动窗口）。
+> > **进度（2026-05-22 更新）**：P0（工程基础底线 A1-A6）和 P1（必修的架构债 B1-B4）
+> > 全部合到 main，含两轮审查后的修复——
+> > 
+> > - 第一轮：B2 cache key 从 `id()` 改为语义键、B4 让 `types.ts` 真正消费
+> >   `api.generated.ts`、CI 加 OpenAPI 漂移检查并把 ESLint 改回阻塞
+> > - 第二轮：ECharts notMerge（"鬼线"）+ backtest 请求竞速保护 +
+> >   Y 轴 6 位数标签裁切
+> > 
+> > 详见 [`change-log/2026-05-21-fix-roadmap-p0-p1.md`](./change-log/2026-05-21-fix-roadmap-p0-p1.md)。
+> > 下一档主线是 P2（C2 费率滑点、C1 多标的、D1 滚动窗口）。
 
 #### P0 — 工程基础底线（建议本周内做）
 

@@ -166,3 +166,59 @@ backend → openapi.json → frontend → api.generated.ts   diff clean
 - D1 滚动窗口表现（差异化 + 低成本）
 
 B2 缓存改成 ProcessPoolExecutor 方案、B1 把 OptimizationPanel 拆出去等 "完成度可继续提升"的项目，等用户反馈或下次添新页面时再做即可。
+
+
+
+---
+
+## 附录 — 合并前的前端图表回归修复
+
+P1 主体内容合到分支后，本地手感测试发现两个 P1 范围之外但同样应该一起修的
+图表回归，所以一并落地：
+
+### 7. ECharts 不删多余 series（"鬼线"问题）
+
+**现象**：在策略对决勾选两个对比策略 → chart 显示 4 条线 → 取消勾选 → chart
+还是 4 条线，对比策略的线没消失。
+
+**诊断**：
+
+- 前端 `comparisonStrategyTypes` state 已经是 `[]`
+- Network 里看请求 body `comparisonStrategyTypes: []`
+- 后端 response `strategyComparisons: []`
+- 但 chart 依然渲染 4 条线
+
+`echarts-for-react` 默认 `notMerge=false`，新 option 会跟旧 option 做深 merge。
+当 series 数量减少时，旧 series 不会被新 option 自动移除——多余的 2 条 series
+就以最后一次接收到的数据快照留在 chart 里。
+
+**修复**：`frontend/src/Chart.tsx` 给 `EChartsReactCore` 加 `notMerge` prop，
+每次更新都用新 option 完整替换 chart 状态。这是对所有 5 张图（priceOption、
+contributionOption、drawdownOption、signalOption、showdownOption）都生效的
+单点修复。
+
+### 8. backtest 请求竞速保护
+
+**现象**：连续快速勾选/取消对比策略时，旧请求可能在新请求之后回来，把已经
+更新过的 result state 反向覆盖。修第 7 项时顺手发现的潜在 bug，但不是这次
+"鬼线"的根因。
+
+**修复**：`useBacktest.ts` 的 backtest effect 加 `let cancelled = false`
+闭包标志，cleanup 时设 `true`；fetch promise resolve 时检查 flag，已 cancel
+就丢弃响应。
+
+### 9. Y 轴 6 位数标签被裁切
+
+**现象**："策略对决"等图的 Y 轴标签 `150,000` 显示成 `50,000`，开头那个 "1"
+被裁掉，导致用户误以为不同策略 5 倍差距（实际是 ~10% 差距）。
+
+**修复**：`useChartOptions.ts` 把 5 张图的 `grid.left` 从 46 调到 64，留出
+6 位数标签的空间。
+
+---
+
+## 与 roadmap 的关系（更新版）
+
+`roadmap-2026-q3.md` 的 P0（A1-A6）+ P1（B1-B4）至此全部落地。第 7-9 项
+属于 P2 范围之外的"已合到 main 之前发现的小回归"，跟 P1 工作流自然衔接，
+所以并入这份 change-log，方便日后回溯。
