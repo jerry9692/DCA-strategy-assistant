@@ -1069,3 +1069,11 @@ input[type="range"] {
     text-align: left;
   }
 }
+
+
+/* Per-symbol date range hint shown above the workspace. Plain
+   muted text — same color as other secondary copy. */
+.data-range-hint {
+  margin: 4px 0 0;
+  padding: 0 12px;
+}

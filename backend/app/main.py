@@ -8,10 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.backtester import DcaBacktester
-from app.data import PriceDataError, get_price_history, validate_symbol
+from app.data import PriceDataError, get_available_range, get_price_history, validate_symbol
 from app.models import (
     SUPPORTED_ASSETS,
     Asset,
+    AssetRange,
     BacktestMetrics,
     BacktestRequest,
     BacktestResult,
@@ -58,6 +59,23 @@ def _raise_api_error(exc: Exception) -> None:
 @app.get("/api/assets", response_model=list[Asset])
 def assets() -> list[Asset]:
     return [Asset(symbol=symbol, name=name) for symbol, name in SUPPORTED_ASSETS.items()]
+
+
+@app.get("/api/assets/{symbol}/range", response_model=AssetRange)
+def asset_range(symbol: str) -> AssetRange:
+    """Return the date range the UI can use as min/max on date inputs.
+
+    Sourced from the local SQLite cache when populated, falling back
+    to a hardcoded earliest-available date per symbol when the cache
+    is empty (fresh install). Avoids hitting yfinance just to discover
+    the floor.
+    """
+    try:
+        normalized = validate_symbol(symbol)
+        floor, ceiling = get_available_range(normalized)
+        return AssetRange(symbol=normalized, minDate=floor, maxDate=ceiling)
+    except Exception as exc:
+        _raise_api_error(exc)
 
 
 @app.get("/api/strategies", response_model=StrategyDefinitionsResponse)

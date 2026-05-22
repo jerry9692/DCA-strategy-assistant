@@ -22,6 +22,12 @@ class Asset(BaseModel):
     currency: str = "USD"
 
 
+class AssetRange(BaseModel):
+    symbol: str
+    minDate: date
+    maxDate: date
+
+
 class ParameterOption(BaseModel):
     label: str
     value: str | int | float | bool

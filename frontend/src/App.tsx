@@ -7,8 +7,9 @@ import { ChartWrapper } from "./components/ChartWrapper";
 import { Metric } from "./components/Metric";
 import { ParamControl, RangeControl } from "./components/ParamControl";
 import { QUICK_BACKTEST_PERIODS } from "./constants";
-import { clampEndDate, describeConfig, exportBacktestCsv, metric } from "./utils";
+import { clampToRange, describeConfig, exportBacktestCsv, metric } from "./utils";
 import { todayIso } from "./constants";
+import { ErrorBanner } from "./components/ErrorBanner";
 import type { PresetMode, Frequency, StrategyConfigPayload } from "./types";
 
 type SchemaStrategyConfig = components["schemas"]["StrategyConfig"];
@@ -77,13 +78,25 @@ export function App() {
         </label>
         <label>
           开始
-          <input type="date" value={state.startDate} onChange={(e) => { state.setStartDate(e.target.value); state.setActiveScenarioId(null); }} />
+          <input
+            type="date"
+            min={state.assetRange?.minDate}
+            max={state.assetRange?.maxDate}
+            value={state.startDate}
+            onChange={(e) => { state.setStartDate(clampToRange(e.target.value, state.assetRange)); state.setActiveScenarioId(null); }}
+          />
         </label>
         <label>
           结束
           <div className="date-with-action">
-            <input type="date" max={todayIso} value={state.endDate} onChange={(e) => { state.setEndDate(clampEndDate(e.target.value)); state.setActiveScenarioId(null); }} />
-            <button type="button" onClick={() => { state.setEndDate(todayIso); state.setActiveScenarioId(null); }}>今天</button>
+            <input
+              type="date"
+              min={state.assetRange?.minDate}
+              max={state.assetRange?.maxDate ?? todayIso}
+              value={state.endDate}
+              onChange={(e) => { state.setEndDate(clampToRange(e.target.value, state.assetRange)); state.setActiveScenarioId(null); }}
+            />
+            <button type="button" onClick={() => { state.setEndDate(state.assetRange?.maxDate ?? todayIso); state.setActiveScenarioId(null); }}>{state.assetRange?.maxDate && state.assetRange.maxDate < todayIso ? "最新可用" : "今天"}</button>
           </div>
         </label>
         <div className="period-control">
@@ -107,11 +120,10 @@ export function App() {
         </label>
       </section>
 
-      {state.error && (
-        <div className="error">
-          <span>{state.error.message}</span>
-          {state.error.retryable && <button type="button" onClick={state.refresh}>重试</button>}
-        </div>
+      {state.error && <ErrorBanner error={state.error} onRetry={state.refresh} />}
+
+      {state.assetRange && (
+        <p className="muted data-range-hint">{state.assetRange.symbol} 数据可用范围 {state.assetRange.minDate} 至 {state.assetRange.maxDate}</p>
       )}
 
       {state.activeScenario && (
@@ -312,6 +324,23 @@ export function App() {
             onChange={(v) => { state.setRiskFreeRate(v / 100); state.markCustom(); }}
           />
           <p className="strategy-note">夏普/索提诺比率以此为基准。默认 4% 接近 2024 年美国短期国债收益率，2020 年前后实际更接近 0-2%。</p>
+          <RangeControl
+            label="交易费率"
+            value={Number((state.feeRate * 100).toFixed(3))}
+            min={0}
+            max={0.5}
+            step={0.01}
+            onChange={(v) => { state.setFeeRate(v / 100); state.markCustom(); }}
+          />
+          <RangeControl
+            label="滑点率"
+            value={Number((state.slippageRate * 100).toFixed(3))}
+            min={0}
+            max={0.5}
+            step={0.01}
+            onChange={(v) => { state.setSlippageRate(v / 100); state.markCustom(); }}
+          />
+          <p className="strategy-note">回测时按比例扣减买入金额并抬高执行价。0% 表示忽略，常见 ETF 在零佣金券商上 0-0.05%。</p>
           <div className="optimizer-card">
             <strong>稳健参数建议</strong>
             <span>跨多个市场阶段搜索更稳定的参数。默认限制为最低 0.6-0.8x、最高 1.2-1.5x，不把功能变成择时交易。</span>
