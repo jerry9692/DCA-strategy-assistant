@@ -80,20 +80,16 @@ export function App() {
             <option value="custom">自定义</option>
           </select>
         </label>
-        <div className="asset-picker">
-          <span>标的</span>
-          <div className="asset-market-tabs">
+        <label className="market-control">
+          市场
+          <select value={activeMarket} onChange={(e) => switchAssetMarket(e.target.value)}>
             {assetMarkets.map((market) => (
-              <button
-                type="button"
-                key={market}
-                className={market === activeMarket ? "active" : ""}
-                onClick={() => switchAssetMarket(market)}
-              >
-                {marketLabelByCode[market] ?? market}
-              </button>
+              <option key={market} value={market}>{marketLabelByCode[market] ?? market}</option>
             ))}
-          </div>
+          </select>
+        </label>
+        <label className="asset-control">
+          标的
           <select value={state.symbol} onChange={(e) => switchAsset(e.target.value)}>
             {Object.entries(assetGroups).map(([label, assets]) => (
               <optgroup key={label} label={label}>
@@ -103,7 +99,7 @@ export function App() {
               </optgroup>
             ))}
           </select>
-        </div>
+        </label>
         <label>
           基础金额
           <input type="number" min={1} step={10} value={state.baseAmount} onChange={(e) => { state.setBaseAmount(Number(e.target.value)); state.markCustom(); }} />
