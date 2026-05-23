@@ -146,9 +146,9 @@ export function App() {
           </div>
         </div>
         <label className="pressure-control">
-          压力测试
+          历史场景
           <select value={state.activeScenario?.id ?? ""} onChange={(e) => state.applyScenario(e.target.value)}>
-            <option value="">普通区间</option>
+            <option value="">自定义区间</option>
             {state.pressureScenarios.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
