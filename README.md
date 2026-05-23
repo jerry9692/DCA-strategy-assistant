@@ -145,9 +145,9 @@ DCA-strategy-assistant/
 │   ├── tsconfig.json
 │   └── vite.config.ts
 └── docs/
-    ├── v0.1-plan.md                 # Implementation plan (Chinese)
     ├── user-guide.md                # User manual (Chinese)
-    └── task-list.md                 # Feature backlog
+    ├── task-list.md                 # Feature backlog
+    └── change-log/                  # Dated implementation notes
 ```
 
 ## Assumptions & Limitations

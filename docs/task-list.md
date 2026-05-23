@@ -16,7 +16,7 @@
 
 **回归测试**：`test_weekend_start_does_not_double_buy_on_next_monday` 和 `test_lump_sum_weekend_start_does_not_double_track_initial_buy`。
 
-详见 [`change-log/2026-05-18-fix-p0.md`](./change-log/2026-05-18-fix-p0.md)。
+详见 [`change-log/2026-05-18-fix-p0-p1.md`](./change-log/2026-05-18-fix-p0-p1.md)。
 
 ---
 
@@ -44,7 +44,7 @@
 
 **修复**：在 `_download` 加注释说明 `auto_adjust=True` 的语义；README 的 Assumptions 段、user-guide 的 FAQ、task-list #27 三处全部对齐成"已隐含分红再投资，未来可加'分红留作现金'模式"。
 
-详见 [`change-log/2026-05-18-fix-p0.md`](./change-log/2026-05-18-fix-p0.md)。
+详见 [`change-log/2026-05-18-fix-p0-p1.md`](./change-log/2026-05-18-fix-p0-p1.md)。
 
 ---
 
@@ -52,11 +52,11 @@
 
 ### 5. 图表种类不完整（计划 5 类，实际 2 类）
 
-**相关文件**：`frontend/src/main.tsx`、`docs/v0.1-plan.md`
+**相关文件**：`frontend/src/main.tsx`（现已拆分为 `App.tsx`、hooks、components 等模块）
 
 **计划要求**（plan 第 28 行）：价格与买入点、每期投入金额、策略价值曲线、回撤曲线、信号曲线。
 
-**当前实现**：5 张图表已全部到位——价格与买入点、投入金额与组合价值、账户回撤对比、评分与投入倍率、策略对决。条目保留作为审查记录。已在 2026-05-18 后续修复中改用时间轴对齐，详见 [`change-log/2026-05-18-fix-p1.md`](./change-log/2026-05-18-fix-p1.md)。
+**当前实现**：5 张图表已全部到位——价格与买入点、投入金额与组合价值、账户回撤对比、评分与投入倍率、策略对决。条目保留作为审查记录。已在 2026-05-18 后续修复中改用时间轴对齐，详见 [`change-log/2026-05-18-fix-p0-p1.md`](./change-log/2026-05-18-fix-p0-p1.md)。
 
 ---
 
@@ -66,7 +66,7 @@
 
 **修复**：四张图全部改成 `xAxis: { type: "time" }` + `[date, value]` 元组数据，并新增 `pairSeries(events, valueOf)` 工具统一构造数据。前端 `tsc --noEmit` 通过。
 
-详见 [`change-log/2026-05-18-fix-p1.md`](./change-log/2026-05-18-fix-p1.md)。
+详见 [`change-log/2026-05-18-fix-p0-p1.md`](./change-log/2026-05-18-fix-p0-p1.md)。
 
 ---
 
@@ -80,7 +80,7 @@
 
 **说明**：`backend/tests/test_strategies.py` 已经从 4 用例扩展到 30+，覆盖固定 DCA、跌幅加码上下界、均线偏离方向、RSI 超卖/过热、历史分位高低、网格档位、组合权重、空数据/单日/非交易日顺延、费率滑点、风险调整指标、市场状态、缓存基准、优化器跨场景、异步 job 等。本次提交又补了三条新用例（周末起始日、warmup 显式提示、`_average_metrics` 不把 None 当 0）。
 
-详见 [`change-log/2026-05-18-fix-p1.md`](./change-log/2026-05-18-fix-p1.md) 和 [`change-log/2026-05-18-fix-p0.md`](./change-log/2026-05-18-fix-p0.md)。
+详见 [`change-log/2026-05-18-fix-p0-p1.md`](./change-log/2026-05-18-fix-p0-p1.md)。
 
 ---
 
@@ -128,7 +128,7 @@
 
 新增 3 条回归测试：drawdown_boost warmup、composite all-zero-weights warmup、composite partial warmup。
 
-详见 [`change-log/2026-05-18-fix-p1.md`](./change-log/2026-05-18-fix-p1.md)。
+详见 [`change-log/2026-05-18-fix-p0-p1.md`](./change-log/2026-05-18-fix-p0-p1.md)。
 
 ---
 
@@ -140,7 +140,7 @@
 
 新增 1 条回归测试：`test_optimizer_average_metrics_skips_none_versus_fixed`。
 
-详见 [`change-log/2026-05-18-fix-p1.md`](./change-log/2026-05-18-fix-p1.md)。
+详见 [`change-log/2026-05-18-fix-p0-p1.md`](./change-log/2026-05-18-fix-p0-p1.md)。
 
 ---
 
