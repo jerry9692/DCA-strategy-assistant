@@ -16,7 +16,7 @@ type SchemaStrategyConfig = components["schemas"]["StrategyConfig"];
 
 export function App() {
   const state = useBacktest();
-  const charts = useChartOptions(state.result, state.selectedStrategy, state.strategyNameByType);
+  const charts = useChartOptions(state.result, state.selectedStrategy, state.strategyNameByType, state.darkMode);
   const moneySymbol = currencySymbol(state.activeAsset?.currency);
 
   const visibleReasons = state.showAllReasons ? state.reasons : state.reasons.slice(0, 5);

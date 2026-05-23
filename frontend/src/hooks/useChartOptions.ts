@@ -6,13 +6,44 @@ export function useChartOptions(
   result: Backtest | null,
   selectedStrategy: StrategyDef | undefined,
   strategyNameByType: Map<string, string>,
+  darkMode: boolean,
 ) {
+  const chartTheme = useMemo(() => {
+    const text = darkMode ? "#cbd5e1" : "#64748b";
+    const legend = darkMode ? "#dbeafe" : "#475569";
+    const gridLine = darkMode ? "#243244" : "#e2e8f0";
+    const axisLine = darkMode ? "#334155" : "#cbd5e1";
+    return {
+      tooltip: {
+        trigger: "axis",
+        backgroundColor: darkMode ? "#0f172a" : "#ffffff",
+        borderColor: darkMode ? "#334155" : "#e2e8f0",
+        textStyle: { color: darkMode ? "#e5e7eb" : "#334155" },
+      },
+      legend: { top: 0, textStyle: { color: legend } },
+      xAxis: {
+        type: "time",
+        axisLabel: { color: text },
+        axisLine: { lineStyle: { color: axisLine } },
+        axisTick: { lineStyle: { color: axisLine } },
+        splitLine: { lineStyle: { color: gridLine } },
+      },
+      valueAxis: {
+        type: "value",
+        axisLabel: { color: text },
+        axisLine: { lineStyle: { color: axisLine } },
+        axisTick: { lineStyle: { color: axisLine } },
+        splitLine: { lineStyle: { color: gridLine } },
+      },
+    };
+  }, [darkMode]);
+
   const priceOption = useMemo(
     () => ({
-      tooltip: { trigger: "axis" },
+      tooltip: chartTheme.tooltip,
       grid: { left: 64, right: 18, top: 24, bottom: 34 },
-      xAxis: { type: "time", axisLabel: { color: "#64748b" } },
-      yAxis: { type: "value", scale: true, axisLabel: { color: "#64748b" } },
+      xAxis: chartTheme.xAxis,
+      yAxis: { ...chartTheme.valueAxis, scale: true },
       series: [
         {
           name: "价格",
@@ -30,18 +61,18 @@ export function useChartOptions(
         },
       ],
     }),
-    [result],
+    [chartTheme, result],
   );
 
   const contributionOption = useMemo(
     () => ({
-      tooltip: { trigger: "axis" },
-      legend: { top: 0, textStyle: { color: "#475569" } },
+      tooltip: chartTheme.tooltip,
+      legend: chartTheme.legend,
       grid: { left: 64, right: 20, top: 36, bottom: 34 },
-      xAxis: { type: "time", axisLabel: { color: "#64748b" } },
+      xAxis: chartTheme.xAxis,
       yAxis: [
-        { type: "value", name: "组合价值", axisLabel: { color: "#64748b" } },
-        { type: "value", name: "投入金额", axisLabel: { color: "#64748b" } },
+        { ...chartTheme.valueAxis, name: "组合价值", nameTextStyle: { color: chartTheme.valueAxis.axisLabel.color } },
+        { ...chartTheme.valueAxis, name: "投入金额", nameTextStyle: { color: chartTheme.valueAxis.axisLabel.color } },
       ],
       series: [
         { name: "本策略投入", type: "bar", yAxisIndex: 1, data: pairSeries(result?.contributions, (e) => e.amount), itemStyle: { color: "#0f766e" } },
@@ -51,16 +82,16 @@ export function useChartOptions(
         { name: "一次性买入", type: "line", yAxisIndex: 0, data: pairSeries(result?.lumpSumContributions, (e) => e.portfolioValue), showSymbol: false, lineStyle: { color: "#dc2626", width: 2, type: "dotted" } },
       ],
     }),
-    [result],
+    [chartTheme, result],
   );
 
   const drawdownOption = useMemo(
     () => ({
-      tooltip: { trigger: "axis" },
-      legend: { top: 0, textStyle: { color: "#475569" } },
+      tooltip: chartTheme.tooltip,
+      legend: chartTheme.legend,
       grid: { left: 64, right: 20, top: 36, bottom: 34 },
-      xAxis: { type: "time", axisLabel: { color: "#64748b" } },
-      yAxis: { type: "value", max: 0, axisLabel: { color: "#64748b" } },
+      xAxis: chartTheme.xAxis,
+      yAxis: { ...chartTheme.valueAxis, max: 0 },
       series: [
         {
           name: "本策略账户回撤",
@@ -86,18 +117,18 @@ export function useChartOptions(
         },
       ],
     }),
-    [result],
+    [chartTheme, result],
   );
 
   const signalOption = useMemo(
     () => ({
-      tooltip: { trigger: "axis" },
-      legend: { top: 0, textStyle: { color: "#475569" } },
+      tooltip: chartTheme.tooltip,
+      legend: chartTheme.legend,
       grid: { left: 64, right: 20, top: 36, bottom: 34 },
-      xAxis: { type: "time", axisLabel: { color: "#64748b" } },
+      xAxis: chartTheme.xAxis,
       yAxis: [
-        { type: "value", min: 0, max: 1, axisLabel: { color: "#64748b" } },
-        { type: "value", axisLabel: { color: "#64748b", formatter: "{value}x" } },
+        { ...chartTheme.valueAxis, min: 0, max: 1 },
+        { ...chartTheme.valueAxis, axisLabel: { ...chartTheme.valueAxis.axisLabel, formatter: "{value}x" } },
       ],
       series: [
         {
@@ -117,16 +148,16 @@ export function useChartOptions(
         },
       ],
     }),
-    [result],
+    [chartTheme, result],
   );
 
   const showdownOption = useMemo(
     () => ({
-      tooltip: { trigger: "axis" },
-      legend: { top: 0, textStyle: { color: "#475569" } },
+      tooltip: chartTheme.tooltip,
+      legend: chartTheme.legend,
       grid: { left: 64, right: 20, top: 42, bottom: 34 },
-      xAxis: { type: "time", axisLabel: { color: "#64748b" } },
-      yAxis: { type: "value", name: "组合价值", axisLabel: { color: "#64748b" } },
+      xAxis: chartTheme.xAxis,
+      yAxis: { ...chartTheme.valueAxis, name: "组合价值", nameTextStyle: { color: chartTheme.valueAxis.axisLabel.color } },
       series: [
         {
           name: result ? strategyNameByType.get(result.strategyType) ?? "本策略" : selectedStrategy?.name ?? "本策略",
@@ -151,7 +182,7 @@ export function useChartOptions(
         },
       ],
     }),
-    [result, selectedStrategy, strategyNameByType],
+    [chartTheme, result, selectedStrategy, strategyNameByType],
   );
 
   const comparisonRows = useMemo(

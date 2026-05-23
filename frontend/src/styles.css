@@ -921,6 +921,14 @@ input[type="range"] {
   color: #e5e7eb;
 }
 
+.app-shell[data-theme="dark"] .icon-button svg,
+.app-shell[data-theme="dark"] .section-title svg,
+.app-shell[data-theme="dark"] .secondary-action svg,
+.app-shell[data-theme="dark"] .loading-overlay svg {
+  color: currentColor;
+  stroke-width: 2.2;
+}
+
 .app-shell[data-theme="dark"] h2,
 .app-shell[data-theme="dark"] .strategy strong,
 .app-shell[data-theme="dark"] .metric strong,
@@ -948,9 +956,10 @@ input[type="range"] {
 }
 
 .app-shell[data-theme="dark"] .period-buttons button.active {
-  border-color: #14b8a6;
-  background: #052e2b;
-  color: #5eead4;
+  border-color: #2dd4bf;
+  background: #134e4a;
+  color: #ccfbf1;
+  box-shadow: inset 0 0 0 1px rgba(94, 234, 212, 0.18);
 }
 
 .app-shell[data-theme="dark"] .eyebrow,
@@ -981,7 +990,19 @@ input[type="range"] {
 }
 
 .app-shell[data-theme="dark"] .progress-track {
-  background: #1e293b;
+  background: #0f172a;
+  border: 1px solid #334155;
+}
+
+.app-shell[data-theme="dark"] .progress-track span {
+  background: linear-gradient(90deg, #38bdf8, #5eead4);
+}
+
+.app-shell[data-theme="dark"] .loading-overlay {
+  background: rgba(15, 23, 42, 0.96);
+  border-color: #38bdf8;
+  color: #bae6fd;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
 }
 
 .app-shell[data-theme="dark"] .optimization-status.applied {
@@ -1178,8 +1199,8 @@ input[type="range"] {
   color: #475569;
 }
 .app-shell[data-theme="dark"] .metric-hint {
-  color: #64748b;
+  color: #94a3b8;
 }
 .app-shell[data-theme="dark"] .metric-hint:hover {
-  color: #cbd5e1;
+  color: #e0f2fe;
 }
