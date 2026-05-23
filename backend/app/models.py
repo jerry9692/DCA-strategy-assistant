@@ -4,9 +4,170 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 SUPPORTED_ASSETS = {
-    "QQQ": "Invesco QQQ Trust",
-    "VOO": "Vanguard S&P 500 ETF",
-    "SPY": "SPDR S&P 500 ETF Trust",
+    "QQQ": {
+        "name": "Invesco QQQ Trust",
+        "category": "core_us",
+        "categoryLabel": "核心宽基",
+        "riskLevel": "core",
+    },
+    "SPY": {
+        "name": "SPDR S&P 500 ETF Trust",
+        "category": "core_us",
+        "categoryLabel": "核心宽基",
+        "riskLevel": "core",
+    },
+    "VOO": {
+        "name": "Vanguard S&P 500 ETF",
+        "category": "core_us",
+        "categoryLabel": "核心宽基",
+        "riskLevel": "core",
+    },
+    "VTI": {
+        "name": "Vanguard Total Stock Market ETF",
+        "category": "core_us",
+        "categoryLabel": "核心宽基",
+        "riskLevel": "core",
+    },
+    "DIA": {
+        "name": "SPDR Dow Jones Industrial Average ETF",
+        "category": "core_us",
+        "categoryLabel": "核心宽基",
+        "riskLevel": "core",
+    },
+    "IWM": {
+        "name": "iShares Russell 2000 ETF",
+        "category": "core_us",
+        "categoryLabel": "核心宽基",
+        "riskLevel": "core",
+    },
+    "SCHD": {
+        "name": "Schwab U.S. Dividend Equity ETF",
+        "category": "dividend_value",
+        "categoryLabel": "红利价值",
+        "riskLevel": "core",
+    },
+    "VYM": {
+        "name": "Vanguard High Dividend Yield ETF",
+        "category": "dividend_value",
+        "categoryLabel": "红利价值",
+        "riskLevel": "core",
+    },
+    "VTV": {
+        "name": "Vanguard Value ETF",
+        "category": "dividend_value",
+        "categoryLabel": "红利价值",
+        "riskLevel": "core",
+    },
+    "VUG": {
+        "name": "Vanguard Growth ETF",
+        "category": "dividend_value",
+        "categoryLabel": "红利价值",
+        "riskLevel": "core",
+    },
+    "VXUS": {
+        "name": "Vanguard Total International Stock ETF",
+        "category": "international",
+        "categoryLabel": "国际股票",
+        "riskLevel": "core",
+    },
+    "VEA": {
+        "name": "Vanguard FTSE Developed Markets ETF",
+        "category": "international",
+        "categoryLabel": "国际股票",
+        "riskLevel": "core",
+    },
+    "VWO": {
+        "name": "Vanguard FTSE Emerging Markets ETF",
+        "category": "international",
+        "categoryLabel": "国际股票",
+        "riskLevel": "core",
+    },
+    "BND": {
+        "name": "Vanguard Total Bond Market ETF",
+        "category": "bond_defensive",
+        "categoryLabel": "债券防守",
+        "riskLevel": "core",
+    },
+    "AGG": {
+        "name": "iShares Core U.S. Aggregate Bond ETF",
+        "category": "bond_defensive",
+        "categoryLabel": "债券防守",
+        "riskLevel": "core",
+    },
+    "TLT": {
+        "name": "iShares 20+ Year Treasury Bond ETF",
+        "category": "bond_defensive",
+        "categoryLabel": "债券防守",
+        "riskLevel": "core",
+    },
+    "IEF": {
+        "name": "iShares 7-10 Year Treasury Bond ETF",
+        "category": "bond_defensive",
+        "categoryLabel": "债券防守",
+        "riskLevel": "core",
+    },
+    "GLD": {
+        "name": "SPDR Gold Shares",
+        "category": "commodity",
+        "categoryLabel": "商品替代",
+        "riskLevel": "core",
+    },
+    "XLK": {
+        "name": "Technology Select Sector SPDR Fund",
+        "category": "advanced_high_vol",
+        "categoryLabel": "高级/高波动",
+        "riskLevel": "advanced",
+        "riskNote": "行业集中度较高，更适合作为卫星仓位分析。",
+    },
+    "SOXX": {
+        "name": "iShares Semiconductor ETF",
+        "category": "advanced_high_vol",
+        "categoryLabel": "高级/高波动",
+        "riskLevel": "advanced",
+        "riskNote": "半导体行业波动较大，更适合作为卫星仓位分析。",
+    },
+    "SMH": {
+        "name": "VanEck Semiconductor ETF",
+        "category": "advanced_high_vol",
+        "categoryLabel": "高级/高波动",
+        "riskLevel": "advanced",
+        "riskNote": "半导体行业波动较大，更适合作为卫星仓位分析。",
+    },
+    "TQQQ": {
+        "name": "ProShares UltraPro QQQ",
+        "category": "advanced_high_vol",
+        "categoryLabel": "高级/高波动",
+        "riskLevel": "advanced",
+        "riskNote": "3 倍杠杆 ETF 使用每日重置机制，长期定投风险和普通指数 ETF 不同。",
+    },
+    "QLD": {
+        "name": "ProShares Ultra QQQ",
+        "category": "advanced_high_vol",
+        "categoryLabel": "高级/高波动",
+        "riskLevel": "advanced",
+        "riskNote": "2 倍杠杆 ETF 使用每日重置机制，长期定投风险和普通指数 ETF 不同。",
+    },
+    "UPRO": {
+        "name": "ProShares UltraPro S&P500",
+        "category": "advanced_high_vol",
+        "categoryLabel": "高级/高波动",
+        "riskLevel": "advanced",
+        "riskNote": "3 倍杠杆 ETF 使用每日重置机制，长期定投风险和普通指数 ETF 不同。",
+    },
+    "SSO": {
+        "name": "ProShares Ultra S&P500",
+        "category": "advanced_high_vol",
+        "categoryLabel": "高级/高波动",
+        "riskLevel": "advanced",
+        "riskNote": "2 倍杠杆 ETF 使用每日重置机制，长期定投风险和普通指数 ETF 不同。",
+    },
+    "IBIT": {
+        "name": "iShares Bitcoin Trust ETF",
+        "category": "advanced_high_vol",
+        "categoryLabel": "高级/高波动",
+        "riskLevel": "advanced",
+        "riskNote": "比特币现货 ETF 历史较短、波动极高，回测样本有限。",
+    },
 }
 
 
@@ -14,12 +175,18 @@ Frequency = Literal["weekly", "biweekly", "monthly"]
 MarketTone = Literal["up", "down", "neutral"]
 OptimizationObjective = Literal["robust_return", "max_return", "min_drawdown"]
 OptimizationJobState = Literal["queued", "running", "completed", "failed", "cancelled"]
+AssetRiskLevel = Literal["core", "advanced"]
 
 
 class Asset(BaseModel):
     symbol: str
     name: str
     currency: str = "USD"
+    market: str = "us"
+    category: str = "core_us"
+    categoryLabel: str = "核心宽基"
+    riskLevel: AssetRiskLevel = "core"
+    riskNote: str | None = None
 
 
 class AssetRange(BaseModel):

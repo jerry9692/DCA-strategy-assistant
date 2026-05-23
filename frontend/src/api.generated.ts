@@ -164,6 +164,29 @@ export interface components {
              * @default USD
              */
             currency: string;
+            /**
+             * Market
+             * @default us
+             */
+            market: string;
+            /**
+             * Category
+             * @default core_us
+             */
+            category: string;
+            /**
+             * Categorylabel
+             * @default 核心宽基
+             */
+            categoryLabel: string;
+            /**
+             * Risklevel
+             * @default core
+             * @enum {string}
+             */
+            riskLevel: "core" | "advanced";
+            /** Risknote */
+            riskNote?: string | null;
         };
         /** AssetRange */
         AssetRange: {

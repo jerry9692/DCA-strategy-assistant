@@ -58,7 +58,13 @@ def _raise_api_error(exc: Exception) -> None:
 
 @app.get("/api/assets", response_model=list[Asset])
 def assets() -> list[Asset]:
-    return [Asset(symbol=symbol, name=name) for symbol, name in SUPPORTED_ASSETS.items()]
+    result: list[Asset] = []
+    for symbol, meta in SUPPORTED_ASSETS.items():
+        if isinstance(meta, str):
+            result.append(Asset(symbol=symbol, name=meta))
+        else:
+            result.append(Asset(symbol=symbol, **meta))
+    return result
 
 
 @app.get("/api/assets/{symbol}/range", response_model=AssetRange)

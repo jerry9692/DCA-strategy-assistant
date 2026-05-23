@@ -196,6 +196,28 @@ h2 {
   font-size: 12px;
 }
 
+.asset-risk-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  margin: 12px 0 16px;
+  color: #9a3412;
+}
+
+.asset-risk-strip strong {
+  flex: 0 0 auto;
+  color: #9a3412;
+}
+
+.asset-risk-strip span {
+  color: #9a3412;
+  font-size: 12px;
+}
+
 label {
   display: grid;
   gap: 6px;
@@ -953,6 +975,17 @@ input[type="range"] {
   background: #3f0d16;
   border-color: #9f1239;
   color: #fecdd3;
+}
+
+.app-shell[data-theme="dark"] .asset-risk-strip {
+  background: #2a1c08;
+  border-color: #b45309;
+  color: #fcd34d;
+}
+
+.app-shell[data-theme="dark"] .asset-risk-strip strong,
+.app-shell[data-theme="dark"] .asset-risk-strip span {
+  color: #fcd34d;
 }
 
 .app-shell[data-theme="dark"] .warmup-banner {

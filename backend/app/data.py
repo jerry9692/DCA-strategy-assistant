@@ -40,7 +40,7 @@ SQLModel.metadata.create_all(engine)
 def validate_symbol(symbol: str) -> str:
     normalized = symbol.upper()
     if normalized not in SUPPORTED_ASSETS:
-        raise PriceDataError("v0.3 only supports QQQ, VOO and SPY.", code="invalid_symbol", retryable=False)
+        raise PriceDataError("v0.3 only supports the built-in US ETF list.", code="invalid_symbol", retryable=False)
     return normalized
 
 
@@ -68,6 +68,29 @@ _YFINANCE_EARLIEST_AVAILABLE = {
     "QQQ": date(1999, 3, 10),
     "SPY": date(1993, 1, 29),
     "VOO": date(2010, 9, 9),
+    "VTI": date(2001, 5, 31),
+    "DIA": date(1998, 1, 14),
+    "IWM": date(2000, 5, 26),
+    "SCHD": date(2011, 10, 20),
+    "VYM": date(2006, 11, 10),
+    "VTV": date(2004, 1, 30),
+    "VUG": date(2004, 1, 30),
+    "VXUS": date(2011, 1, 26),
+    "VEA": date(2007, 7, 26),
+    "VWO": date(2005, 3, 10),
+    "BND": date(2007, 4, 10),
+    "AGG": date(2003, 9, 26),
+    "TLT": date(2002, 7, 30),
+    "IEF": date(2002, 7, 30),
+    "GLD": date(2004, 11, 18),
+    "XLK": date(1998, 12, 22),
+    "SOXX": date(2001, 7, 10),
+    "SMH": date(2000, 6, 5),
+    "TQQQ": date(2010, 2, 11),
+    "QLD": date(2006, 6, 21),
+    "UPRO": date(2009, 6, 25),
+    "SSO": date(2006, 6, 21),
+    "IBIT": date(2024, 1, 11),
 }
 
 

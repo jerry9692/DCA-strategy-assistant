@@ -330,6 +330,41 @@
             "type": "string",
             "title": "Currency",
             "default": "USD"
+          },
+          "market": {
+            "type": "string",
+            "title": "Market",
+            "default": "us"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "default": "core_us"
+          },
+          "categoryLabel": {
+            "type": "string",
+            "title": "Categorylabel",
+            "default": "核心宽基"
+          },
+          "riskLevel": {
+            "type": "string",
+            "enum": [
+              "core",
+              "advanced"
+            ],
+            "title": "Risklevel",
+            "default": "core"
+          },
+          "riskNote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risknote"
           }
         },
         "type": "object",

@@ -83,3 +83,11 @@ def test_get_available_range_falls_back_when_no_hardcoded_entry(monkeypatch):
     floor, ceiling = get_available_range("VTI")
     assert floor == date(1990, 1, 1)
     assert ceiling == date.today()
+
+
+def test_new_us_etf_available_ranges_are_declared():
+    from app.data import get_available_range
+
+    assert get_available_range("VTI")[0] == date(2001, 5, 31)
+    assert get_available_range("TQQQ")[0] == date(2010, 2, 11)
+    assert get_available_range("IBIT")[0] == date(2024, 1, 11)

@@ -19,6 +19,12 @@ export function App() {
   const charts = useChartOptions(state.result, state.selectedStrategy, state.strategyNameByType);
 
   const visibleReasons = state.showAllReasons ? state.reasons : state.reasons.slice(0, 5);
+  const assetGroups = state.assets.reduce<Record<string, typeof state.assets>>((groups, asset) => {
+    const label = asset.categoryLabel ?? "其他";
+    groups[label] = groups[label] ?? [];
+    groups[label].push(asset);
+    return groups;
+  }, {});
 
   return (
     <main className="app-shell" data-theme={state.darkMode ? "dark" : "light"}>
@@ -59,8 +65,12 @@ export function App() {
         <label>
           标的
           <select value={state.symbol} onChange={(e) => state.setSymbol(e.target.value)}>
-            {state.assets.map((a) => (
-              <option key={a.symbol} value={a.symbol}>{a.symbol} · {a.name}</option>
+            {Object.entries(assetGroups).map(([label, assets]) => (
+              <optgroup key={label} label={label}>
+                {assets.map((a) => (
+                  <option key={a.symbol} value={a.symbol}>{a.symbol} · {a.name}</option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </label>
@@ -124,6 +134,13 @@ export function App() {
 
       {state.assetRange && (
         <p className="muted data-range-hint">{state.assetRange.symbol} 数据可用范围 {state.assetRange.minDate} 至 {state.assetRange.maxDate}</p>
+      )}
+
+      {state.activeAsset?.riskLevel === "advanced" && (
+        <section className="asset-risk-strip">
+          <strong>高级/高波动标的</strong>
+          <span>{state.activeAsset.riskNote ?? "该标的波动较高，更适合作为卫星仓位分析。"}</span>
+        </section>
       )}
 
       {state.activeScenario && (
