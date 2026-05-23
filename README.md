@@ -2,7 +2,7 @@
 
 A local web application for dynamic Dollar-Cost Averaging (DCA) investment research. Instead of investing the same amount every period, it uses 7 market-driven strategies to adjust your contribution based on current conditions — buy more when the market dips, less when it's overheated.
 
-Currently supports **QQQ, VOO, SPY** (US-listed ETFs, USD denominated, daily data).
+Currently supports built-in US ETFs and a first batch of core China ETFs. US assets include broad-market, dividend/value, international, bond, commodity, and advanced/high-volatility ETFs; China assets currently include SSE 50, CSI 300, CSI 500, ChiNext, and STAR 50 ETF proxies. The UI separates assets by market before showing the filtered symbol list.
 
 > **Disclaimer**: This tool is for research and decision support only. It does not auto-trade, does not connect to brokerage APIs, and does not constitute investment advice.
 
@@ -34,6 +34,7 @@ Default dynamic bounds are intentionally mild: **0.8x minimum** and **1.2x maxim
 - yfinance 偶发只返回 Adj Close 时优雅降级，不再抛 KeyError。
 - `ContributionEvent` frozen 化，防止 lru_cache 被下游意外修改污染。
 - 文档对齐实际行为：明确历史回测**已经隐含分红再投资**（auto_adjust）。
+- C1 扩展内置标的：26 个美股 ETF + 5 个 A 股基础指数 ETF，并用 `市场` + `标的` 双下拉避免长列表混杂。
 
 ## v0.2 Highlights
 
@@ -151,11 +152,11 @@ DCA-strategy-assistant/
 
 ## Assumptions & Limitations
 
-- v0.3: USD only, daily data, QQQ/VOO/SPY only.
+- v0.3: Built-in ETF universe only. US ETFs use USD display; China ETFs use CNY display and Yahoo Finance provider symbols (`.SS` / `.SZ`) behind the scenes.
 - The grid strategy is "grid-weighted DCA" — it only adjusts buy amounts, no sell signals.
 - Backtesting uses a simple IRR bisection method for annualized return.
 - Price data is fetched from Yahoo Finance with `auto_adjust=True`, so historical close prices already reflect dividend and split adjustments. Backtest returns and drawdowns therefore implicitly assume cash dividends are reinvested on the ex-date at that day's close. There is no separate "hold dividends as cash" mode yet.
-- Fee and slippage rates are supported in the engine but not yet exposed in strategy parameters.
+- Fee and slippage rates are exposed in the right-side parameter panel and applied during backtests.
 - Parameter optimization is historical multi-scenario validation only. It does not predict which parameters will be best in future markets.
 
 ## License
