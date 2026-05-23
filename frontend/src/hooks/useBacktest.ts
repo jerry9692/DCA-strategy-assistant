@@ -18,8 +18,22 @@ import type {
 
 type Schemas = components["schemas"];
 import { API_BASE, ASSET_MARKETS, PRESSURE_SCENARIOS, QUICK_BACKTEST_PERIODS, SETTINGS_KEY, defaultStartDate, todayIso } from "../constants";
-import { clampEndDate, clampToRange, normalizeFrequency, presetFor, readSavedSettings, readUrlSettings, syncUrlSettings, yearsBefore } from "../utils";
+import {
+  clampEndDate,
+  clampToRange,
+  normalizeFrequency,
+  presetFor,
+  readSavedSettings,
+  readUrlSettings,
+  strategyConfigKey,
+  syncUrlSettings,
+  yearsBefore,
+} from "../utils";
 import { readJson, toUiError } from "../api";
+
+type OptimizationRunContext = {
+  configKey: string;
+};
 
 export function useBacktest() {
   const savedSettings = useMemo(() => readSavedSettings(), []);
@@ -48,6 +62,7 @@ export function useBacktest() {
   const [quickData, setQuickData] = useState<{ dataSource: string; cacheStatus: string } | null>(null);
   const [optimization, setOptimization] = useState<OptimizationResult | null>(null);
   const [optimizationJob, setOptimizationJob] = useState<OptimizationJobStatus | null>(null);
+  const [optimizationContext, setOptimizationContext] = useState<OptimizationRunContext | null>(null);
   const [loading, setLoading] = useState(false);
   const [recommendationLoading, setRecommendationLoading] = useState(false);
   const [optimizationLoading, setOptimizationLoading] = useState(false);
@@ -97,21 +112,41 @@ export function useBacktest() {
     }),
     [strategyType, baseAmount, frequency, minMultiplier, maxMultiplier, params, feeRate, slippageRate],
   );
+  const configKey = useMemo(() => strategyConfigKey(config), [config]);
+  const optimizationScopeKey = useMemo(
+    () => JSON.stringify({ symbol, strategyType, startDate, endDate }),
+    [symbol, strategyType, startDate, endDate],
+  );
   const optimizationActive = optimizationJob?.status === "queued" || optimizationJob?.status === "running";
+  const activeOptimizationCandidateRank = useMemo(() => {
+    if (!optimization) return null;
+    const match = optimization.candidates.find((candidate) => strategyConfigKey(candidate.config) === configKey);
+    return match?.rank ?? null;
+  }, [configKey, optimization]);
+  const optimizationRecommendedActive = Boolean(
+    optimization && strategyConfigKey(optimization.recommendedConfig) === configKey,
+  );
+  const optimizationBaselineActive = Boolean(optimization && optimizationContext?.configKey === configKey);
+  const optimizationOutOfSync = Boolean(
+    optimization && !optimizationBaselineActive && activeOptimizationCandidateRank === null,
+  );
   const metadataReady = assets.length > 0 && strategies.length > 0;
 
   // ─── Effects ─────────────────────────────────────────────────────────────
 
-  // Reset optimization when key inputs change
+  // Reset optimization only when the run scope changes. Parameter tweaks
+  // should not cancel a long-running optimization; the result panel can
+  // instead show that it was launched from a previous parameter set.
   useEffect(() => {
     setOptimization(null);
+    setOptimizationContext(null);
     if (optimizationActive && optimizationJob) {
       fetch(`${API_BASE}/api/optimizations/jobs/${optimizationJob.jobId}`, { method: "DELETE" }).catch(() => undefined);
       setOptimizationLoading(false);
     }
     setOptimizationJob(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, strategyType, startDate, endDate, config]);
+  }, [optimizationScopeKey]);
 
   // Load assets and strategies. Kept retryable because users commonly
   // start the Vite frontend before uvicorn is ready; in that case the
@@ -369,6 +404,7 @@ export function useBacktest() {
     setError(null);
     setOptimization(null);
     setOptimizationJob(null);
+    setOptimizationContext({ configKey });
     fetch(`${API_BASE}/api/optimizations/jobs`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -379,6 +415,7 @@ export function useBacktest() {
       .catch((err) => {
         setError(toUiError(err));
         setOptimizationLoading(false);
+        setOptimizationContext(null);
       });
   };
 
@@ -480,6 +517,9 @@ export function useBacktest() {
     activePeriodId,
     config,
     optimizationActive,
+    optimizationOutOfSync,
+    optimizationRecommendedActive,
+    activeOptimizationCandidateRank,
     metadataReady,
     activeAsset,
     decision,

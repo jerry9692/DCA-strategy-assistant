@@ -303,7 +303,15 @@ export function App() {
           )}
 
           {/* Optimization result */}
-          {state.optimization && <OptimizationPanel optimization={state.optimization} applyOptimizedConfig={state.applyOptimizedConfig} />}
+          {state.optimization && (
+            <OptimizationPanel
+              optimization={state.optimization}
+              applyOptimizedConfig={state.applyOptimizedConfig}
+              optimizationOutOfSync={state.optimizationOutOfSync}
+              optimizationRecommendedActive={state.optimizationRecommendedActive}
+              activeOptimizationCandidateRank={state.activeOptimizationCandidateRank}
+            />
+          )}
 
           {/* Charts */}
           <div className="chart-block">
@@ -413,9 +421,15 @@ export function App() {
 function OptimizationPanel({
   optimization,
   applyOptimizedConfig,
+  optimizationOutOfSync,
+  optimizationRecommendedActive,
+  activeOptimizationCandidateRank,
 }: {
   optimization: NonNullable<ReturnType<typeof useBacktest>["optimization"]>;
   applyOptimizedConfig: (config: StrategyConfigPayload | SchemaStrategyConfig) => void;
+  optimizationOutOfSync: boolean;
+  optimizationRecommendedActive: boolean;
+  activeOptimizationCandidateRank: number | null;
 }) {
   return (
     <div className="optimization-panel">
@@ -424,8 +438,22 @@ function OptimizationPanel({
           <div className="section-title"><Sparkles size={17} />稳健参数建议</div>
           <p className="muted">这是基于历史多场景验证的稳健建议，不代表未来保证最优。默认只搜索最低 0.6-0.8x、最高 1.2-1.5x，保持定投纪律。</p>
         </div>
-        <button type="button" className="secondary-action" onClick={() => applyOptimizedConfig(optimization.recommendedConfig)}>应用推荐参数</button>
+        <button
+          type="button"
+          className="secondary-action"
+          onClick={() => applyOptimizedConfig(optimization.recommendedConfig)}
+          disabled={optimizationRecommendedActive}
+        >
+          {optimizationRecommendedActive ? "已应用推荐参数" : "应用推荐参数"}
+        </button>
       </div>
+      {optimizationRecommendedActive && <p className="optimization-status applied">推荐参数已应用，调优结果会保留在这里供你继续对照各场景表现。</p>}
+      {!optimizationRecommendedActive && activeOptimizationCandidateRank !== null && (
+        <p className="optimization-status applied">已应用第 {activeOptimizationCandidateRank} 名候选参数，调优结果会保留在这里供你继续对照。</p>
+      )}
+      {optimizationOutOfSync && (
+        <p className="optimization-status stale">当前参数已不同于启动本次调优时的参数。结果仍可参考；如果要按当前参数重新验证，请再次点击自动调优。</p>
+      )}
       <div className="optimization-summary">
         <Metric label="推荐稳健分" value={metric(optimization.candidates[0]?.score)} hint="跨多个市场阶段的综合得分。同时考虑年化、夏普、回撤，并对'某个场景表现特别差'做惩罚，避免推荐脆弱参数。" />
         <Metric label="平均年化提升" value={metric(optimization.recommendedSummary.annualizedReturnPct - optimization.baselineSummary.annualizedReturnPct, "%")} hint="推荐参数 vs 当前参数，所有验证场景的平均年化差。正值表示推荐参数总体更好。" />
@@ -461,7 +489,14 @@ function OptimizationPanel({
             <b>{metric(c.summary.annualizedReturnPct, "%")}</b>
             <b>{metric(c.summary.maxDrawdownPct, "%")}</b>
             <small>{describeConfig(c.config)}</small>
-            <button type="button" className="reason-toggle" onClick={() => applyOptimizedConfig(c.config)}>应用</button>
+            <button
+              type="button"
+              className="reason-toggle"
+              onClick={() => applyOptimizedConfig(c.config)}
+              disabled={activeOptimizationCandidateRank === c.rank}
+            >
+              {activeOptimizationCandidateRank === c.rank ? "已应用" : "应用"}
+            </button>
           </div>
         ))}
       </div>

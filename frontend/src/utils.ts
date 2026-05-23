@@ -283,6 +283,20 @@ export function currencySymbol(currency: string | null | undefined): string {
   return `${currency} `;
 }
 
+export function strategyConfigKey(
+  config: StrategyConfigPayload | { strategyType?: string; baseAmount?: number; frequency?: string; minMultiplier: number; maxMultiplier: number; params?: Record<string, unknown> | null },
+): string {
+  const params = Object.fromEntries(Object.entries(config.params ?? {}).sort(([a], [b]) => a.localeCompare(b)));
+  return JSON.stringify({
+    strategyType: config.strategyType,
+    baseAmount: config.baseAmount,
+    frequency: config.frequency,
+    minMultiplier: config.minMultiplier,
+    maxMultiplier: config.maxMultiplier,
+    params,
+  });
+}
+
 // Accepts both the narrowed UI payload and the raw OpenAPI shape so
 // optimization candidates (which come straight off the wire) can be
 // rendered without extra type juggling.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pairSeries, accountDrawdown, metric, currencySymbol, csvEscape, readUrlSettings, buildShareableSearch } from "./utils";
+import { pairSeries, accountDrawdown, metric, currencySymbol, strategyConfigKey, csvEscape, readUrlSettings, buildShareableSearch } from "./utils";
 
 describe("pairSeries", () => {
   it("returns empty array for undefined events", () => {
@@ -58,6 +58,29 @@ describe("currencySymbol", () => {
 
   it("falls back to an ISO-code prefix for unknown currencies", () => {
     expect(currencySymbol("HKD")).toBe("HKD ");
+  });
+});
+
+describe("strategyConfigKey", () => {
+  it("is stable when params are ordered differently", () => {
+    const first = strategyConfigKey({
+      strategyType: "composite_score",
+      baseAmount: 100,
+      frequency: "weekly",
+      minMultiplier: 0.8,
+      maxMultiplier: 1.2,
+      params: { rsiWeight: 1.2, drawdownWeight: 2 },
+    });
+    const second = strategyConfigKey({
+      strategyType: "composite_score",
+      baseAmount: 100,
+      frequency: "weekly",
+      minMultiplier: 0.8,
+      maxMultiplier: 1.2,
+      params: { drawdownWeight: 2, rsiWeight: 1.2 },
+    });
+
+    expect(first).toBe(second);
   });
 });
 
