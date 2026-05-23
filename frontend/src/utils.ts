@@ -336,6 +336,10 @@ type ExportSeries = {
   events: Contribution[];
 };
 
+export function withUtf8Bom(content: string): string {
+  return content.startsWith("\uFEFF") ? content : `\uFEFF${content}`;
+}
+
 export function downloadText(filename: string, content: string, type = "text/csv;charset=utf-8") {
   const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
@@ -388,11 +392,11 @@ export function buildBacktestCsv(result: Backtest): string {
   const rows = Array.from(byDate.values())
     .sort((a, b) => String(a.date).localeCompare(String(b.date)))
     .map((row) => header.map((column) => row[column] ?? ""));
-  return [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
+  return [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\r\n");
 }
 
 export function exportBacktestCsv(result: Backtest | null) {
   if (!result) return;
   const csv = buildBacktestCsv(result);
-  downloadText(`dca-backtest-${result.symbol}-${result.strategyType}-${result.recommendation.date}.csv`, csv);
+  downloadText(`dca-backtest-${result.symbol}-${result.strategyType}-${result.recommendation.date}.csv`, withUtf8Bom(csv));
 }

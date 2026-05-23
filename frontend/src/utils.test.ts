@@ -7,6 +7,7 @@ import {
   strategyConfigKey,
   csvEscape,
   buildBacktestCsv,
+  withUtf8Bom,
   readUrlSettings,
   buildShareableSearch,
 } from "./utils";
@@ -150,7 +151,7 @@ describe("buildBacktestCsv", () => {
           contributions: [contribution({ date: "2024-01-08", amount: 90, portfolioValue: 190 })],
         },
       ],
-    } as Backtest;
+    } as unknown as Backtest;
 
     const csv = buildBacktestCsv(result);
     const lines = csv.split("\n");
@@ -163,6 +164,30 @@ describe("buildBacktestCsv", () => {
     expect(lines[2]).toContain('"2024-01-08"');
     expect(lines[2]).toContain('"120"');
     expect(lines[2]).toContain('"-2"');
+  });
+
+  it("uses Windows-friendly CRLF line endings", () => {
+    const result = {
+      symbol: "QQQ",
+      strategyType: "composite_score",
+      recommendation: { date: "2024-01-01" },
+      contributions: [contribution({ date: "2024-01-01" })],
+      fixedContributions: [],
+      lumpSumContributions: [],
+      strategyComparisons: [],
+    } as unknown as Backtest;
+
+    expect(buildBacktestCsv(result)).toContain("\r\n");
+  });
+});
+
+describe("withUtf8Bom", () => {
+  it("prepends a UTF-8 BOM for Excel", () => {
+    expect(withUtf8Bom('"date","本策略_投入金额"')).toBe('\uFEFF"date","本策略_投入金额"');
+  });
+
+  it("does not duplicate an existing BOM", () => {
+    expect(withUtf8Bom('\uFEFF"date"')).toBe('\uFEFF"date"');
   });
 });
 
