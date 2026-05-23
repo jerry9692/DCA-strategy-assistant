@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 from yfinance.exceptions import YFRateLimitError
 
-from app.data import PriceDataError, _close_series, get_price_history
+from app.data import PriceDataError, _close_series, _download, get_price_history
 
 
 def test_close_series_handles_yfinance_multi_index_columns():
@@ -91,3 +91,27 @@ def test_new_us_etf_available_ranges_are_declared():
     assert get_available_range("VTI")[0] == date(2001, 5, 31)
     assert get_available_range("TQQQ")[0] == date(2010, 2, 11)
     assert get_available_range("IBIT")[0] == date(2024, 1, 11)
+
+
+def test_new_cn_etf_available_ranges_are_declared():
+    from app.data import get_available_range
+
+    assert get_available_range("510050")[0] == date(2005, 2, 23)
+    assert get_available_range("510300")[0] == date(2012, 5, 28)
+    assert get_available_range("159915")[0] == date(2011, 12, 9)
+    assert get_available_range("588000")[0] == date(2020, 11, 16)
+
+
+def test_download_uses_provider_symbol_for_cn_etfs(monkeypatch):
+    seen: dict[str, str] = {}
+
+    def fake_download(symbol, **kwargs):
+        seen["symbol"] = symbol
+        return pd.DataFrame({"Close": [1.0, 1.1]}, index=pd.to_datetime(["2024-01-02", "2024-01-03"]))
+
+    monkeypatch.setattr("app.data.yf.download", fake_download)
+
+    frame = _download("159915", date(2024, 1, 1), date(2024, 1, 5))
+
+    assert seen["symbol"] == "159915.SZ"
+    assert frame["close"].tolist() == [1.0, 1.1]

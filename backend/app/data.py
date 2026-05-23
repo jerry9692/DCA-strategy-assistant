@@ -40,8 +40,15 @@ SQLModel.metadata.create_all(engine)
 def validate_symbol(symbol: str) -> str:
     normalized = symbol.upper()
     if normalized not in SUPPORTED_ASSETS:
-        raise PriceDataError("v0.3 only supports the built-in US ETF list.", code="invalid_symbol", retryable=False)
+        raise PriceDataError("v0.3 only supports the built-in ETF list.", code="invalid_symbol", retryable=False)
     return normalized
+
+
+def _provider_symbol(symbol: str) -> str:
+    meta = SUPPORTED_ASSETS.get(symbol)
+    if isinstance(meta, dict):
+        return str(meta.get("providerSymbol") or symbol)
+    return symbol
 
 
 def _load_cached(symbol: str, start: date, end: date) -> pd.DataFrame:
@@ -91,6 +98,11 @@ _YFINANCE_EARLIEST_AVAILABLE = {
     "UPRO": date(2009, 6, 25),
     "SSO": date(2006, 6, 21),
     "IBIT": date(2024, 1, 11),
+    "510050": date(2005, 2, 23),
+    "510300": date(2012, 5, 28),
+    "510500": date(2013, 3, 15),
+    "159915": date(2011, 12, 9),
+    "588000": date(2020, 11, 16),
 }
 
 
@@ -152,8 +164,9 @@ def _download(symbol: str, start: date, end: date) -> pd.DataFrame:
     # the ex-date at that day's close", so backtests built on it already
     # include dividend reinvestment in their return, annualized return and
     # drawdown numbers. The user-facing docs reflect this assumption.
+    provider_symbol = _provider_symbol(symbol)
     data = yf.download(
-        symbol,
+        provider_symbol,
         start=start.isoformat(),
         end=(end + timedelta(days=1)).isoformat(),
         auto_adjust=True,

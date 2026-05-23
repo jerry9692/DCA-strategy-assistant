@@ -7,7 +7,7 @@ import { ChartWrapper } from "./components/ChartWrapper";
 import { Metric } from "./components/Metric";
 import { ParamControl, RangeControl } from "./components/ParamControl";
 import { QUICK_BACKTEST_PERIODS } from "./constants";
-import { clampToRange, describeConfig, exportBacktestCsv, metric } from "./utils";
+import { clampToRange, currencySymbol, describeConfig, exportBacktestCsv, metric } from "./utils";
 import { todayIso } from "./constants";
 import { ErrorBanner } from "./components/ErrorBanner";
 import type { PresetMode, Frequency, StrategyConfigPayload } from "./types";
@@ -17,6 +17,7 @@ type SchemaStrategyConfig = components["schemas"]["StrategyConfig"];
 export function App() {
   const state = useBacktest();
   const charts = useChartOptions(state.result, state.selectedStrategy, state.strategyNameByType);
+  const moneySymbol = currencySymbol(state.activeAsset?.currency);
 
   const visibleReasons = state.showAllReasons ? state.reasons : state.reasons.slice(0, 5);
   const assetGroups = state.assets.reduce<Record<string, typeof state.assets>>((groups, asset) => {
@@ -190,8 +191,8 @@ export function App() {
           <div className="recommendation">
             <div>
               <p className="muted">{state.activeAsset?.symbol} · {state.decision?.date ?? "等待数据"}</p>
-              <h2>${metric(state.decision?.recommendedAmount)}</h2>
-              <p className="muted">基础 ${state.baseAmount} · 倍率 {metric(state.decision?.multiplier, "x")} · 当前价 ${metric(state.decision?.price)}</p>
+              <h2>{moneySymbol}{metric(state.decision?.recommendedAmount)}</h2>
+              <p className="muted">基础 {moneySymbol}{state.baseAmount} · 倍率 {metric(state.decision?.multiplier, "x")} · 当前价 {moneySymbol}{metric(state.decision?.price)}</p>
             </div>
             <div className="recommendation-actions">
               <button type="button" className="secondary-action" onClick={() => exportBacktestCsv(state.result)} disabled={!state.result}>
@@ -208,7 +209,7 @@ export function App() {
             <div className={`market-state ${state.result.marketState.tone}`}>
               <strong>{state.result.marketState.label}</strong>
               <span>{state.result.marketState.summary}</span>
-              <b>SMA50 ${metric(state.result.marketState.sma50)} · SMA200 ${metric(state.result.marketState.sma200)} · 距 SMA200 {metric(state.result.marketState.distanceToSma200Pct, "%")}</b>
+              <b>SMA50 {moneySymbol}{metric(state.result.marketState.sma50)} · SMA200 {moneySymbol}{metric(state.result.marketState.sma200)} · 距 SMA200 {metric(state.result.marketState.distanceToSma200Pct, "%")}</b>
             </div>
           )}
 
@@ -227,8 +228,8 @@ export function App() {
 
           {/* Metrics */}
           <div className="metrics-grid">
-            <Metric label="总投入" value={`$${metric(state.result?.metrics.totalInvested)}`} hint="区间内累计买入金额，不含滑点和费率扣减。" />
-            <Metric label="期末价值" value={`$${metric(state.result?.metrics.endingValue)}`} hint="区间结束日所有持仓按收盘价计算的市值。" />
+            <Metric label="总投入" value={`${moneySymbol}${metric(state.result?.metrics.totalInvested)}`} hint="区间内累计买入金额，不含滑点和费率扣减。" />
+            <Metric label="期末价值" value={`${moneySymbol}${metric(state.result?.metrics.endingValue)}`} hint="区间结束日所有持仓按收盘价计算的市值。" />
             <Metric label="收益率" value={metric(state.result?.metrics.returnPct, "%")} hint="(期末价值 ÷ 总投入 − 1)，不含时间维度，长短不同的回测之间不可直接比较。" />
             <Metric label="资金年化" value={metric(state.result?.metrics.annualizedReturnPct, "%")} hint="按现金流加权（IRR）算的年化收益。考虑了每笔买入的时点，比简单(1+收益率)^(1/年)更准确反映 DCA 真实收益。" />
             <Metric label="持仓最大回撤" value={metric(state.result?.metrics.maxDrawdownPct, "%")} hint="已经买入的资产从历史高点到低点的最大百分比跌幅。注意：不是股价回撤，是组合价值回撤。" />
@@ -240,15 +241,15 @@ export function App() {
 
           <div className="fixed-metrics">
             <span>固定 DCA 基准</span>
-            <b>总投入 ${metric(state.result?.fixedMetrics?.totalInvested)}</b>
-            <b>期末 ${metric(state.result?.fixedMetrics?.endingValue)}</b>
+            <b>总投入 {moneySymbol}{metric(state.result?.fixedMetrics?.totalInvested)}</b>
+            <b>期末 {moneySymbol}{metric(state.result?.fixedMetrics?.endingValue)}</b>
             <b>收益 {metric(state.result?.fixedMetrics?.returnPct, "%")}</b>
             <b>回撤 {metric(state.result?.fixedMetrics?.maxDrawdownPct, "%")}</b>
           </div>
           <div className="fixed-metrics">
             <span>一次性买入基准</span>
-            <b>总投入 ${metric(state.result?.lumpSumMetrics?.totalInvested)}</b>
-            <b>期末 ${metric(state.result?.lumpSumMetrics?.endingValue)}</b>
+            <b>总投入 {moneySymbol}{metric(state.result?.lumpSumMetrics?.totalInvested)}</b>
+            <b>期末 {moneySymbol}{metric(state.result?.lumpSumMetrics?.endingValue)}</b>
             <b>收益 {metric(state.result?.lumpSumMetrics?.returnPct, "%")}</b>
             <b>回撤 {metric(state.result?.lumpSumMetrics?.maxDrawdownPct, "%")}</b>
           </div>
@@ -306,8 +307,8 @@ export function App() {
               {charts.comparisonRows.map((item) => (
                 <div key={item.strategyType} className="comparison-row">
                   <span>{item.name}</span>
-                  <b>${metric(item.metrics.totalInvested)}</b>
-                  <b>${metric(item.metrics.endingValue)}</b>
+                  <b>{moneySymbol}{metric(item.metrics.totalInvested)}</b>
+                  <b>{moneySymbol}{metric(item.metrics.endingValue)}</b>
                   <b>{metric(item.metrics.returnPct, "%")}</b>
                   <b>{metric(item.metrics.maxDrawdownPct, "%")}</b>
                   <b>{metric(item.metrics.sharpeRatio)}</b>

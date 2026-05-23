@@ -637,11 +637,15 @@ def test_assets_endpoint_returns_grouped_us_etf_metadata():
     items = assets()
     by_symbol = {item.symbol: item for item in items}
 
-    assert len(items) == 26
+    assert len(items) == 31
     assert by_symbol["VTI"].categoryLabel == "核心宽基"
     assert by_symbol["TQQQ"].riskLevel == "advanced"
     assert by_symbol["TQQQ"].riskNote is not None
     assert by_symbol["IBIT"].categoryLabel == "高级/高波动"
+    assert by_symbol["510050"].market == "cn"
+    assert by_symbol["510050"].currency == "CNY"
+    assert by_symbol["510050"].providerSymbol == "510050.SS"
+    assert by_symbol["159915"].providerSymbol == "159915.SZ"
 
 
 def test_cached_fixed_backtest_reuses_same_parameter_result(monkeypatch):

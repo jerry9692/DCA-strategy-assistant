@@ -277,6 +277,12 @@ export function metric(value: number | null | undefined, suffix = ""): string {
   return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}${suffix}`;
 }
 
+export function currencySymbol(currency: string | null | undefined): string {
+  if (currency === "CNY") return "¥";
+  if (currency === "USD" || !currency) return "$";
+  return `${currency} `;
+}
+
 // Accepts both the narrowed UI payload and the raw OpenAPI shape so
 // optimization candidates (which come straight off the wire) can be
 // rendered without extra type juggling.

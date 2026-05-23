@@ -49,6 +49,11 @@ export const ASSET_MARKETS: Record<string, MarketCode> = {
   UPRO: "us",
   SSO: "us",
   IBIT: "us",
+  "510050": "cn",
+  "510300": "cn",
+  "510500": "cn",
+  "159915": "cn",
+  "588000": "cn",
 };
 
 export const PRESSURE_SCENARIOS: PressureScenario[] = [

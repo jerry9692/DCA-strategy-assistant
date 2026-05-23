@@ -168,6 +168,51 @@ SUPPORTED_ASSETS = {
         "riskLevel": "advanced",
         "riskNote": "比特币现货 ETF 历史较短、波动极高，回测样本有限。",
     },
+    "510050": {
+        "name": "华夏上证50ETF",
+        "currency": "CNY",
+        "market": "cn",
+        "category": "cn_core",
+        "categoryLabel": "A股核心指数",
+        "riskLevel": "core",
+        "providerSymbol": "510050.SS",
+    },
+    "510300": {
+        "name": "华泰柏瑞沪深300ETF",
+        "currency": "CNY",
+        "market": "cn",
+        "category": "cn_core",
+        "categoryLabel": "A股核心指数",
+        "riskLevel": "core",
+        "providerSymbol": "510300.SS",
+    },
+    "510500": {
+        "name": "南方中证500ETF",
+        "currency": "CNY",
+        "market": "cn",
+        "category": "cn_core",
+        "categoryLabel": "A股核心指数",
+        "riskLevel": "core",
+        "providerSymbol": "510500.SS",
+    },
+    "159915": {
+        "name": "易方达创业板ETF",
+        "currency": "CNY",
+        "market": "cn",
+        "category": "cn_core",
+        "categoryLabel": "A股核心指数",
+        "riskLevel": "core",
+        "providerSymbol": "159915.SZ",
+    },
+    "588000": {
+        "name": "华夏科创50ETF",
+        "currency": "CNY",
+        "market": "cn",
+        "category": "cn_core",
+        "categoryLabel": "A股核心指数",
+        "riskLevel": "core",
+        "providerSymbol": "588000.SS",
+    },
 }
 
 
@@ -187,6 +232,7 @@ class Asset(BaseModel):
     categoryLabel: str = "核心宽基"
     riskLevel: AssetRiskLevel = "core"
     riskNote: str | None = None
+    providerSymbol: str | None = None
 
 
 class AssetRange(BaseModel):

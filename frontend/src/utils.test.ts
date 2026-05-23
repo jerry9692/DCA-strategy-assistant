@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pairSeries, accountDrawdown, metric, csvEscape, readUrlSettings, buildShareableSearch } from "./utils";
+import { pairSeries, accountDrawdown, metric, currencySymbol, csvEscape, readUrlSettings, buildShareableSearch } from "./utils";
 
 describe("pairSeries", () => {
   it("returns empty array for undefined events", () => {
@@ -47,6 +47,17 @@ describe("metric", () => {
 
   it("returns dash for NaN", () => {
     expect(metric(NaN)).toBe("-");
+  });
+});
+
+describe("currencySymbol", () => {
+  it("formats supported asset currencies", () => {
+    expect(currencySymbol("USD")).toBe("$");
+    expect(currencySymbol("CNY")).toBe("¥");
+  });
+
+  it("falls back to an ISO-code prefix for unknown currencies", () => {
+    expect(currencySymbol("HKD")).toBe("HKD ");
   });
 });
 

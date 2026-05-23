@@ -365,6 +365,17 @@
               }
             ],
             "title": "Risknote"
+          },
+          "providerSymbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Providersymbol"
           }
         },
         "type": "object",
