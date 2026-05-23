@@ -20,12 +20,29 @@ export function App() {
   const moneySymbol = currencySymbol(state.activeAsset?.currency);
 
   const visibleReasons = state.showAllReasons ? state.reasons : state.reasons.slice(0, 5);
-  const assetGroups = state.assets.reduce<Record<string, typeof state.assets>>((groups, asset) => {
+  const marketLabelByCode: Record<string, string> = {
+    us: "美股 ETF",
+    cn: "A股 ETF",
+  };
+  const assetMarkets = Array.from(new Set(state.assets.map((asset) => asset.market ?? "us")));
+  const activeMarket = state.activeAsset?.market ?? assetMarkets[0] ?? "us";
+  const activeMarketAssets = state.assets.filter((asset) => (asset.market ?? "us") === activeMarket);
+  const assetGroups = activeMarketAssets.reduce<Record<string, typeof state.assets>>((groups, asset) => {
     const label = asset.categoryLabel ?? "其他";
     groups[label] = groups[label] ?? [];
     groups[label].push(asset);
     return groups;
   }, {});
+  const switchAssetMarket = (market: string) => {
+    const next = state.assets.find((asset) => (asset.market ?? "us") === market);
+    if (!next || next.symbol === state.symbol) return;
+    state.setSymbol(next.symbol);
+    state.setActiveScenarioId(null);
+  };
+  const switchAsset = (symbol: string) => {
+    state.setSymbol(symbol);
+    state.setActiveScenarioId(null);
+  };
 
   return (
     <main className="app-shell" data-theme={state.darkMode ? "dark" : "light"}>
@@ -63,9 +80,21 @@ export function App() {
             <option value="custom">自定义</option>
           </select>
         </label>
-        <label>
-          标的
-          <select value={state.symbol} onChange={(e) => state.setSymbol(e.target.value)}>
+        <div className="asset-picker">
+          <span>标的</span>
+          <div className="asset-market-tabs">
+            {assetMarkets.map((market) => (
+              <button
+                type="button"
+                key={market}
+                className={market === activeMarket ? "active" : ""}
+                onClick={() => switchAssetMarket(market)}
+              >
+                {marketLabelByCode[market] ?? market}
+              </button>
+            ))}
+          </div>
+          <select value={state.symbol} onChange={(e) => switchAsset(e.target.value)}>
             {Object.entries(assetGroups).map(([label, assets]) => (
               <optgroup key={label} label={label}>
                 {assets.map((a) => (
@@ -74,7 +103,7 @@ export function App() {
               </optgroup>
             ))}
           </select>
-        </label>
+        </div>
         <label>
           基础金额
           <input type="number" min={1} step={10} value={state.baseAmount} onChange={(e) => { state.setBaseAmount(Number(e.target.value)); state.markCustom(); }} />

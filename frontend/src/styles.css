@@ -112,6 +112,41 @@ h2 {
   flex-wrap: wrap;
 }
 
+.asset-picker {
+  display: grid;
+  gap: 6px;
+  min-width: 280px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.asset-picker select {
+  width: 100%;
+}
+
+.asset-market-tabs {
+  display: flex;
+  gap: 6px;
+  height: 34px;
+}
+
+.asset-market-tabs button {
+  height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+  color: #475569;
+  padding: 0 12px;
+  cursor: pointer;
+  font-weight: 740;
+}
+
+.asset-market-tabs button.active {
+  border-color: #0f766e;
+  background: #f0fdfa;
+  color: #0f766e;
+}
+
 .period-control {
   display: grid;
   gap: 6px;
@@ -920,6 +955,18 @@ input[type="range"] {
   color: #5eead4;
 }
 
+.app-shell[data-theme="dark"] .asset-market-tabs button {
+  background: #0f172a;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+.app-shell[data-theme="dark"] .asset-market-tabs button.active {
+  border-color: #14b8a6;
+  background: #052e2b;
+  color: #5eead4;
+}
+
 .app-shell[data-theme="dark"] .eyebrow,
 .app-shell[data-theme="dark"] .muted,
 .app-shell[data-theme="dark"] .strategy span,
@@ -1048,8 +1095,13 @@ input[type="range"] {
     width: 100%;
   }
 
+  .asset-picker {
+    width: 100%;
+  }
+
   .control-strip input,
-  .control-strip select {
+  .control-strip select,
+  .asset-picker select {
     width: 100%;
   }
 
