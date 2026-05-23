@@ -1,6 +1,45 @@
 import type { Backtest, Contribution, Frequency, ParamValue, PresetMode, StrategyConfigPayload, StrategyDef } from "./types";
 import { FREQUENCY_OPTIONS, PARAMETER_PRESETS, SETTINGS_KEY, todayIso } from "./constants";
 
+export type ShareableSettings = {
+  symbol?: string;
+  strategyType?: string;
+  baseAmount?: number;
+  frequency?: Frequency;
+  minMultiplier?: number;
+  maxMultiplier?: number;
+  startDate?: string;
+  endDate?: string;
+  params?: Record<string, ParamValue>;
+  presetMode?: PresetMode;
+  activeScenarioId?: string | null;
+  comparisonStrategyTypes?: string[];
+  riskFreeRate?: number;
+  feeRate?: number;
+  slippageRate?: number;
+};
+
+export type ShareableSearchSettings = Required<Pick<
+  ShareableSettings,
+  | "symbol"
+  | "strategyType"
+  | "baseAmount"
+  | "frequency"
+  | "minMultiplier"
+  | "maxMultiplier"
+  | "startDate"
+  | "endDate"
+  | "params"
+  | "presetMode"
+  | "comparisonStrategyTypes"
+  | "riskFreeRate"
+  | "feeRate"
+  | "slippageRate"
+>> & {
+  activeScenarioId?: string | null;
+  strategy?: StrategyDef;
+};
+
 // ─── Date helpers ────────────────────────────────────────────────────────────
 
 export function isoDate(date: Date): string {
@@ -99,6 +138,130 @@ export function readSavedSettings() {
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
+  }
+}
+
+// ─── URL state ──────────────────────────────────────────────────────────────
+
+const URL_KEYS = [
+  "symbol",
+  "strategy",
+  "start",
+  "end",
+  "amount",
+  "frequency",
+  "min",
+  "max",
+  "preset",
+  "scenario",
+  "compare",
+  "riskFree",
+  "fee",
+  "slippage",
+];
+
+function finiteNumber(value: string | null): number | undefined {
+  if (value === null || value.trim() === "") return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function dateText(value: string | null): string | undefined {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  return value;
+}
+
+function parsePreset(value: string | null): PresetMode | undefined {
+  return value === "conservative" || value === "balanced" || value === "aggressive" || value === "custom" ? value : undefined;
+}
+
+function parseParamValue(value: string): ParamValue {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  if (/^-?\d+(\.\d+)?$/.test(value)) return Number(value);
+  return value;
+}
+
+export function readUrlSettings(search = window.location.search): ShareableSettings | null {
+  const query = new URLSearchParams(search);
+  const hasUrlState = URL_KEYS.some((key) => query.has(key)) || Array.from(query.keys()).some((key) => key.startsWith("p."));
+  if (!hasUrlState) return null;
+
+  const params: Record<string, ParamValue> = {};
+  query.forEach((value, key) => {
+    if (key.startsWith("p.") && key.length > 2) {
+      params[key.slice(2)] = parseParamValue(value);
+    }
+  });
+
+  const comparisonStrategyTypes = (query.get("compare") ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const frequency = normalizeFrequency(query.get("frequency"));
+  const riskFreeRate = finiteNumber(query.get("riskFree"));
+  const feeRate = finiteNumber(query.get("fee"));
+  const slippageRate = finiteNumber(query.get("slippage"));
+
+  return {
+    symbol: query.get("symbol") || undefined,
+    strategyType: query.get("strategy") || undefined,
+    baseAmount: finiteNumber(query.get("amount")),
+    frequency,
+    minMultiplier: finiteNumber(query.get("min")),
+    maxMultiplier: finiteNumber(query.get("max")),
+    startDate: dateText(query.get("start")),
+    endDate: dateText(query.get("end")),
+    params: Object.keys(params).length > 0 ? params : undefined,
+    presetMode: parsePreset(query.get("preset")),
+    activeScenarioId: query.get("scenario") || null,
+    comparisonStrategyTypes: comparisonStrategyTypes.length > 0 ? comparisonStrategyTypes : undefined,
+    riskFreeRate,
+    feeRate,
+    slippageRate,
+  };
+}
+
+function isDefaultValue(value: unknown, defaultValue: unknown): boolean {
+  return String(value) === String(defaultValue);
+}
+
+export function buildShareableSearch(settings: ShareableSearchSettings): string {
+  const query = new URLSearchParams();
+  // Dates are kept even when they match defaults because they define
+  // the exact backtest window. Everything else is written only when it
+  // differs from the app defaults, keeping shared links readable.
+  query.set("start", settings.startDate);
+  query.set("end", settings.endDate);
+  if (settings.symbol !== "QQQ") query.set("symbol", settings.symbol);
+  if (settings.strategyType !== "composite_score") query.set("strategy", settings.strategyType);
+  if (settings.baseAmount !== 100) query.set("amount", String(settings.baseAmount));
+  if (settings.frequency !== "weekly") query.set("frequency", settings.frequency);
+  if (settings.minMultiplier !== PARAMETER_PRESETS.balanced.minMultiplier) query.set("min", String(settings.minMultiplier));
+  if (settings.maxMultiplier !== PARAMETER_PRESETS.balanced.maxMultiplier) query.set("max", String(settings.maxMultiplier));
+  if (settings.presetMode !== "balanced") query.set("preset", settings.presetMode);
+  if (settings.riskFreeRate !== 0.04) query.set("riskFree", String(settings.riskFreeRate));
+  if (settings.feeRate !== 0) query.set("fee", String(settings.feeRate));
+  if (settings.slippageRate !== 0) query.set("slippage", String(settings.slippageRate));
+  if (settings.activeScenarioId) query.set("scenario", settings.activeScenarioId);
+  if (settings.comparisonStrategyTypes.length > 0) query.set("compare", settings.comparisonStrategyTypes.join(","));
+  const defaultParams = defaultsFor(settings.strategy);
+  Object.entries(settings.params)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .forEach(([key, value]) => {
+      if (key === "feeRate" || key === "slippageRate") return;
+      if (key in defaultParams && isDefaultValue(value, defaultParams[key])) return;
+      query.set(`p.${key}`, String(value));
+    });
+  return query.toString();
+}
+
+export function syncUrlSettings(settings: ShareableSearchSettings) {
+  const nextSearch = buildShareableSearch(settings);
+  const nextUrl = `${window.location.pathname}?${nextSearch}${window.location.hash}`;
+  const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (nextUrl !== currentUrl) {
+    window.history.replaceState(null, "", nextUrl);
   }
 }
 

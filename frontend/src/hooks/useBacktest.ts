@@ -18,11 +18,13 @@ import type {
 
 type Schemas = components["schemas"];
 import { API_BASE, ASSET_MARKETS, PRESSURE_SCENARIOS, QUICK_BACKTEST_PERIODS, SETTINGS_KEY, defaultStartDate, todayIso } from "../constants";
-import { clampEndDate, clampToRange, normalizeFrequency, presetFor, readSavedSettings, yearsBefore } from "../utils";
+import { clampEndDate, clampToRange, normalizeFrequency, presetFor, readSavedSettings, readUrlSettings, syncUrlSettings, yearsBefore } from "../utils";
 import { readJson, toUiError } from "../api";
 
 export function useBacktest() {
   const savedSettings = useMemo(() => readSavedSettings(), []);
+  const urlSettings = useMemo(() => readUrlSettings(), []);
+  const initialSettings = urlSettings ?? savedSettings ?? {};
 
   // ─── Core state ──────────────────────────────────────────────────────────
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -32,14 +34,14 @@ export function useBacktest() {
   const [assetRange, setAssetRange] = useState<AssetRange | null>(null);
   const [strategies, setStrategies] = useState<StrategyDef[]>([]);
   const [darkMode, setDarkMode] = useState(Boolean(savedSettings?.darkMode));
-  const [symbol, setSymbol] = useState(String(savedSettings?.symbol ?? "QQQ"));
-  const [strategyType, setStrategyType] = useState(String(savedSettings?.strategyType ?? "composite_score"));
-  const [baseAmount, setBaseAmount] = useState(Number(savedSettings?.baseAmount ?? 100));
-  const [frequency, setFrequency] = useState<Frequency>(normalizeFrequency(savedSettings?.frequency));
-  const [minMultiplier, setMinMultiplier] = useState(Number(savedSettings?.minMultiplier ?? 0.8));
-  const [maxMultiplier, setMaxMultiplier] = useState(Number(savedSettings?.maxMultiplier ?? 1.2));
-  const [startDate, setStartDate] = useState(String(savedSettings?.startDate ?? defaultStartDate));
-  const [endDate, setEndDate] = useState(clampEndDate(String(savedSettings?.endDate ?? todayIso)));
+  const [symbol, setSymbol] = useState(String(initialSettings.symbol ?? "QQQ"));
+  const [strategyType, setStrategyType] = useState(String(initialSettings.strategyType ?? "composite_score"));
+  const [baseAmount, setBaseAmount] = useState(Number(initialSettings.baseAmount ?? 100));
+  const [frequency, setFrequency] = useState<Frequency>(normalizeFrequency(initialSettings.frequency));
+  const [minMultiplier, setMinMultiplier] = useState(Number(initialSettings.minMultiplier ?? 0.8));
+  const [maxMultiplier, setMaxMultiplier] = useState(Number(initialSettings.maxMultiplier ?? 1.2));
+  const [startDate, setStartDate] = useState(String(initialSettings.startDate ?? defaultStartDate));
+  const [endDate, setEndDate] = useState(clampEndDate(String(initialSettings.endDate ?? todayIso)));
   const [params, setParams] = useState<Record<string, number | string | boolean>>({});
   const [result, setResult] = useState<Backtest | null>(null);
   const [quickDecision, setQuickDecision] = useState<Decision | null>(null);
@@ -53,19 +55,19 @@ export function useBacktest() {
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [metadataNonce, setMetadataNonce] = useState(0);
   const [showAllReasons, setShowAllReasons] = useState(false);
-  const [presetMode, setPresetMode] = useState<PresetMode>((savedSettings?.presetMode as PresetMode) ?? "balanced");
-  const [activeScenarioId, setActiveScenarioId] = useState<string | null>(String(savedSettings?.activeScenarioId ?? "") || null);
+  const [presetMode, setPresetMode] = useState<PresetMode>((initialSettings.presetMode as PresetMode) ?? "balanced");
+  const [activeScenarioId, setActiveScenarioId] = useState<string | null>(String(initialSettings.activeScenarioId ?? "") || null);
   const [comparisonStrategyTypes, setComparisonStrategyTypes] = useState<string[]>(
-    Array.isArray(savedSettings?.comparisonStrategyTypes) ? savedSettings.comparisonStrategyTypes : ["drawdown_boost", "ma_deviation"],
+    Array.isArray(initialSettings.comparisonStrategyTypes) ? initialSettings.comparisonStrategyTypes : ["drawdown_boost", "ma_deviation"],
   );
-  const [riskFreeRate, setRiskFreeRate] = useState<number>(typeof savedSettings?.riskFreeRate === "number" ? savedSettings.riskFreeRate : 0.04);
+  const [riskFreeRate, setRiskFreeRate] = useState<number>(typeof initialSettings.riskFreeRate === "number" ? initialSettings.riskFreeRate : 0.04);
   // Fee and slippage are user preferences (like riskFreeRate), not part
   // of any strategy's parameter schema, so we keep them as top-level
   // state and merge them into config.params at request time. Otherwise
   // they would be wiped whenever the user switches strategy or preset
   // (which calls setParams(preset.params) and replaces the whole dict).
-  const [feeRate, setFeeRate] = useState<number>(typeof savedSettings?.feeRate === "number" ? savedSettings.feeRate : 0);
-  const [slippageRate, setSlippageRate] = useState<number>(typeof savedSettings?.slippageRate === "number" ? savedSettings.slippageRate : 0);
+  const [feeRate, setFeeRate] = useState<number>(typeof initialSettings.feeRate === "number" ? initialSettings.feeRate : 0);
+  const [slippageRate, setSlippageRate] = useState<number>(typeof initialSettings.slippageRate === "number" ? initialSettings.slippageRate : 0);
 
   // ─── Derived state ───────────────────────────────────────────────────────
   const selectedStrategy = useMemo(() => strategies.find((item) => item.type === strategyType), [strategies, strategyType]);
@@ -125,13 +127,16 @@ export function useBacktest() {
         const active =
           strategyData.strategies.find((item: StrategyDef) => item.type === strategyType) ??
           strategyData.strategies.find((item: StrategyDef) => item.type === "composite_score");
-        if (savedSettings?.params && savedSettings?.strategyType === strategyType) {
-          setParams(savedSettings.params as Record<string, string | number | boolean>);
+        if (initialSettings.params && (!initialSettings.strategyType || initialSettings.strategyType === strategyType)) {
+          setParams(initialSettings.params as Record<string, string | number | boolean>);
         } else {
           const preset = presetFor(active, presetMode);
           setMinMultiplier(preset.minMultiplier);
           setMaxMultiplier(preset.maxMultiplier);
           setParams(preset.params);
+        }
+        if (active && active.type !== strategyType) {
+          setStrategyType(active.type);
         }
       })
       .catch((err) => setError(toUiError(err)));
@@ -199,27 +204,26 @@ export function useBacktest() {
   // Persist settings
   useEffect(() => {
     if (!selectedStrategy || Object.keys(params).length === 0) return;
-    window.localStorage.setItem(
-      SETTINGS_KEY,
-      JSON.stringify({
-        darkMode,
-        symbol,
-        strategyType,
-        baseAmount,
-        frequency,
-        minMultiplier,
-        maxMultiplier,
-        startDate,
-        endDate,
-        params,
-        presetMode,
-        activeScenarioId,
-        comparisonStrategyTypes: comparisonTypes,
-        riskFreeRate,
-        feeRate,
-        slippageRate,
-      }),
-    );
+    const persisted = {
+      darkMode,
+      symbol,
+      strategyType,
+      baseAmount,
+      frequency,
+      minMultiplier,
+      maxMultiplier,
+      startDate,
+      endDate,
+      params,
+      presetMode,
+      activeScenarioId,
+      comparisonStrategyTypes: comparisonTypes,
+      riskFreeRate,
+      feeRate,
+      slippageRate,
+    };
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(persisted));
+    syncUrlSettings({ ...persisted, strategy: selectedStrategy });
   }, [activeScenarioId, baseAmount, comparisonTypes, darkMode, endDate, feeRate, frequency, maxMultiplier, minMultiplier, params, presetMode, riskFreeRate, selectedStrategy, slippageRate, startDate, strategyType, symbol]);
 
   // Auto-run backtest
