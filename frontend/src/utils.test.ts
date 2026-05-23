@@ -1,5 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { pairSeries, accountDrawdown, metric, currencySymbol, strategyConfigKey, csvEscape, readUrlSettings, buildShareableSearch } from "./utils";
+import {
+  pairSeries,
+  accountDrawdown,
+  metric,
+  currencySymbol,
+  strategyConfigKey,
+  csvEscape,
+  buildBacktestCsv,
+  readUrlSettings,
+  buildShareableSearch,
+} from "./utils";
+import type { Backtest, Contribution } from "./types";
 
 describe("pairSeries", () => {
   it("returns empty array for undefined events", () => {
@@ -99,6 +110,59 @@ describe("csvEscape", () => {
 
   it("handles numbers", () => {
     expect(csvEscape(42)).toBe('"42"');
+  });
+});
+
+function contribution(partial: Partial<Contribution> & Pick<Contribution, "date">): Contribution {
+  return {
+    date: partial.date,
+    price: partial.price ?? 100,
+    amount: partial.amount ?? 100,
+    shares: partial.shares ?? 1,
+    totalShares: partial.totalShares ?? 1,
+    totalInvested: partial.totalInvested ?? 100,
+    portfolioValue: partial.portfolioValue ?? 100,
+    multiplier: partial.multiplier ?? 1,
+    score: partial.score ?? 0.5,
+    reasons: partial.reasons ?? [],
+    drawdownPct: partial.drawdownPct ?? 0,
+    accountDrawdownPct: partial.accountDrawdownPct ?? 0,
+  };
+}
+
+describe("buildBacktestCsv", () => {
+  it("exports a wide table keyed by date", () => {
+    const result = {
+      symbol: "QQQ",
+      strategyType: "composite_score",
+      recommendation: { date: "2024-01-08" },
+      contributions: [
+        contribution({ date: "2024-01-01", amount: 80, portfolioValue: 80, accountDrawdownPct: 0 }),
+        contribution({ date: "2024-01-08", amount: 120, portfolioValue: 205, accountDrawdownPct: -2 }),
+      ],
+      fixedContributions: [contribution({ date: "2024-01-01", amount: 100, portfolioValue: 100 })],
+      lumpSumContributions: [contribution({ date: "2024-01-01", amount: 200, portfolioValue: 200 })],
+      strategyComparisons: [
+        {
+          strategyType: "ma_deviation",
+          name: "均线,偏离",
+          metrics: {},
+          contributions: [contribution({ date: "2024-01-08", amount: 90, portfolioValue: 190 })],
+        },
+      ],
+    } as Backtest;
+
+    const csv = buildBacktestCsv(result);
+    const lines = csv.split("\n");
+
+    expect(lines[0]).toContain('"本策略_投入金额"');
+    expect(lines[0]).toContain('"固定DCA_组合价值"');
+    expect(lines[0]).toContain('"均线 偏离_投入金额"');
+    expect(lines[1]).toContain('"2024-01-01"');
+    expect(lines[1]).toContain('"80"');
+    expect(lines[2]).toContain('"2024-01-08"');
+    expect(lines[2]).toContain('"120"');
+    expect(lines[2]).toContain('"-2"');
   });
 });
 

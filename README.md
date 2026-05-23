@@ -44,7 +44,7 @@ Default dynamic bounds are intentionally mild: **0.8x minimum** and **1.2x maxim
 - Run a strategy showdown by comparing up to 3 extra strategies on the same asset and date range.
 - Apply conservative, balanced, or aggressive parameter presets saved in localStorage.
 - Replay preset crisis scenarios such as the 2020 selloff and 2022 rate-hike drawdown.
-- Switch between light and dark themes, and export backtest contribution records to CSV.
+- Switch between light and dark themes, and export date-aligned wide CSV backtest records.
 - Generate robust parameter suggestions by validating candidate settings across multiple market regimes.
 
 ## Tech Stack

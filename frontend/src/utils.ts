@@ -331,6 +331,11 @@ export function pairSeries<T extends { date: string }>(events: T[] | undefined, 
 
 // ─── Export ──────────────────────────────────────────────────────────────────
 
+type ExportSeries = {
+  label: string;
+  events: Contribution[];
+};
+
 export function downloadText(filename: string, content: string, type = "text/csv;charset=utf-8") {
   const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
@@ -343,29 +348,51 @@ export function downloadText(filename: string, content: string, type = "text/csv
   URL.revokeObjectURL(url);
 }
 
+function seriesLabel(raw: string): string {
+  return raw.replace(/[,\r\n"]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function exportSeries(result: Backtest): ExportSeries[] {
+  return [
+    { label: "本策略", events: result.contributions },
+    { label: "固定DCA", events: result.fixedContributions },
+    { label: "一次性买入", events: result.lumpSumContributions },
+    ...result.strategyComparisons.map((item) => ({ label: seriesLabel(item.name), events: item.contributions })),
+  ];
+}
+
+export function buildBacktestCsv(result: Backtest): string {
+  const fields = [
+    ["price", "价格"],
+    ["amount", "投入金额"],
+    ["portfolioValue", "组合价值"],
+    ["multiplier", "投入倍率"],
+    ["score", "评分"],
+    ["drawdownPct", "持仓回撤%"],
+    ["accountDrawdownPct", "账户回撤%"],
+  ] as const;
+  const series = exportSeries(result);
+  const header = ["date", ...series.flatMap((item) => fields.map(([, label]) => `${item.label}_${label}`))];
+  const byDate = new Map<string, Record<string, number | string>>();
+
+  series.forEach((item) => {
+    item.events.forEach((event) => {
+      const row = byDate.get(event.date) ?? { date: event.date };
+      fields.forEach(([key, label]) => {
+        row[`${item.label}_${label}`] = key === "accountDrawdownPct" ? accountDrawdown(event) : event[key];
+      });
+      byDate.set(event.date, row);
+    });
+  });
+
+  const rows = Array.from(byDate.values())
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+    .map((row) => header.map((column) => row[column] ?? ""));
+  return [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
+}
+
 export function exportBacktestCsv(result: Backtest | null) {
   if (!result) return;
-  const rows = [["series", "date", "price", "amount", "portfolioValue", "multiplier", "score", "holdingDrawdownPct", "accountDrawdownPct"]];
-  const append = (series: string, events: Contribution[] | undefined) => {
-    if (!events) return;
-    events.forEach((event) => {
-      rows.push([
-        series,
-        event.date,
-        String(event.price),
-        String(event.amount),
-        String(event.portfolioValue),
-        String(event.multiplier),
-        String(event.score),
-        String(event.drawdownPct),
-        String(accountDrawdown(event)),
-      ]);
-    });
-  };
-  append("strategy", result.contributions);
-  append("fixed_dca", result.fixedContributions);
-  append("lump_sum", result.lumpSumContributions);
-  result.strategyComparisons?.forEach((item) => append(item.strategyType, item.contributions));
-  const csv = rows.map((row) => row.map(csvEscape).join(",")).join("\n");
+  const csv = buildBacktestCsv(result);
   downloadText(`dca-backtest-${result.symbol}-${result.strategyType}-${result.recommendation.date}.csv`, csv);
 }
