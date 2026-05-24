@@ -344,6 +344,14 @@ class PricePoint(BaseModel):
     close: float
 
 
+class RollingPerformancePoint(BaseModel):
+    date: str
+    windowYears: int
+    strategyAnnualizedReturnPct: float | None = None
+    fixedAnnualizedReturnPct: float | None = None
+    lumpSumAnnualizedReturnPct: float | None = None
+
+
 class MarketState(BaseModel):
     label: str
     tone: MarketTone
@@ -374,6 +382,7 @@ class BacktestResult(BaseModel):
     lumpSumContributions: list[ContributionEvent] = Field(default_factory=list)
     strategyComparisons: list[StrategyComparison] = Field(default_factory=list)
     priceSeries: list[PricePoint]
+    rollingPerformance: list[RollingPerformancePoint] = Field(default_factory=list)
     dataSource: str
     cacheStatus: str
 

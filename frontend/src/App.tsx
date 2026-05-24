@@ -279,6 +279,22 @@ export function App() {
             <b>回撤 {metric(state.result?.lumpSumMetrics?.maxDrawdownPct, "%")}</b>
           </div>
 
+          <div className="chart-block">
+            <div className="section-title">
+              <BarChart3 size={17} />
+              {charts.rollingWindowYears ? `滚动 ${charts.rollingWindowYears} 年表现` : "滚动表现"}
+            </div>
+            <p className="chart-note">
+              从每个日期往前看一段完整窗口，计算现金流调整后的年化收益。长区间用 3 年窗口，较短区间用 1 年窗口，
+              用来看策略表现是否集中在少数年份。
+            </p>
+            {state.result?.rollingPerformance.length ? (
+              <ChartWrapper option={charts.rollingOption} height={280} />
+            ) : (
+              <div className="chart-placeholder" style={{ height: 120 }}>回测区间至少约 2 年才会显示滚动表现。</div>
+            )}
+          </div>
+
           {/* Optimization progress */}
           {state.optimizationActive && state.optimizationJob && (
             <div className="optimization-progress">

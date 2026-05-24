@@ -745,6 +745,13 @@ select {
   margin-top: 12px;
 }
 
+.chart-note {
+  margin: -4px 0 8px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .chart-placeholder {
   display: grid;
   place-items: center;
@@ -964,6 +971,7 @@ input[type="range"] {
 
 .app-shell[data-theme="dark"] .eyebrow,
 .app-shell[data-theme="dark"] .muted,
+.app-shell[data-theme="dark"] .chart-note,
 .app-shell[data-theme="dark"] .strategy span,
 .app-shell[data-theme="dark"] .showdown-picker > span,
 .app-shell[data-theme="dark"] .pressure-strip span,

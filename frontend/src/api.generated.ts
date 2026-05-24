@@ -187,6 +187,8 @@ export interface components {
             riskLevel: "core" | "advanced";
             /** Risknote */
             riskNote?: string | null;
+            /** Providersymbol */
+            providerSymbol?: string | null;
         };
         /** AssetRange */
         AssetRange: {
@@ -270,6 +272,8 @@ export interface components {
             strategyComparisons?: components["schemas"]["StrategyComparison"][];
             /** Priceseries */
             priceSeries: components["schemas"]["PricePoint"][];
+            /** Rollingperformance */
+            rollingPerformance?: components["schemas"]["RollingPerformancePoint"][];
             /** Datasource */
             dataSource: string;
             /** Cachestatus */
@@ -496,6 +500,19 @@ export interface components {
             dataSource: string;
             /** Cachestatus */
             cacheStatus: string;
+        };
+        /** RollingPerformancePoint */
+        RollingPerformancePoint: {
+            /** Date */
+            date: string;
+            /** Windowyears */
+            windowYears: number;
+            /** Strategyannualizedreturnpct */
+            strategyAnnualizedReturnPct?: number | null;
+            /** Fixedannualizedreturnpct */
+            fixedAnnualizedReturnPct?: number | null;
+            /** Lumpsumannualizedreturnpct */
+            lumpSumAnnualizedReturnPct?: number | null;
         };
         /** StrategyComparison */
         StrategyComparison: {

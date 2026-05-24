@@ -34,6 +34,7 @@ export type StrategyDef = Schemas["StrategyDefinition"];
 export type Decision = Schemas["StrategyDecision"];
 export type Metrics = Schemas["BacktestMetrics"];
 export type MarketState = Schemas["MarketState"];
+export type RollingPerformancePoint = Schemas["RollingPerformancePoint"];
 export type RecommendationResponse = Schemas["RecommendationResponse"];
 export type OptimizationScenarioMetric = Schemas["OptimizationScenarioMetrics"];
 export type OptimizationCandidate = Schemas["OptimizationCandidate"];
@@ -75,12 +76,13 @@ export type StrategyComparison = Omit<Schemas["StrategyComparison"], "contributi
 
 export type Backtest = Omit<
   Schemas["BacktestResult"],
-  "contributions" | "fixedContributions" | "lumpSumContributions" | "strategyComparisons"
+  "contributions" | "fixedContributions" | "lumpSumContributions" | "strategyComparisons" | "rollingPerformance"
 > & {
   contributions: Contribution[];
   fixedContributions: Contribution[];
   lumpSumContributions: Contribution[];
   strategyComparisons: StrategyComparison[];
+  rollingPerformance: RollingPerformancePoint[];
 };
 
 // ─── Local-only UI types ────────────────────────────────────────────────────

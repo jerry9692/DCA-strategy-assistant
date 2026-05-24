@@ -151,6 +151,44 @@ export function useChartOptions(
     [chartTheme, result],
   );
 
+  const rollingWindowYears = result?.rollingPerformance?.[0]?.windowYears ?? null;
+  const rollingOption = useMemo(
+    () => ({
+      tooltip: {
+        ...chartTheme.tooltip,
+        valueFormatter: (value: number | string | null) => (typeof value === "number" ? `${value.toFixed(2)}%` : "-"),
+      },
+      legend: chartTheme.legend,
+      grid: { left: 64, right: 20, top: 42, bottom: 34 },
+      xAxis: chartTheme.xAxis,
+      yAxis: { ...chartTheme.valueAxis, axisLabel: { ...chartTheme.valueAxis.axisLabel, formatter: "{value}%" } },
+      series: [
+        {
+          name: "本策略",
+          type: "line",
+          showSymbol: false,
+          data: pairSeries(result?.rollingPerformance, (e) => e.strategyAnnualizedReturnPct),
+          lineStyle: { color: "#7c3aed", width: 2 },
+        },
+        {
+          name: "固定DCA",
+          type: "line",
+          showSymbol: false,
+          data: pairSeries(result?.rollingPerformance, (e) => e.fixedAnnualizedReturnPct),
+          lineStyle: { color: "#64748b", width: 2, type: "dashed" },
+        },
+        {
+          name: "一次性买入",
+          type: "line",
+          showSymbol: false,
+          data: pairSeries(result?.rollingPerformance, (e) => e.lumpSumAnnualizedReturnPct),
+          lineStyle: { color: "#dc2626", width: 2, type: "dotted" },
+        },
+      ],
+    }),
+    [chartTheme, result],
+  );
+
   const showdownOption = useMemo(
     () => ({
       tooltip: chartTheme.tooltip,
@@ -195,5 +233,14 @@ export function useChartOptions(
     [result, strategyNameByType],
   );
 
-  return { priceOption, contributionOption, drawdownOption, signalOption, showdownOption, comparisonRows };
+  return {
+    priceOption,
+    contributionOption,
+    drawdownOption,
+    signalOption,
+    rollingOption,
+    rollingWindowYears,
+    showdownOption,
+    comparisonRows,
+  };
 }

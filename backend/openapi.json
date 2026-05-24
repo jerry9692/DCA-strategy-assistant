@@ -632,6 +632,13 @@
             "type": "array",
             "title": "Priceseries"
           },
+          "rollingPerformance": {
+            "items": {
+              "$ref": "#/components/schemas/RollingPerformancePoint"
+            },
+            "type": "array",
+            "title": "Rollingperformance"
+          },
           "dataSource": {
             "type": "string",
             "title": "Datasource"
@@ -1245,6 +1252,57 @@
           "cacheStatus"
         ],
         "title": "RecommendationResponse"
+      },
+      "RollingPerformancePoint": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "windowYears": {
+            "type": "integer",
+            "title": "Windowyears"
+          },
+          "strategyAnnualizedReturnPct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategyannualizedreturnpct"
+          },
+          "fixedAnnualizedReturnPct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixedannualizedreturnpct"
+          },
+          "lumpSumAnnualizedReturnPct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lumpsumannualizedreturnpct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "windowYears"
+        ],
+        "title": "RollingPerformancePoint"
       },
       "StrategyComparison": {
         "properties": {

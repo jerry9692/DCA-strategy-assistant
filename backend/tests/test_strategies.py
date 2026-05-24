@@ -3,8 +3,16 @@ import time
 import pandas as pd
 import pytest
 
-from app.backtester import DcaBacktester, _next_trading_day, _schedule
-from app.main import _cached_fixed_backtest, _chart_contributions, _chart_prices, _market_state, assets
+from app.backtester import DcaBacktester, _next_trading_day, _schedule, rolling_annualized_returns
+from app.main import (
+    _cached_fixed_backtest,
+    _chart_contributions,
+    _chart_prices,
+    _market_state,
+    _rolling_performance,
+    _rolling_window_years,
+    assets,
+)
 from app.models import BacktestMetrics, ContributionEvent, OptimizationRequest, OptimizationResult, StrategyConfig
 from app.optimization_jobs import cancel_optimization_job, create_optimization_job, get_optimization_job
 from app.optimizer import OptimizationCancelled, _robust_score, optimize_parameters
@@ -544,6 +552,60 @@ def test_annualized_return_uses_money_weighted_dca_result():
         pd.Timestamp("2021-12-31").date(),
     )
     assert metrics.annualizedReturnPct > metrics.returnPct / 2
+
+
+def test_rolling_annualized_returns_are_cashflow_adjusted():
+    prices = fixture_prices([100 + i * 0.2 for i in range(900)])
+    config = StrategyConfig(strategyType="fixed_dca", baseAmount=100, frequency="weekly")
+    events, _ = DcaBacktester(prices).run(
+        "fixed_dca",
+        config,
+        pd.Timestamp("2020-01-01").date(),
+        pd.Timestamp("2023-05-31").date(),
+    )
+
+    points = rolling_annualized_returns(events, window_years=1)
+
+    assert points
+    assert points[-1][0] == events[-1].date
+    assert points[-1][1] > 0
+
+
+def test_rolling_performance_selects_window_by_backtest_length():
+    assert _rolling_window_years(pd.Timestamp("2020-01-01").date(), pd.Timestamp("2026-01-01").date()) == 3
+    assert _rolling_window_years(pd.Timestamp("2022-01-01").date(), pd.Timestamp("2024-06-01").date()) == 1
+    assert _rolling_window_years(pd.Timestamp("2024-01-01").date(), pd.Timestamp("2024-12-31").date()) is None
+
+
+def test_rolling_performance_aligns_strategy_fixed_and_lump_sum():
+    prices = fixture_prices([100 + i * 0.15 for i in range(900)])
+    config = StrategyConfig(strategyType="fixed_dca", baseAmount=100, frequency="weekly")
+    events, _ = DcaBacktester(prices).run(
+        "fixed_dca",
+        config,
+        pd.Timestamp("2020-01-01").date(),
+        pd.Timestamp("2023-05-31").date(),
+    )
+    lump_events, _ = DcaBacktester(prices).run_lump_sum(
+        1000,
+        pd.Timestamp("2020-01-01").date(),
+        pd.Timestamp("2023-05-31").date(),
+        "weekly",
+    )
+
+    points = _rolling_performance(
+        events,
+        events,
+        lump_events,
+        pd.Timestamp("2020-01-01").date(),
+        pd.Timestamp("2023-05-31").date(),
+    )
+
+    assert points
+    assert points[0].windowYears == 1
+    assert points[-1].strategyAnnualizedReturnPct is not None
+    assert points[-1].fixedAnnualizedReturnPct is not None
+    assert points[-1].lumpSumAnnualizedReturnPct is not None
 
 
 def test_lump_sum_invests_total_budget_once_and_tracks_value():

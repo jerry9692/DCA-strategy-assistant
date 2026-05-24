@@ -106,11 +106,10 @@ def _risk_adjusted_ratios(
 
     returns: list[float] = []
     for previous, current in zip(events, events[1:]):
-        if previous.portfolioValue <= 0:
+        period_return = _cashflow_adjusted_period_return(previous, current)
+        if period_return is None:
             continue
-        current_purchase_value = current.shares * current.price
-        portfolio_value_before_current_purchase = current.portfolioValue - current_purchase_value
-        returns.append(portfolio_value_before_current_purchase / previous.portfolioValue - 1)
+        returns.append(period_return)
     if len(returns) < 2:
         return None, None
 
@@ -134,6 +133,14 @@ def _risk_adjusted_ratios(
     )
 
 
+def _cashflow_adjusted_period_return(previous: ContributionEvent, current: ContributionEvent) -> float | None:
+    if previous.portfolioValue <= 0:
+        return None
+    current_purchase_value = current.shares * current.price
+    portfolio_value_before_current_purchase = current.portfolioValue - current_purchase_value
+    return portfolio_value_before_current_purchase / previous.portfolioValue - 1
+
+
 def _with_cashflow_adjusted_drawdowns(events: list[ContributionEvent]) -> list[ContributionEvent]:
     if not events:
         return []
@@ -142,17 +149,47 @@ def _with_cashflow_adjusted_drawdowns(events: list[ContributionEvent]) -> list[C
     peak = 1.0
     drawdowns = [0.0]
     for previous, current in zip(events, events[1:]):
-        if previous.portfolioValue <= 0:
-            period_return = 0.0
-        else:
-            current_purchase_value = current.shares * current.price
-            portfolio_value_before_current_purchase = current.portfolioValue - current_purchase_value
-            period_return = portfolio_value_before_current_purchase / previous.portfolioValue - 1
+        period_return = _cashflow_adjusted_period_return(previous, current) or 0.0
         curve *= 1 + period_return
         peak = max(peak, curve)
         drawdowns.append((curve / peak - 1) * 100 if peak > 0 else 0.0)
 
     return [event.model_copy(update={"drawdownPct": round(drawdown, 2)}) for event, drawdown in zip(events, drawdowns)]
+
+
+def rolling_annualized_returns(events: list[ContributionEvent], window_years: int) -> list[tuple[str, float]]:
+    if len(events) < 3 or window_years <= 0:
+        return []
+
+    ordered = sorted(events, key=lambda event: event.date)
+    window_days = int(round(365.25 * window_years))
+    minimum_periods = max(4, window_years * 8)
+    first_date = pd.Timestamp(ordered[0].date)
+    points: list[tuple[str, float]] = []
+
+    for end_index, end_event in enumerate(ordered):
+        end_date = pd.Timestamp(end_event.date)
+        if (end_date - first_date).days < window_days:
+            continue
+        window_start = end_date - pd.Timedelta(days=window_days)
+        curve = 1.0
+        periods = 0
+        for previous, current in zip(ordered[:end_index], ordered[1 : end_index + 1]):
+            current_date = pd.Timestamp(current.date)
+            if current_date <= window_start:
+                continue
+            period_return = _cashflow_adjusted_period_return(previous, current)
+            if period_return is None:
+                continue
+            curve *= 1 + period_return
+            periods += 1
+
+        if periods < minimum_periods:
+            continue
+        annualized = -100.0 if curve <= 0 else (curve ** (365.25 / window_days) - 1) * 100
+        points.append((end_event.date, round(annualized, 2)))
+
+    return points
 
 
 def _money_weighted_annualized_return(events: list[ContributionEvent]) -> float | None:
