@@ -157,47 +157,12 @@ def _with_cashflow_adjusted_drawdowns(events: list[ContributionEvent]) -> list[C
     return [event.model_copy(update={"drawdownPct": round(drawdown, 2)}) for event, drawdown in zip(events, drawdowns)]
 
 
-def rolling_annualized_returns(events: list[ContributionEvent], window_years: int) -> list[tuple[str, float]]:
-    if len(events) < 3 or window_years <= 0:
-        return []
-
-    ordered = sorted(events, key=lambda event: event.date)
-    window_days = int(round(365.25 * window_years))
-    minimum_periods = max(4, window_years * 8)
-    first_date = pd.Timestamp(ordered[0].date)
-    points: list[tuple[str, float]] = []
-
-    for end_index, end_event in enumerate(ordered):
-        end_date = pd.Timestamp(end_event.date)
-        if (end_date - first_date).days < window_days:
-            continue
-        window_start = end_date - pd.Timedelta(days=window_days)
-        curve = 1.0
-        periods = 0
-        for previous, current in zip(ordered[:end_index], ordered[1 : end_index + 1]):
-            current_date = pd.Timestamp(current.date)
-            if current_date <= window_start:
-                continue
-            period_return = _cashflow_adjusted_period_return(previous, current)
-            if period_return is None:
-                continue
-            curve *= 1 + period_return
-            periods += 1
-
-        if periods < minimum_periods:
-            continue
-        annualized = -100.0 if curve <= 0 else (curve ** (365.25 / window_days) - 1) * 100
-        points.append((end_event.date, round(annualized, 2)))
-
-    return points
-
-
-def _money_weighted_annualized_return(events: list[ContributionEvent]) -> float | None:
-    if len(events) < 2:
+def _annualized_return_from_cashflows(cashflows: list[tuple[date, float]]) -> float | None:
+    if len(cashflows) < 2:
+        return None
+    if not any(amount < 0 for _, amount in cashflows) or not any(amount > 0 for _, amount in cashflows):
         return None
 
-    cashflows = [(pd.Timestamp(event.date).date(), -event.amount) for event in events]
-    cashflows.append((pd.Timestamp(events[-1].date).date(), events[-1].portfolioValue))
     base_date = cashflows[0][0]
 
     def npv(rate: float) -> float:
@@ -227,6 +192,82 @@ def _money_weighted_annualized_return(events: list[ContributionEvent]) -> float 
             low = mid
             low_value = mid_value
     return ((low + high) / 2) * 100
+
+
+def rolling_annualized_returns(events: list[ContributionEvent], window_years: int) -> list[tuple[str, float]]:
+    if len(events) < 3 or window_years <= 0:
+        return []
+
+    ordered = sorted(events, key=lambda event: event.date)
+    window_days = int(round(365.25 * window_years))
+    minimum_periods = max(4, window_years * 8)
+    first_date = pd.Timestamp(ordered[0].date)
+    points: list[tuple[str, float]] = []
+
+    for end_index, end_event in enumerate(ordered):
+        end_date = pd.Timestamp(end_event.date)
+        if (end_date - first_date).days < window_days:
+            continue
+        window_start = end_date - pd.Timedelta(days=window_days)
+        window_events = [event for event in ordered[: end_index + 1] if pd.Timestamp(event.date) > window_start]
+        buy_events = [event for event in window_events if event.amount > 0]
+
+        if len(buy_events) < minimum_periods:
+            continue
+        window_shares = sum(event.shares for event in buy_events)
+        cashflows = [(pd.Timestamp(event.date).date(), -event.amount) for event in buy_events]
+        cashflows.append((pd.Timestamp(end_event.date).date(), window_shares * end_event.price))
+        annualized = _annualized_return_from_cashflows(cashflows)
+        if annualized is not None:
+            points.append((end_event.date, round(annualized, 2)))
+
+    return points
+
+
+def rolling_lump_sum_annualized_returns(fixed_events: list[ContributionEvent], window_years: int) -> list[tuple[str, float]]:
+    if len(fixed_events) < 3 or window_years <= 0:
+        return []
+
+    ordered = sorted(fixed_events, key=lambda event: event.date)
+    window_days = int(round(365.25 * window_years))
+    minimum_periods = max(4, window_years * 8)
+    first_date = pd.Timestamp(ordered[0].date)
+    points: list[tuple[str, float]] = []
+
+    for end_index, end_event in enumerate(ordered):
+        end_date = pd.Timestamp(end_event.date)
+        if (end_date - first_date).days < window_days:
+            continue
+        window_start = end_date - pd.Timedelta(days=window_days)
+        buy_events = [
+            event for event in ordered[: end_index + 1] if pd.Timestamp(event.date) > window_start and event.amount > 0
+        ]
+        if len(buy_events) < minimum_periods:
+            continue
+
+        total_budget = sum(event.amount for event in buy_events)
+        first_buy = buy_events[0]
+        shares_per_amount = first_buy.shares / first_buy.amount if first_buy.amount > 0 else 0
+        ending_value = total_budget * shares_per_amount * end_event.price
+        annualized = _annualized_return_from_cashflows(
+            [
+                (pd.Timestamp(first_buy.date).date(), -total_budget),
+                (pd.Timestamp(end_event.date).date(), ending_value),
+            ]
+        )
+        if annualized is not None:
+            points.append((end_event.date, round(annualized, 2)))
+
+    return points
+
+
+def _money_weighted_annualized_return(events: list[ContributionEvent]) -> float | None:
+    if len(events) < 2:
+        return None
+
+    cashflows = [(pd.Timestamp(event.date).date(), -event.amount) for event in events]
+    cashflows.append((pd.Timestamp(events[-1].date).date(), events[-1].portfolioValue))
+    return _annualized_return_from_cashflows(cashflows)
 
 
 def _metrics(

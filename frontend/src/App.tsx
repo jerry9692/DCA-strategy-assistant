@@ -285,7 +285,7 @@ export function App() {
               {charts.rollingWindowYears ? `滚动 ${charts.rollingWindowYears} 年表现` : "滚动表现"}
             </div>
             <p className="chart-note">
-              从每个日期往前看一段完整窗口，计算现金流调整后的年化收益。长区间用 3 年窗口，较短区间用 1 年窗口，
+              假设从每个滚动窗口起点开始执行对应方案，计算窗口内新增投入的资金年化。长区间用 3 年窗口，较短区间用 1 年窗口，
               用来看策略表现是否集中在少数年份。
             </p>
             {state.result?.rollingPerformance.length ? (

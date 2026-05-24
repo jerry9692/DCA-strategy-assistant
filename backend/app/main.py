@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.backtester import DcaBacktester, rolling_annualized_returns
+from app.backtester import DcaBacktester, rolling_annualized_returns, rolling_lump_sum_annualized_returns
 from app.data import PriceDataError, get_available_range, get_price_history, validate_symbol
 from app.models import (
     SUPPORTED_ASSETS,
@@ -327,7 +327,6 @@ def _rolling_window_years(start: date, end: date) -> int | None:
 def _rolling_performance(
     events: list[ContributionEvent],
     fixed_events: list[ContributionEvent],
-    lump_sum_events: list[ContributionEvent],
     start: date,
     end: date,
 ) -> list[RollingPerformancePoint]:
@@ -337,7 +336,7 @@ def _rolling_performance(
 
     strategy = dict(rolling_annualized_returns(events, window_years))
     fixed = dict(rolling_annualized_returns(fixed_events, window_years))
-    lump_sum = dict(rolling_annualized_returns(lump_sum_events, window_years))
+    lump_sum = dict(rolling_lump_sum_annualized_returns(fixed_events, window_years))
     dates = sorted(set(strategy) | set(fixed) | set(lump_sum))
     return [
         RollingPerformancePoint(
@@ -459,7 +458,7 @@ def backtest(request: BacktestRequest) -> BacktestResult:
                 for item in comparisons
             ],
             priceSeries=_chart_prices(prices, start),
-            rollingPerformance=_rolling_performance(events, fixed_events, lump_sum_events, start, end),
+            rollingPerformance=_rolling_performance(events, fixed_events, start, end),
             dataSource=data_source,
             cacheStatus=cache_status,
         )

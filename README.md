@@ -35,7 +35,7 @@ Default dynamic bounds are intentionally mild: **0.8x minimum** and **1.2x maxim
 - `ContributionEvent` frozen 化，防止 lru_cache 被下游意外修改污染。
 - 文档对齐实际行为：明确历史回测**已经隐含分红再投资**（auto_adjust）。
 - C1 扩展内置标的：26 个美股 ETF + 5 个 A 股基础指数 ETF，并用 `市场` + `标的` 双下拉避免长列表混杂。
-- D1 新增滚动表现图：长区间展示滚动 3 年年化，较短区间展示滚动 1 年年化，用现金流调整后的口径观察策略是否只在少数年份表现好。
+- D1 新增滚动表现图：假设从每个滚动窗口起点开始执行对应方案，展示窗口内新增投入的 3 年 / 1 年资金年化，用来观察策略是否只在少数年份表现好。
 
 ## v0.2 Highlights
 
@@ -116,7 +116,7 @@ Each backtest returns:
 - **Baselines**: fixed-DCA and lump-sum metrics and chart series
 - **Strategy comparisons**: optional peer strategy results for showdown charts and tables
 - **Market state**: 50/200-day moving-average trend label and summary
-- **Rolling performance**: 1-year or 3-year cashflow-adjusted annualized return series for the strategy, fixed DCA, and lump-sum baseline
+- **Rolling performance**: 1-year or 3-year money-weighted annualized return series for the strategy, fixed DCA, and lump-sum baseline
 - **Price series**: daily close prices for charting
 - **Recommendation**: the strategy's current signal
 
