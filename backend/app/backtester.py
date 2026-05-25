@@ -199,7 +199,7 @@ def rolling_annualized_returns(events: list[ContributionEvent], window_years: in
         return []
 
     ordered = sorted(events, key=lambda event: event.date)
-    window_days = int(round(365.25 * window_years))
+    window_days = round(365.25 * window_years)
     minimum_periods = max(4, window_years * 8)
     first_date = pd.Timestamp(ordered[0].date)
     points: list[tuple[str, float]] = []
@@ -224,12 +224,14 @@ def rolling_annualized_returns(events: list[ContributionEvent], window_years: in
     return points
 
 
-def rolling_lump_sum_annualized_returns(fixed_events: list[ContributionEvent], window_years: int) -> list[tuple[str, float]]:
+def rolling_lump_sum_annualized_returns(
+    fixed_events: list[ContributionEvent], window_years: int
+) -> list[tuple[str, float]]:
     if len(fixed_events) < 3 or window_years <= 0:
         return []
 
     ordered = sorted(fixed_events, key=lambda event: event.date)
-    window_days = int(round(365.25 * window_years))
+    window_days = round(365.25 * window_years)
     minimum_periods = max(4, window_years * 8)
     first_date = pd.Timestamp(ordered[0].date)
     points: list[tuple[str, float]] = []
