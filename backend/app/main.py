@@ -61,6 +61,10 @@ def _raise_api_error(exc: Exception) -> None:
 def assets() -> list[Asset]:
     result: list[Asset] = []
     for symbol, meta in SUPPORTED_ASSETS.items():
+        # SUPPORTED_ASSETS is always {symbol: dict} at runtime; the str
+        # branch is purely test compatibility for monkeypatched
+        # {symbol: name} fixtures in tests/test_data.py. Don't drop it
+        # without updating those tests.
         if isinstance(meta, str):
             result.append(Asset(symbol=symbol, name=meta))
         else:

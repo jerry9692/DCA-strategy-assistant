@@ -196,6 +196,16 @@ describe("URL state", () => {
     expect(readUrlSettings("?utm_source=test")).toBeNull();
   });
 
+  it("leaves frequency undefined when the URL doesn't carry it", () => {
+    // Regression: an earlier version called normalizeFrequency() on
+    // the missing key, which silently defaulted to "weekly". That
+    // overwrote any frequency the user had stored in localStorage
+    // whenever they opened a shared URL with no frequency param.
+    const settings = readUrlSettings("?symbol=SPY");
+    expect(settings).not.toBeNull();
+    expect(settings!.frequency).toBeUndefined();
+  });
+
   it("parses shareable settings and strategy params", () => {
     const settings = readUrlSettings(
       "?symbol=SPY&strategy=ma_deviation&start=2020-01-01&end=2024-12-31&amount=250&frequency=monthly&min=0.8&max=1.2&p.maWindow=200&p.smooth=true&compare=drawdown_boost,rsi_sentiment&riskFree=0.03&fee=0.001&slippage=0.0005",
