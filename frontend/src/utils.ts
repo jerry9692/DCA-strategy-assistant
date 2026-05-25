@@ -198,7 +198,12 @@ export function readUrlSettings(search = window.location.search): ShareableSetti
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
-  const frequency = normalizeFrequency(query.get("frequency"));
+  // Only treat URL frequency as authoritative when it actually
+  // appears in the query. Otherwise normalizeFrequency would default
+  // to "weekly" and silently overwrite a localStorage value of
+  // "monthly" / "biweekly" — defeating the documented "URL beats
+  // localStorage only for fields the URL actually carries" rule.
+  const frequency = query.has("frequency") ? normalizeFrequency(query.get("frequency")) : undefined;
   const riskFreeRate = finiteNumber(query.get("riskFree"));
   const feeRate = finiteNumber(query.get("fee"));
   const slippageRate = finiteNumber(query.get("slippage"));

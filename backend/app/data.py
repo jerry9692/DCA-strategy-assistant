@@ -45,9 +45,12 @@ def validate_symbol(symbol: str) -> str:
 
 
 def _provider_symbol(symbol: str) -> str:
-    meta = SUPPORTED_ASSETS.get(symbol)
+    meta = SUPPORTED_ASSETS.get(symbol, {})
     if isinstance(meta, dict):
         return str(meta.get("providerSymbol") or symbol)
+    # SUPPORTED_ASSETS is always dict-shaped in production, but a
+    # handful of legacy tests monkeypatch it to {symbol: name_str}; the
+    # str fallback keeps those green without complicating the runtime.
     return symbol
 
 

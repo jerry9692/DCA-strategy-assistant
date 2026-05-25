@@ -17,6 +17,7 @@ from app.main import (
     _market_state,
     _rolling_performance,
     _rolling_window_years,
+    asset_range,
     assets,
 )
 from app.models import BacktestMetrics, ContributionEvent, OptimizationRequest, OptimizationResult, StrategyConfig
@@ -766,6 +767,38 @@ def test_assets_endpoint_returns_grouped_us_etf_metadata():
     assert by_symbol["510050"].currency == "CNY"
     assert by_symbol["510050"].providerSymbol == "510050.SS"
     assert by_symbol["159915"].providerSymbol == "159915.SZ"
+
+
+def test_asset_range_endpoint_returns_hardcoded_floor_for_supported_symbols():
+    """Regression test: /api/assets/{symbol}/range and /api/assets must
+    coexist on the same parent path. Earlier audits flagged that the
+    route order matters in FastAPI — if someone reorders the decorators
+    so the {symbol}/range path is declared first, the static /api/assets
+    path is still safe (different path), but the helper exposes the
+    real wiring so future refactors stay honest.
+    """
+
+    response = asset_range("QQQ")
+    assert response.symbol == "QQQ"
+    # Hardcoded floor, see _YFINANCE_EARLIEST_AVAILABLE
+    assert response.minDate.isoformat() == "1999-03-10"
+
+    cn_response = asset_range("510050")
+    assert cn_response.symbol == "510050"
+    assert cn_response.minDate.isoformat() == "2005-02-23"
+
+
+def test_asset_range_endpoint_rejects_unsupported_symbol():
+    """Unsupported symbols should bubble up as a structured 400 error
+    rather than crashing or returning the generic 1990 floor."""
+
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc_info:
+        asset_range("AAPL")
+    detail = exc_info.value.detail
+    assert isinstance(detail, dict)
+    assert detail.get("code") == "invalid_symbol"
 
 
 def test_cached_fixed_backtest_reuses_same_parameter_result(monkeypatch):

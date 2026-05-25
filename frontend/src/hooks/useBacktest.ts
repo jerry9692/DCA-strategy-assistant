@@ -154,9 +154,11 @@ export function useBacktest() {
   // backtest refresh cannot recover because strategy metadata never
   // loaded.
   useEffect(() => {
+    let cancelled = false;
     setError(null);
     Promise.all([fetch(`${API_BASE}/api/assets`).then(readJson<Asset[]>), fetch(`${API_BASE}/api/strategies`).then(readJson<{ strategies: StrategyDef[] }>)])
       .then(([assetData, strategyData]) => {
+        if (cancelled) return;
         setAssets(assetData);
         setStrategies(strategyData.strategies);
         const active =
@@ -174,7 +176,13 @@ export function useBacktest() {
           setStrategyType(active.type);
         }
       })
-      .catch((err) => setError(toUiError(err)));
+      .catch((err) => {
+        if (cancelled) return;
+        setError(toUiError(err));
+      });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metadataNonce]);
 

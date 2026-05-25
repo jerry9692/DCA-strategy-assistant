@@ -285,13 +285,17 @@ export function App() {
               {charts.rollingWindowYears ? `滚动 ${charts.rollingWindowYears} 年表现` : "滚动表现"}
             </div>
             <p className="chart-note">
-              假设从每个滚动窗口起点开始执行对应方案，计算窗口内新增投入的资金年化。长区间用 3 年窗口，较短区间用 1 年窗口，
-              用来看策略表现是否集中在少数年份。
+              把同一套策略放进一个个滑动窗口里，看每个窗口期内的资金年化。线越平稳，说明策略表现不依赖某一段特殊行情。
+              长区间用 3 年窗口，较短区间用 1 年窗口。
             </p>
             {state.result?.rollingPerformance.length ? (
               <ChartWrapper option={charts.rollingOption} height={280} />
             ) : (
-              <div className="chart-placeholder" style={{ height: 120 }}>回测区间至少约 2 年才会显示滚动表现。</div>
+              <div className="chart-placeholder" style={{ height: 120 }}>
+                {state.result
+                  ? "回测区间不足约 2 年，滚动表现至少需要 2 年才能出图。"
+                  : "等待回测结果。"}
+              </div>
             )}
           </div>
 
