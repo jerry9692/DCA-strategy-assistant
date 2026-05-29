@@ -80,6 +80,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/explanations/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Explanation
+         * @description Generate a plain-language explanation of the current
+         *     recommendation via the user's OpenAI-compatible LLM.
+         *
+         *     The API key in request.llm is forwarded to the provider for this
+         *     single call only — never persisted, never logged. See
+         *     explanations.py for the request construction.
+         */
+        post: operations["explanation_api_explanations_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/optimizations/run": {
         parameters: {
             query?: never;
@@ -312,10 +337,51 @@ export interface components {
             /** Accountdrawdownpct */
             accountDrawdownPct?: number | null;
         };
+        /** ExplanationRequest */
+        ExplanationRequest: {
+            /**
+             * Symbol
+             * @default QQQ
+             */
+            symbol: string;
+            config?: components["schemas"]["StrategyConfig"];
+            /** Asof */
+            asOf?: string | null;
+            llm: components["schemas"]["LlmSettings"];
+        };
+        /** ExplanationResponse */
+        ExplanationResponse: {
+            /** Symbol */
+            symbol: string;
+            decision: components["schemas"]["StrategyDecision"];
+            /** Explanation */
+            explanation: string;
+            /** Model */
+            model: string;
+            /** Datasource */
+            dataSource: string;
+            /** Cachestatus */
+            cacheStatus: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** LlmSettings */
+        LlmSettings: {
+            /**
+             * Baseurl
+             * @default https://api.openai.com/v1
+             */
+            baseUrl: string;
+            /**
+             * Model
+             * @default gpt-4o-mini
+             */
+            model: string;
+            /** Apikey */
+            apiKey: string;
         };
         /** MarketState */
         MarketState: {
@@ -739,6 +805,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecommendationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    explanation_api_explanations_run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExplanationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExplanationResponse"];
                 };
             };
             /** @description Validation Error */

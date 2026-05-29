@@ -419,6 +419,40 @@ class StrategyDefinitionsResponse(BaseModel):
     strategies: list[StrategyDefinition]
 
 
+class LlmSettings(BaseModel):
+    # User-supplied OpenAI-compatible credentials. These are forwarded
+    # to the provider for a single request and never persisted or
+    # logged server-side (see explanations.py). baseUrl defaults to
+    # OpenAI; DeepSeek / Moonshot / Zhipu etc. work by overriding it.
+    baseUrl: str = Field(default="https://api.openai.com/v1")
+    model: str = Field(default="gpt-4o-mini", min_length=1)
+    apiKey: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _normalize_base_url(self) -> "LlmSettings":
+        # Strip a trailing slash so we can safely append the chat path.
+        self.baseUrl = self.baseUrl.strip().rstrip("/")
+        if not self.baseUrl.startswith(("http://", "https://")):
+            raise ValueError("baseUrl must start with http:// or https://.")
+        return self
+
+
+class ExplanationRequest(BaseModel):
+    symbol: str = "QQQ"
+    config: StrategyConfig = Field(default_factory=StrategyConfig)
+    asOf: date | None = None
+    llm: LlmSettings
+
+
+class ExplanationResponse(BaseModel):
+    symbol: str
+    decision: StrategyDecision
+    explanation: str
+    model: str
+    dataSource: str
+    cacheStatus: str
+
+
 class OptimizationRequest(BaseModel):
     symbol: str = "QQQ"
     config: StrategyConfig = Field(default_factory=StrategyConfig)
