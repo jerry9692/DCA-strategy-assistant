@@ -4,7 +4,7 @@ function ErrorFallback({ onReset }: { onReset: () => void }) {
   return (
     <main className="app-shell">
       <section className="fatal-error">
-        <p className="eyebrow">DCA Strategy Assistant v0.3</p>
+        <p className="eyebrow">DCA Strategy Assistant v0.4</p>
         <h1>界面渲染遇到问题</h1>
         <p className="muted">当前数据没有丢失，可以先恢复界面再重试。</p>
         <button type="button" onClick={onReset}>
