@@ -61,7 +61,7 @@ export function App() {
     <main className="app-shell" data-theme={state.darkMode ? "dark" : "light"}>
       <header className="topbar">
         <div>
-          <p className="eyebrow">DCA Strategy Assistant v0.3</p>
+          <p className="eyebrow">DCA Strategy Assistant v0.4</p>
           <h1>定投策略工作台</h1>
         </div>
         <div className="topbar-actions">

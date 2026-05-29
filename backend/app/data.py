@@ -40,7 +40,7 @@ SQLModel.metadata.create_all(engine)
 def validate_symbol(symbol: str) -> str:
     normalized = symbol.upper()
     if normalized not in SUPPORTED_ASSETS:
-        raise PriceDataError("v0.3 only supports the built-in ETF list.", code="invalid_symbol", retryable=False)
+        raise PriceDataError("v0.4 only supports the built-in ETF list.", code="invalid_symbol", retryable=False)
     return normalized
 
 

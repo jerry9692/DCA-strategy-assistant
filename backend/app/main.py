@@ -38,7 +38,7 @@ from app.optimizer import optimize_parameters
 from app.strategies import clear_prepare_cache, evaluate_prepared_strategy, evaluate_strategy, prepare_market
 from app.strategy_definitions import COMMON_PARAMETERS, STRATEGIES
 
-app = FastAPI(title="DCA Strategy Assistant", version="0.3.0")
+app = FastAPI(title="DCA Strategy Assistant", version="0.4.0")
 
 app.add_middleware(
     CORSMiddleware,
