@@ -123,6 +123,45 @@
         }
       }
     },
+    "/api/explanations/run": {
+      "post": {
+        "summary": "Explanation",
+        "description": "Generate a plain-language explanation of the current\nrecommendation via the user's OpenAI-compatible LLM.\n\nThe API key in request.llm is forwarded to the provider for this\nsingle call only — never persisted, never logged. See\nexplanations.py for the request construction.",
+        "operationId": "explanation_api_explanations_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExplanationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplanationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/optimizations/run": {
       "post": {
         "summary": "Optimization",
@@ -739,6 +778,75 @@
         ],
         "title": "ContributionEvent"
       },
+      "ExplanationRequest": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol",
+            "default": "QQQ"
+          },
+          "config": {
+            "$ref": "#/components/schemas/StrategyConfig"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asof"
+          },
+          "llm": {
+            "$ref": "#/components/schemas/LlmSettings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "llm"
+        ],
+        "title": "ExplanationRequest"
+      },
+      "ExplanationResponse": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/StrategyDecision"
+          },
+          "explanation": {
+            "type": "string",
+            "title": "Explanation"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "dataSource": {
+            "type": "string",
+            "title": "Datasource"
+          },
+          "cacheStatus": {
+            "type": "string",
+            "title": "Cachestatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "decision",
+          "explanation",
+          "model",
+          "dataSource",
+          "cacheStatus"
+        ],
+        "title": "ExplanationResponse"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -751,6 +859,31 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "LlmSettings": {
+        "properties": {
+          "baseUrl": {
+            "type": "string",
+            "title": "Baseurl",
+            "default": "https://api.openai.com/v1"
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Model",
+            "default": "gpt-4o-mini"
+          },
+          "apiKey": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Apikey"
+          }
+        },
+        "type": "object",
+        "required": [
+          "apiKey"
+        ],
+        "title": "LlmSettings"
       },
       "MarketState": {
         "properties": {

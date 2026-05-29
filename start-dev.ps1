@@ -10,6 +10,32 @@ $BackendDir = Join-Path $Root "backend"
 $FrontendDir = Join-Path $Root "frontend"
 $PythonExe = Join-Path $BackendDir ".venv\Scripts\python.exe"
 
+function Test-PortAvailable {
+    param(
+        [int]$Port,
+        [string]$Name
+    )
+
+    $pattern = "^\s*TCP\s+\S+:$Port\s+\S+\s+LISTENING\s+(\d+)\s*$"
+    $pids = @(
+        netstat -ano |
+            ForEach-Object {
+                if ($_ -match $pattern) {
+                    $Matches[1]
+                }
+            } |
+            Select-Object -Unique
+    )
+
+    if ($pids.Count -eq 0) {
+        return $true
+    }
+
+    Write-Host "$Name port $Port is already in use by PID(s): $($pids -join ', ')." -ForegroundColor Yellow
+    Write-Host "Close the existing dev window, or run: taskkill /PID <pid> /T /F" -ForegroundColor Yellow
+    return $false
+}
+
 function Start-DevWindow {
     param(
         [string]$Title,
@@ -57,6 +83,14 @@ if (-not (Test-Path $PythonExe)) {
 
 if (-not (Test-Path (Join-Path $FrontendDir "node_modules"))) {
     Write-Host "frontend/node_modules not found. Run '.\start-dev.ps1 -Install' once, then start again." -ForegroundColor Yellow
+    exit 1
+}
+
+if (-not (Test-PortAvailable -Port $BackendPort -Name "Backend")) {
+    exit 1
+}
+
+if (-not (Test-PortAvailable -Port $FrontendPort -Name "Frontend")) {
     exit 1
 }
 

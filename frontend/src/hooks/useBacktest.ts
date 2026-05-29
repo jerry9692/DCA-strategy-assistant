@@ -58,6 +58,7 @@ export function useBacktest() {
   const [endDate, setEndDate] = useState(clampEndDate(String(initialSettings.endDate ?? todayIso)));
   const [params, setParams] = useState<Record<string, number | string | boolean>>({});
   const [result, setResult] = useState<Backtest | null>(null);
+  const [decisionContextKey, setDecisionContextKey] = useState("");
   const [quickDecision, setQuickDecision] = useState<Decision | null>(null);
   const [quickData, setQuickData] = useState<{ dataSource: string; cacheStatus: string } | null>(null);
   const [optimization, setOptimization] = useState<OptimizationResult | null>(null);
@@ -113,6 +114,10 @@ export function useBacktest() {
     [strategyType, baseAmount, frequency, minMultiplier, maxMultiplier, params, feeRate, slippageRate],
   );
   const configKey = useMemo(() => strategyConfigKey(config), [config]);
+  const recommendationContextKey = useMemo(
+    () => JSON.stringify({ symbol, startDate, endDate, config }),
+    [symbol, startDate, endDate, config],
+  );
   const optimizationScopeKey = useMemo(
     () => JSON.stringify({ symbol, strategyType, startDate, endDate }),
     [symbol, strategyType, startDate, endDate],
@@ -293,6 +298,7 @@ export function useBacktest() {
           setResult(data);
           setQuickDecision(null);
           setQuickData(null);
+          setDecisionContextKey(recommendationContextKey);
         })
         .catch((err) => {
           if (cancelled) return;
@@ -307,7 +313,7 @@ export function useBacktest() {
       cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [symbol, startDate, endDate, config, selectedStrategy, refreshNonce, comparisonTypes, riskFreeRate]);
+  }, [symbol, startDate, endDate, config, selectedStrategy, refreshNonce, comparisonTypes, riskFreeRate, recommendationContextKey]);
 
   // Poll optimization job
   useEffect(() => {
@@ -398,6 +404,7 @@ export function useBacktest() {
       .then((data) => {
         setQuickDecision(data.decision);
         setQuickData({ dataSource: data.dataSource, cacheStatus: data.cacheStatus });
+        setDecisionContextKey(recommendationContextKey);
         setResult((current) =>
           current ? { ...current, recommendation: data.decision, dataSource: data.dataSource, cacheStatus: data.cacheStatus } : current,
         );
@@ -468,6 +475,7 @@ export function useBacktest() {
   // ─── Computed values for UI ──────────────────────────────────────────────
   const activeAsset = assets.find((item) => item.symbol === symbol);
   const decision = quickDecision ?? result?.recommendation;
+  const decisionFresh = Boolean(decision && decisionContextKey === recommendationContextKey);
   const reasons = decision?.reasons ?? [];
   const dataSource = quickData?.dataSource ?? result?.dataSource ?? "-";
   const cacheStatus = quickData?.cacheStatus ?? result?.cacheStatus ?? "-";
@@ -531,6 +539,8 @@ export function useBacktest() {
     metadataReady,
     activeAsset,
     decision,
+    decisionFresh,
+    recommendationContextKey,
     reasons,
     dataSource,
     cacheStatus,

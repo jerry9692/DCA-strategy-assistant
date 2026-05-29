@@ -3,6 +3,7 @@ import { Activity, BarChart3, Download, Moon, RefreshCcw, SlidersHorizontal, Spa
 import type { components } from "./api.generated";
 import { useBacktest } from "./hooks/useBacktest";
 import { useChartOptions } from "./hooks/useChartOptions";
+import { useLlmExplanation } from "./hooks/useLlmExplanation";
 import { ChartWrapper } from "./components/ChartWrapper";
 import { Metric } from "./components/Metric";
 import { ParamControl, RangeControl } from "./components/ParamControl";
@@ -18,6 +19,18 @@ export function App() {
   const state = useBacktest();
   const charts = useChartOptions(state.result, state.selectedStrategy, state.strategyNameByType, state.darkMode);
   const moneySymbol = currencySymbol(state.activeAsset?.currency);
+
+  // Re-explain when the actual decision the user is looking at changes
+  // (date + amount + multiplier captures every meaningful shift without
+  // firing on unrelated state churn).
+  const decisionKey = state.decision
+    ? `${state.symbol}:${state.decision.date}:${state.decision.recommendedAmount}:${state.decision.multiplier}:${state.decision.score}`
+    : "";
+  const llmState = useLlmExplanation(
+    state.decision && state.decisionFresh
+      ? { symbol: state.symbol, config: state.config, asOf: state.endDate, decisionKey }
+      : null,
+  );
 
   const visibleReasons = state.showAllReasons ? state.reasons : state.reasons.slice(0, 5);
   const marketLabelByCode: Record<string, string> = {
@@ -251,6 +264,31 @@ export function App() {
             )}
           </div>
 
+          {llmState.enabled && (
+            <div className="ai-explanation">
+              <div className="ai-explanation-head">
+                <span className="ai-explanation-title"><Sparkles size={15} />AI 解读{llmState.explanationModel ? ` · ${llmState.explanationModel}` : ""}</span>
+                <button
+                  type="button"
+                  className="reason-toggle"
+                  onClick={llmState.retryExplanation}
+                  disabled={llmState.explanationLoading || !llmState.canExplain}
+                >
+                  {llmState.explanationLoading ? "生成中" : llmState.explanation ? "重新解读" : "生成解读"}
+                </button>
+              </div>
+              {llmState.explanationLoading && !llmState.explanation && <p className="muted">正在请求 AI 解读...</p>}
+              {!llmState.canExplain && <p className="muted">参数或时间已变化，等待新的建议结果后可生成解读。</p>}
+              {llmState.canExplain && !llmState.llm.autoGenerate && !llmState.explanation && !llmState.explanationLoading && !llmState.explanationError && (
+                <p className="muted">已关闭自动生成，点击“生成解读”手动请求。</p>
+              )}
+              {llmState.explanationError && (
+                <p className="ai-explanation-error">{llmState.explanationError.message}</p>
+              )}
+              {llmState.explanation && <p className="ai-explanation-body">{llmState.explanation}</p>}
+            </div>
+          )}
+
           {/* Metrics */}
           <div className="metrics-grid">
             <Metric label="总投入" value={`${moneySymbol}${metric(state.result?.metrics.totalInvested)}`} hint="区间内累计买入金额，不含滑点和费率扣减。" />
@@ -277,26 +315,6 @@ export function App() {
             <b>期末 {moneySymbol}{metric(state.result?.lumpSumMetrics?.endingValue)}</b>
             <b>收益 {metric(state.result?.lumpSumMetrics?.returnPct, "%")}</b>
             <b>回撤 {metric(state.result?.lumpSumMetrics?.maxDrawdownPct, "%")}</b>
-          </div>
-
-          <div className="chart-block">
-            <div className="section-title">
-              <BarChart3 size={17} />
-              {charts.rollingWindowYears ? `滚动 ${charts.rollingWindowYears} 年表现` : "滚动表现"}
-            </div>
-            <p className="chart-note">
-              把同一套策略放进一个个滑动窗口里，看每个窗口期内的资金年化。线越平稳，说明策略表现不依赖某一段特殊行情。
-              长区间用 3 年窗口，较短区间用 1 年窗口。
-            </p>
-            {state.result?.rollingPerformance.length ? (
-              <ChartWrapper option={charts.rollingOption} height={280} />
-            ) : (
-              <div className="chart-placeholder" style={{ height: 120 }}>
-                {state.result
-                  ? "回测区间不足约 2 年，滚动表现至少需要 2 年才能出图。"
-                  : "等待回测结果。"}
-              </div>
-            )}
           </div>
 
           {/* Optimization progress */}
@@ -349,6 +367,25 @@ export function App() {
           <div className="chart-block">
             <div className="section-title"><BarChart3 size={17} />评分与投入倍率</div>
             <ChartWrapper option={charts.signalOption} height={260} />
+          </div>
+          <div className="chart-block">
+            <div className="section-title">
+              <BarChart3 size={17} />
+              {charts.rollingWindowYears ? `滚动 ${charts.rollingWindowYears} 年表现` : "滚动表现"}
+            </div>
+            <p className="chart-note">
+              把同一套策略放进一个个滑动窗口里，看每个窗口期内的资金年化。线越平稳，说明策略表现不依赖某一段特殊行情。
+              长区间用 3 年窗口，较短区间用 1 年窗口。
+            </p>
+            {state.result?.rollingPerformance.length ? (
+              <ChartWrapper option={charts.rollingOption} height={280} />
+            ) : (
+              <div className="chart-placeholder" style={{ height: 120 }}>
+                {state.result
+                  ? "回测区间不足约 2 年，滚动表现至少需要 2 年才能出图。"
+                  : "等待回测结果。"}
+              </div>
+            )}
           </div>
           <div className="chart-block">
             <div className="section-title"><BarChart3 size={17} />策略对决</div>
@@ -425,6 +462,47 @@ export function App() {
             {state.decision && Object.entries(state.decision.rawSignals).filter(([k]) => k !== "strategyType").map(([k, v]) => (
               <div key={k}><span>{k}</span><b>{v ?? "-"}</b></div>
             ))}
+          </div>
+          <div className="llm-card">
+            <strong>AI 解读设置</strong>
+            <span>填入 OpenAI 兼容的 API Key 后，建议卡会自动用大白话解释为什么本期投这个金额。Key 只存在你本机浏览器，请求时经由本地后端转发，不会被保存或记录。</span>
+            <label className="llm-field">
+              API Base URL
+              <input
+                type="text"
+                value={llmState.llm.baseUrl}
+                placeholder="https://api.openai.com/v1"
+                onChange={(e) => llmState.setLlm((cur) => ({ ...cur, baseUrl: e.target.value }))}
+              />
+            </label>
+            <label className="llm-field">
+              模型
+              <input
+                type="text"
+                value={llmState.llm.model}
+                placeholder="gpt-4o-mini"
+                onChange={(e) => llmState.setLlm((cur) => ({ ...cur, model: e.target.value }))}
+              />
+            </label>
+            <label className="llm-field">
+              API Key
+              <input
+                type="password"
+                value={llmState.llm.apiKey}
+                placeholder="sk-..."
+                autoComplete="off"
+                onChange={(e) => llmState.setLlm((cur) => ({ ...cur, apiKey: e.target.value }))}
+              />
+            </label>
+            <label className="llm-toggle">
+              <input
+                type="checkbox"
+                checked={llmState.llm.autoGenerate}
+                onChange={(e) => llmState.setLlm((cur) => ({ ...cur, autoGenerate: e.target.checked }))}
+              />
+              <span>建议变化后自动生成解读</span>
+            </label>
+            <span className="llm-hint">DeepSeek 填 https://api.deepseek.com + deepseek-v4-pro；更快可用 deepseek-v4-flash。其它 OpenAI 兼容服务同理。</span>
           </div>
           {(state.loading || state.recommendationLoading || state.optimizationLoading) && (
             <p className="muted">{state.optimizationActive ? "调优任务在后台运行，可以继续查看页面。" : "正在刷新策略结果..."}</p>

@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.backtester import DcaBacktester, rolling_annualized_returns, rolling_lump_sum_annualized_returns
 from app.data import PriceDataError, get_available_range, get_price_history, validate_symbol
+from app.explanations import explain_decision
 from app.models import (
     SUPPORTED_ASSETS,
     Asset,
@@ -17,6 +18,8 @@ from app.models import (
     BacktestRequest,
     BacktestResult,
     ContributionEvent,
+    ExplanationRequest,
+    ExplanationResponse,
     MarketState,
     OptimizationJobCreateResponse,
     OptimizationJobStatus,
@@ -110,6 +113,45 @@ def recommendation(request: RecommendationRequest) -> RecommendationResponse:
         decision = evaluate_strategy(request.config.strategyType, request.config, prices)
         return RecommendationResponse(
             symbol=symbol, decision=decision, dataSource=data_source, cacheStatus=cache_status
+        )
+    except Exception as exc:
+        _raise_api_error(exc)
+
+
+def _asset_currency(symbol: str) -> str:
+    meta = SUPPORTED_ASSETS.get(symbol)
+    if isinstance(meta, dict):
+        currency = meta.get("currency", "USD")
+        return "¥" if currency == "CNY" else "$"
+    return "$"
+
+
+@app.post("/api/explanations/run", response_model=ExplanationResponse)
+def explanation(request: ExplanationRequest) -> ExplanationResponse:
+    """Generate a plain-language explanation of the current
+    recommendation via the user's OpenAI-compatible LLM.
+
+    The API key in request.llm is forwarded to the provider for this
+    single call only — never persisted, never logged. See
+    explanations.py for the request construction.
+    """
+    try:
+        clear_prepare_cache()
+        symbol = validate_symbol(request.symbol)
+        end = request.asOf or date.today()
+        start = end - timedelta(days=365 * 10)
+        prices, data_source, cache_status = get_price_history(symbol, start, end)
+        decision = evaluate_strategy(request.config.strategyType, request.config, prices)
+        market_state = _market_state(prices, end)
+        currency = _asset_currency(symbol)
+        text = explain_decision(request.model_copy(update={"symbol": symbol}), decision, market_state, currency)
+        return ExplanationResponse(
+            symbol=symbol,
+            decision=decision,
+            explanation=text,
+            model=request.llm.model,
+            dataSource=data_source,
+            cacheStatus=cache_status,
         )
     except Exception as exc:
         _raise_api_error(exc)

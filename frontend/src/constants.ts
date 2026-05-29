@@ -2,6 +2,10 @@ import type { Frequency, MarketCode, PresetMode, PressureScenario } from "./type
 
 export const API_BASE = "";
 export const SETTINGS_KEY = "dca-assistant-settings-v3";
+// LLM credentials live under a separate key and are NEVER put into the
+// shareable URL — an API key in a query string would leak the moment a
+// user copies the link. localStorage only.
+export const LLM_SETTINGS_KEY = "dca-assistant-llm-v1";
 
 function formatIso(date: Date): string {
   const year = date.getFullYear();
