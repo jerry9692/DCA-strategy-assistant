@@ -162,6 +162,45 @@
         }
       }
     },
+    "/api/explanations/selection": {
+      "post": {
+        "summary": "Selection Explanation",
+        "description": "Explain user-selected page text with current strategy context.\n\nThe selected text is treated as untrusted quoted content by the\nprompt; it is never executed as an instruction. The API key follows\nthe same per-request forwarding rules as /api/explanations/run.",
+        "operationId": "selection_explanation_api_explanations_selection_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectionExplanationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectionExplanationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/optimizations/run": {
       "post": {
         "summary": "Optimization",
@@ -1436,6 +1475,83 @@
           "windowYears"
         ],
         "title": "RollingPerformancePoint"
+      },
+      "SelectionExplanationRequest": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol",
+            "default": "QQQ"
+          },
+          "config": {
+            "$ref": "#/components/schemas/StrategyConfig"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asof"
+          },
+          "selectedText": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 2,
+            "title": "Selectedtext"
+          },
+          "llm": {
+            "$ref": "#/components/schemas/LlmSettings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "selectedText",
+          "llm"
+        ],
+        "title": "SelectionExplanationRequest"
+      },
+      "SelectionExplanationResponse": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "selectedText": {
+            "type": "string",
+            "title": "Selectedtext"
+          },
+          "explanation": {
+            "type": "string",
+            "title": "Explanation"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "dataSource": {
+            "type": "string",
+            "title": "Datasource"
+          },
+          "cacheStatus": {
+            "type": "string",
+            "title": "Cachestatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "selectedText",
+          "explanation",
+          "model",
+          "dataSource",
+          "cacheStatus"
+        ],
+        "title": "SelectionExplanationResponse"
       },
       "StrategyComparison": {
         "properties": {

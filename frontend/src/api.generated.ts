@@ -105,6 +105,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/explanations/selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Selection Explanation
+         * @description Explain user-selected page text with current strategy context.
+         *
+         *     The selected text is treated as untrusted quoted content by the
+         *     prompt; it is never executed as an instruction. The API key follows
+         *     the same per-request forwarding rules as /api/explanations/run.
+         */
+        post: operations["selection_explanation_api_explanations_selection_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/optimizations/run": {
         parameters: {
             query?: never;
@@ -580,6 +604,35 @@ export interface components {
             /** Lumpsumannualizedreturnpct */
             lumpSumAnnualizedReturnPct?: number | null;
         };
+        /** SelectionExplanationRequest */
+        SelectionExplanationRequest: {
+            /**
+             * Symbol
+             * @default QQQ
+             */
+            symbol: string;
+            config?: components["schemas"]["StrategyConfig"];
+            /** Asof */
+            asOf?: string | null;
+            /** Selectedtext */
+            selectedText: string;
+            llm: components["schemas"]["LlmSettings"];
+        };
+        /** SelectionExplanationResponse */
+        SelectionExplanationResponse: {
+            /** Symbol */
+            symbol: string;
+            /** Selectedtext */
+            selectedText: string;
+            /** Explanation */
+            explanation: string;
+            /** Model */
+            model: string;
+            /** Datasource */
+            dataSource: string;
+            /** Cachestatus */
+            cacheStatus: string;
+        };
         /** StrategyComparison */
         StrategyComparison: {
             /** Strategytype */
@@ -838,6 +891,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExplanationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    selection_explanation_api_explanations_selection_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelectionExplanationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SelectionExplanationResponse"];
                 };
             };
             /** @description Validation Error */

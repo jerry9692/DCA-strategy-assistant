@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.backtester import DcaBacktester, rolling_annualized_returns, rolling_lump_sum_annualized_returns
 from app.data import PriceDataError, get_available_range, get_price_history, validate_symbol
-from app.explanations import explain_decision
+from app.explanations import explain_decision, explain_selection
 from app.models import (
     SUPPORTED_ASSETS,
     Asset,
@@ -29,6 +29,8 @@ from app.models import (
     RecommendationRequest,
     RecommendationResponse,
     RollingPerformancePoint,
+    SelectionExplanationRequest,
+    SelectionExplanationResponse,
     StrategyComparison,
     StrategyConfig,
     StrategyDefinitionsResponse,
@@ -148,6 +150,36 @@ def explanation(request: ExplanationRequest) -> ExplanationResponse:
         return ExplanationResponse(
             symbol=symbol,
             decision=decision,
+            explanation=text,
+            model=request.llm.model,
+            dataSource=data_source,
+            cacheStatus=cache_status,
+        )
+    except Exception as exc:
+        _raise_api_error(exc)
+
+
+@app.post("/api/explanations/selection", response_model=SelectionExplanationResponse)
+def selection_explanation(request: SelectionExplanationRequest) -> SelectionExplanationResponse:
+    """Explain user-selected page text with current strategy context.
+
+    The selected text is treated as untrusted quoted content by the
+    prompt; it is never executed as an instruction. The API key follows
+    the same per-request forwarding rules as /api/explanations/run.
+    """
+    try:
+        clear_prepare_cache()
+        symbol = validate_symbol(request.symbol)
+        end = request.asOf or date.today()
+        start = end - timedelta(days=365 * 10)
+        prices, data_source, cache_status = get_price_history(symbol, start, end)
+        decision = evaluate_strategy(request.config.strategyType, request.config, prices)
+        market_state = _market_state(prices, end)
+        currency = _asset_currency(symbol)
+        text = explain_selection(request.model_copy(update={"symbol": symbol}), decision, market_state, currency)
+        return SelectionExplanationResponse(
+            symbol=symbol,
+            selectedText=request.selectedText,
             explanation=text,
             model=request.llm.model,
             dataSource=data_source,
