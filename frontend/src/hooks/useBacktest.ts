@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { components } from "../api.generated";
 import type {
+  AppDefaults,
   Asset,
   AssetRange,
   Backtest,
@@ -13,6 +14,7 @@ import type {
   RecommendationResponse,
   StrategyConfigPayload,
   StrategyDef,
+  StrategyOverride,
   UiError,
 } from "../types";
 
@@ -21,7 +23,9 @@ import { API_BASE, ASSET_MARKETS, PRESSURE_SCENARIOS, QUICK_BACKTEST_PERIODS, SE
 import {
   clampEndDate,
   clampToRange,
-  normalizeFrequency,
+  multipliersForStrategy,
+  normalizeAppDefaults,
+  normalizeStrategyOverrides,
   presetFor,
   readSavedSettings,
   readUrlSettings,
@@ -38,7 +42,35 @@ type OptimizationRunContext = {
 export function useBacktest() {
   const savedSettings = useMemo(() => readSavedSettings(), []);
   const urlSettings = useMemo(() => readUrlSettings(), []);
-  const initialSettings = urlSettings ?? savedSettings ?? {};
+  const initialSettings = useMemo(() => urlSettings ?? savedSettings ?? {}, [savedSettings, urlSettings]);
+  const initialStrategyType = String(initialSettings.strategyType ?? "composite_score");
+  const initialAppDefaults = useMemo(() => {
+    const savedDefaults = normalizeAppDefaults(savedSettings?.appDefaults);
+    return normalizeAppDefaults({
+      ...savedDefaults,
+      baseAmount: initialSettings.baseAmount ?? savedDefaults.baseAmount,
+      frequency: initialSettings.frequency ?? savedDefaults.frequency,
+      minMultiplier: savedDefaults.minMultiplier,
+      maxMultiplier: savedDefaults.maxMultiplier,
+      riskFreeRate: initialSettings.riskFreeRate ?? savedDefaults.riskFreeRate,
+      feeRate: initialSettings.feeRate ?? savedDefaults.feeRate,
+      slippageRate: initialSettings.slippageRate ?? savedDefaults.slippageRate,
+    });
+  }, [initialSettings, savedSettings]);
+  const initialStrategyOverrides = useMemo(() => {
+    const overrides = normalizeStrategyOverrides(savedSettings?.strategyOverrides);
+    if (urlSettings) {
+      const urlOverride: StrategyOverride = {};
+      if (typeof urlSettings.minMultiplier === "number") urlOverride.minMultiplier = urlSettings.minMultiplier;
+      if (typeof urlSettings.maxMultiplier === "number") urlOverride.maxMultiplier = urlSettings.maxMultiplier;
+      if (urlSettings.params) urlOverride.params = urlSettings.params;
+      if (Object.keys(urlOverride).length > 0) {
+        overrides[initialStrategyType] = { ...overrides[initialStrategyType], ...urlOverride };
+      }
+    }
+    return overrides;
+  }, [initialStrategyType, savedSettings, urlSettings]);
+  const initialMultipliers = multipliersForStrategy(initialStrategyType, initialAppDefaults, initialStrategyOverrides);
 
   // ─── Core state ──────────────────────────────────────────────────────────
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -49,11 +81,11 @@ export function useBacktest() {
   const [strategies, setStrategies] = useState<StrategyDef[]>([]);
   const [darkMode, setDarkMode] = useState(Boolean(savedSettings?.darkMode));
   const [symbol, setSymbol] = useState(String(initialSettings.symbol ?? "QQQ"));
-  const [strategyType, setStrategyType] = useState(String(initialSettings.strategyType ?? "composite_score"));
-  const [baseAmount, setBaseAmount] = useState(Number(initialSettings.baseAmount ?? 100));
-  const [frequency, setFrequency] = useState<Frequency>(normalizeFrequency(initialSettings.frequency));
-  const [minMultiplier, setMinMultiplier] = useState(Number(initialSettings.minMultiplier ?? 0.8));
-  const [maxMultiplier, setMaxMultiplier] = useState(Number(initialSettings.maxMultiplier ?? 1.2));
+  const [strategyType, setStrategyType] = useState(initialStrategyType);
+  const [appDefaults, setAppDefaults] = useState<AppDefaults>(initialAppDefaults);
+  const [strategyOverrides, setStrategyOverrides] = useState<Record<string, StrategyOverride>>(initialStrategyOverrides);
+  const [minMultiplier, setCurrentMinMultiplier] = useState(initialMultipliers.minMultiplier);
+  const [maxMultiplier, setCurrentMaxMultiplier] = useState(initialMultipliers.maxMultiplier);
   const [startDate, setStartDate] = useState(String(initialSettings.startDate ?? defaultStartDate));
   const [endDate, setEndDate] = useState(clampEndDate(String(initialSettings.endDate ?? todayIso)));
   const [params, setParams] = useState<Record<string, number | string | boolean>>({});
@@ -76,14 +108,14 @@ export function useBacktest() {
   const [comparisonStrategyTypes, setComparisonStrategyTypes] = useState<string[]>(
     Array.isArray(initialSettings.comparisonStrategyTypes) ? initialSettings.comparisonStrategyTypes : ["drawdown_boost", "ma_deviation"],
   );
-  const [riskFreeRate, setRiskFreeRate] = useState<number>(typeof initialSettings.riskFreeRate === "number" ? initialSettings.riskFreeRate : 0.04);
-  // Fee and slippage are user preferences (like riskFreeRate), not part
-  // of any strategy's parameter schema, so we keep them as top-level
-  // state and merge them into config.params at request time. Otherwise
-  // they would be wiped whenever the user switches strategy or preset
-  // (which calls setParams(preset.params) and replaces the whole dict).
-  const [feeRate, setFeeRate] = useState<number>(typeof initialSettings.feeRate === "number" ? initialSettings.feeRate : 0);
-  const [slippageRate, setSlippageRate] = useState<number>(typeof initialSettings.slippageRate === "number" ? initialSettings.slippageRate : 0);
+  const baseAmount = appDefaults.baseAmount;
+  const frequency = appDefaults.frequency;
+  const riskFreeRate = appDefaults.riskFreeRate;
+  // Fee and slippage are global user preferences, not strategy schema
+  // params. They are merged into config.params only at the request
+  // boundary so switching strategies cannot wipe them.
+  const feeRate = appDefaults.feeRate;
+  const slippageRate = appDefaults.slippageRate;
 
   // ─── Derived state ───────────────────────────────────────────────────────
   const selectedStrategy = useMemo(() => strategies.find((item) => item.type === strategyType), [strategies, strategyType]);
@@ -169,14 +201,13 @@ export function useBacktest() {
         const active =
           strategyData.strategies.find((item: StrategyDef) => item.type === strategyType) ??
           strategyData.strategies.find((item: StrategyDef) => item.type === "composite_score");
-        if (initialSettings.params && (!initialSettings.strategyType || initialSettings.strategyType === strategyType)) {
-          setParams(initialSettings.params as Record<string, string | number | boolean>);
-        } else {
-          const preset = presetFor(active, presetMode);
-          setMinMultiplier(preset.minMultiplier);
-          setMaxMultiplier(preset.maxMultiplier);
-          setParams(preset.params);
-        }
+        const activeType = active?.type ?? strategyType;
+        const preset = presetFor(active, presetMode);
+        const override = initialStrategyOverrides[activeType];
+        const nextMultipliers = multipliersForStrategy(activeType, initialAppDefaults, initialStrategyOverrides);
+        setCurrentMinMultiplier(nextMultipliers.minMultiplier);
+        setCurrentMaxMultiplier(nextMultipliers.maxMultiplier);
+        setParams(override?.params ?? preset.params);
         if (active && active.type !== strategyType) {
           setStrategyType(active.type);
         }
@@ -216,12 +247,13 @@ export function useBacktest() {
   // Reset params when strategy changes
   useEffect(() => {
     const preset = presetFor(selectedStrategy, presetMode === "custom" ? "balanced" : presetMode);
-    setMinMultiplier(preset.minMultiplier);
-    setMaxMultiplier(preset.maxMultiplier);
-    setParams(preset.params);
+    const override = strategyOverrides[strategyType];
+    setCurrentMinMultiplier(override?.minMultiplier ?? appDefaults.minMultiplier);
+    setCurrentMaxMultiplier(override?.maxMultiplier ?? appDefaults.maxMultiplier);
+    setParams(override?.params ?? preset.params);
     setComparisonStrategyTypes((current) => current.filter((item) => item !== strategyType));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [strategyType]);
+  }, [strategyType, selectedStrategy, appDefaults.minMultiplier, appDefaults.maxMultiplier, strategyOverrides]);
 
   // Clear invalid scenario
   useEffect(() => {
@@ -269,10 +301,12 @@ export function useBacktest() {
       riskFreeRate,
       feeRate,
       slippageRate,
+      appDefaults,
+      strategyOverrides,
     };
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(persisted));
     syncUrlSettings({ ...persisted, strategy: selectedStrategy });
-  }, [activeScenarioId, baseAmount, comparisonTypes, darkMode, endDate, feeRate, frequency, maxMultiplier, minMultiplier, params, presetMode, riskFreeRate, selectedStrategy, slippageRate, startDate, strategyType, symbol]);
+  }, [activeScenarioId, appDefaults, baseAmount, comparisonTypes, darkMode, endDate, feeRate, frequency, maxMultiplier, minMultiplier, params, presetMode, riskFreeRate, selectedStrategy, slippageRate, startDate, strategyOverrides, strategyType, symbol]);
 
   // Auto-run backtest
   useEffect(() => {
@@ -354,13 +388,70 @@ export function useBacktest() {
 
   // ─── Actions ─────────────────────────────────────────────────────────────
 
+  const updateAppDefaults = (updates: Partial<AppDefaults>) => {
+    setAppDefaults((current) => ({ ...current, ...updates }));
+  };
+
+  const setBaseAmount = (value: number) => updateAppDefaults({ baseAmount: value });
+  const setFrequency = (value: Frequency) => updateAppDefaults({ frequency: value });
+  const setRiskFreeRate = (value: number) => updateAppDefaults({ riskFreeRate: value });
+  const setFeeRate = (value: number) => updateAppDefaults({ feeRate: value });
+  const setSlippageRate = (value: number) => updateAppDefaults({ slippageRate: value });
+
+  const setDefaultMinMultiplier = (value: number) => {
+    updateAppDefaults({ minMultiplier: value });
+    if (strategyOverrides[strategyType]?.minMultiplier === undefined) {
+      setCurrentMinMultiplier(value);
+    }
+  };
+
+  const setDefaultMaxMultiplier = (value: number) => {
+    updateAppDefaults({ maxMultiplier: value });
+    if (strategyOverrides[strategyType]?.maxMultiplier === undefined) {
+      setCurrentMaxMultiplier(value);
+    }
+  };
+
+  const setMinMultiplier = (value: number) => {
+    setCurrentMinMultiplier(value);
+    setStrategyOverrides((current) => ({
+      ...current,
+      [strategyType]: { ...current[strategyType], minMultiplier: value },
+    }));
+  };
+
+  const setMaxMultiplier = (value: number) => {
+    setCurrentMaxMultiplier(value);
+    setStrategyOverrides((current) => ({
+      ...current,
+      [strategyType]: { ...current[strategyType], maxMultiplier: value },
+    }));
+  };
+
+  const setStrategyParams = (nextParams: Record<string, ParamValue>) => {
+    setParams(nextParams);
+    setStrategyOverrides((current) => ({
+      ...current,
+      [strategyType]: { ...current[strategyType], params: nextParams },
+    }));
+  };
+
+  const setStrategyParam = (key: string, value: ParamValue) => {
+    const nextParams = { ...params, [key]: value };
+    setStrategyParams(nextParams);
+  };
+
   const applyPreset = (mode: PresetMode) => {
     setPresetMode(mode);
     if (mode === "custom") return;
     const preset = presetFor(selectedStrategy, mode);
-    setMinMultiplier(preset.minMultiplier);
-    setMaxMultiplier(preset.maxMultiplier);
+    setCurrentMinMultiplier(appDefaults.minMultiplier);
+    setCurrentMaxMultiplier(appDefaults.maxMultiplier);
     setParams(preset.params);
+    setStrategyOverrides((current) => ({
+      ...current,
+      [strategyType]: { params: preset.params },
+    }));
   };
 
   const markCustom = () => {
@@ -447,12 +538,22 @@ export function useBacktest() {
 
   const applyOptimizedConfig = (optimizedConfig: StrategyConfigPayload | Schemas["StrategyConfig"]) => {
     setPresetMode("custom");
-    setMinMultiplier(optimizedConfig.minMultiplier);
-    setMaxMultiplier(optimizedConfig.maxMultiplier);
+    setCurrentMinMultiplier(optimizedConfig.minMultiplier);
+    setCurrentMaxMultiplier(optimizedConfig.maxMultiplier);
     // The optimizer payload's `params` come from the same backend
     // that produces the runtime values, so the unknown-typed entries
     // are always one of the ParamValue primitives.
-    setParams((optimizedConfig.params ?? {}) as Record<string, ParamValue>);
+    const nextParams = (optimizedConfig.params ?? {}) as Record<string, ParamValue>;
+    setParams(nextParams);
+    setStrategyOverrides((current) => ({
+      ...current,
+      [strategyType]: {
+        ...current[strategyType],
+        minMultiplier: optimizedConfig.minMultiplier,
+        maxMultiplier: optimizedConfig.maxMultiplier,
+        params: nextParams,
+      },
+    }));
   };
 
   const toggleComparison = (type: string) => {
@@ -491,6 +592,8 @@ export function useBacktest() {
     setSymbol,
     strategyType,
     setStrategyType,
+    appDefaults,
+    strategyOverrides,
     baseAmount,
     setBaseAmount,
     frequency,
@@ -504,7 +607,7 @@ export function useBacktest() {
     endDate,
     setEndDate,
     params,
-    setParams,
+    setStrategyParam,
     result,
     optimization,
     optimizationJob,
@@ -519,6 +622,8 @@ export function useBacktest() {
     setActiveScenarioId,
     riskFreeRate,
     setRiskFreeRate,
+    setDefaultMinMultiplier,
+    setDefaultMaxMultiplier,
     feeRate,
     setFeeRate,
     slippageRate,

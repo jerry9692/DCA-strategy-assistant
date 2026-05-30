@@ -97,6 +97,22 @@ export type PresetMode = "conservative" | "balanced" | "aggressive" | "custom";
 // the literal-union form is more useful for `<select>` change handlers.
 export type Frequency = "weekly" | "biweekly" | "monthly";
 
+export type AppDefaults = {
+  baseAmount: number;
+  frequency: Frequency;
+  minMultiplier: number;
+  maxMultiplier: number;
+  riskFreeRate: number;
+  feeRate: number;
+  slippageRate: number;
+};
+
+export type StrategyOverride = {
+  minMultiplier?: number;
+  maxMultiplier?: number;
+  params?: Record<string, ParamValue>;
+};
+
 export type MarketCode = "us" | "cn";
 
 export type PressureScenario = {

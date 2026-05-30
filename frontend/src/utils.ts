@@ -1,5 +1,5 @@
-import type { Backtest, Contribution, Frequency, ParamValue, PresetMode, StrategyConfigPayload, StrategyDef } from "./types";
-import { FREQUENCY_OPTIONS, PARAMETER_PRESETS, SETTINGS_KEY, todayIso } from "./constants";
+import type { AppDefaults, Backtest, Contribution, Frequency, ParamValue, PresetMode, StrategyConfigPayload, StrategyDef, StrategyOverride } from "./types";
+import { DEFAULT_APP_DEFAULTS, FREQUENCY_OPTIONS, PARAMETER_PRESETS, SETTINGS_KEY, todayIso } from "./constants";
 
 export type ShareableSettings = {
   symbol?: string;
@@ -128,6 +128,68 @@ export function presetFor(strategy: StrategyDef | undefined, mode: PresetMode) {
     if ("rsiWeight" in params) params.rsiWeight = 1.2;
   }
   return { minMultiplier: preset.minMultiplier, maxMultiplier: preset.maxMultiplier, params };
+}
+
+function finiteOrDefault(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+export function normalizeAppDefaults(value: unknown): AppDefaults {
+  const source = value && typeof value === "object" ? (value as Partial<AppDefaults>) : {};
+  return {
+    baseAmount: finiteOrDefault(source.baseAmount, DEFAULT_APP_DEFAULTS.baseAmount),
+    frequency: normalizeFrequency(source.frequency),
+    minMultiplier: finiteOrDefault(source.minMultiplier, DEFAULT_APP_DEFAULTS.minMultiplier),
+    maxMultiplier: finiteOrDefault(source.maxMultiplier, DEFAULT_APP_DEFAULTS.maxMultiplier),
+    riskFreeRate: finiteOrDefault(source.riskFreeRate, DEFAULT_APP_DEFAULTS.riskFreeRate),
+    feeRate: finiteOrDefault(source.feeRate, DEFAULT_APP_DEFAULTS.feeRate),
+    slippageRate: finiteOrDefault(source.slippageRate, DEFAULT_APP_DEFAULTS.slippageRate),
+  };
+}
+
+function isParamValue(value: unknown): value is ParamValue {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+}
+
+function normalizeParamRecord(value: unknown): Record<string, ParamValue> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const params: Record<string, ParamValue> = {};
+  Object.entries(value as Record<string, unknown>).forEach(([key, paramValue]) => {
+    if (isParamValue(paramValue)) params[key] = paramValue;
+  });
+  return Object.keys(params).length > 0 ? params : undefined;
+}
+
+export function normalizeStrategyOverrides(value: unknown): Record<string, StrategyOverride> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const result: Record<string, StrategyOverride> = {};
+  Object.entries(value as Record<string, unknown>).forEach(([strategyType, rawOverride]) => {
+    if (!rawOverride || typeof rawOverride !== "object" || Array.isArray(rawOverride)) return;
+    const source = rawOverride as StrategyOverride;
+    const override: StrategyOverride = {};
+    if (typeof source.minMultiplier === "number" && Number.isFinite(source.minMultiplier)) {
+      override.minMultiplier = source.minMultiplier;
+    }
+    if (typeof source.maxMultiplier === "number" && Number.isFinite(source.maxMultiplier)) {
+      override.maxMultiplier = source.maxMultiplier;
+    }
+    const params = normalizeParamRecord(source.params);
+    if (params) override.params = params;
+    if (Object.keys(override).length > 0) result[strategyType] = override;
+  });
+  return result;
+}
+
+export function multipliersForStrategy(
+  strategyType: string,
+  appDefaults: Pick<AppDefaults, "minMultiplier" | "maxMultiplier">,
+  strategyOverrides: Record<string, StrategyOverride>,
+) {
+  const override = strategyOverrides[strategyType];
+  return {
+    minMultiplier: override?.minMultiplier ?? appDefaults.minMultiplier,
+    maxMultiplier: override?.maxMultiplier ?? appDefaults.maxMultiplier,
+  };
 }
 
 // ─── Settings persistence ────────────────────────────────────────────────────

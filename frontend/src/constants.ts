@@ -1,11 +1,21 @@
-import type { Frequency, MarketCode, PresetMode, PressureScenario } from "./types";
+import type { AppDefaults, Frequency, MarketCode, PresetMode, PressureScenario } from "./types";
 
 export const API_BASE = "";
-export const SETTINGS_KEY = "dca-assistant-settings-v3";
+export const SETTINGS_KEY = "dca-assistant-settings-v4";
 // LLM credentials live under a separate key and are NEVER put into the
 // shareable URL — an API key in a query string would leak the moment a
 // user copies the link. localStorage only.
 export const LLM_SETTINGS_KEY = "dca-assistant-llm-v1";
+
+export const DEFAULT_APP_DEFAULTS: AppDefaults = {
+  baseAmount: 100,
+  frequency: "weekly",
+  minMultiplier: 0.8,
+  maxMultiplier: 1.2,
+  riskFreeRate: 0.04,
+  feeRate: 0,
+  slippageRate: 0,
+};
 
 function formatIso(date: Date): string {
   const year = date.getFullYear();

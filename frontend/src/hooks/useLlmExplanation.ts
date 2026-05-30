@@ -43,12 +43,26 @@ type ExplanationInputs = {
   decisionKey: string;
 };
 
+type SelectionExplanationResponse = {
+  symbol: string;
+  selectedText: string;
+  explanation: string;
+  model: string;
+  dataSource: string;
+  cacheStatus: string;
+};
+
 export function useLlmExplanation(inputs: ExplanationInputs | null) {
   const [llm, setLlm] = useState<StoredLlmSettings>(() => readStoredLlm());
   const [explanation, setExplanation] = useState<string | null>(null);
   const [explanationModel, setExplanationModel] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<UiError | null>(null);
+  const [selectionExplanation, setSelectionExplanation] = useState<string | null>(null);
+  const [selectionModel, setSelectionModel] = useState<string | null>(null);
+  const [selectionText, setSelectionText] = useState<string | null>(null);
+  const [selectionLoading, setSelectionLoading] = useState(false);
+  const [selectionError, setSelectionError] = useState<UiError | null>(null);
 
   const enabled = llm.apiKey.trim().length > 0;
 
@@ -74,12 +88,15 @@ export function useLlmExplanation(inputs: ExplanationInputs | null) {
   // Track the latest in-flight request so a slow earlier response can't
   // overwrite a newer explanation.
   const requestSeq = useRef(0);
+  const selectionRequestSeq = useRef(0);
 
   const requestCurrentExplanation = () => {
     if (!canExplain || !symbol || !config || !asOf) return;
     const seq = ++requestSeq.current;
     setLoading(true);
     setError(null);
+    setExplanation(null);
+    setExplanationModel(null);
     fetch(`${API_BASE}/api/explanations/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -101,6 +118,48 @@ export function useLlmExplanation(inputs: ExplanationInputs | null) {
         if (seq !== requestSeq.current) return;
         setLoading(false);
       });
+  };
+
+  const requestSelectionExplanation = (selectedText: string) => {
+    const cleanText = selectedText.trim().replace(/\s+/g, " ");
+    if (!canExplain || !symbol || !config || !asOf || cleanText.length < 2) return;
+    const seq = ++selectionRequestSeq.current;
+    setSelectionText(cleanText);
+    setSelectionLoading(true);
+    setSelectionError(null);
+    setSelectionExplanation(null);
+    setSelectionModel(null);
+    fetch(`${API_BASE}/api/explanations/selection`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol, asOf, config, selectedText: cleanText, llm: payloadSettings }),
+    })
+      .then(readJson<SelectionExplanationResponse>)
+      .then((data) => {
+        if (seq !== selectionRequestSeq.current) return;
+        setSelectionExplanation(data.explanation);
+        setSelectionModel(data.model);
+        setSelectionText(data.selectedText);
+      })
+      .catch((err) => {
+        if (seq !== selectionRequestSeq.current) return;
+        setSelectionError(toUiError(err));
+        setSelectionExplanation(null);
+        setSelectionModel(null);
+      })
+      .finally(() => {
+        if (seq !== selectionRequestSeq.current) return;
+        setSelectionLoading(false);
+      });
+  };
+
+  const clearSelectionExplanation = () => {
+    selectionRequestSeq.current += 1;
+    setSelectionExplanation(null);
+    setSelectionModel(null);
+    setSelectionText(null);
+    setSelectionLoading(false);
+    setSelectionError(null);
   };
 
   useEffect(() => {
@@ -135,5 +194,12 @@ export function useLlmExplanation(inputs: ExplanationInputs | null) {
     explanationLoading: loading,
     explanationError: error,
     retryExplanation: requestCurrentExplanation,
+    selectionExplanation,
+    selectionModel,
+    selectionText,
+    selectionLoading,
+    selectionError,
+    requestSelectionExplanation,
+    clearSelectionExplanation,
   };
 }

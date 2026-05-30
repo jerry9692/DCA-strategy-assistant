@@ -1,5 +1,5 @@
 import React from "react";
-import { Activity, BarChart3, Download, Moon, RefreshCcw, SlidersHorizontal, Sparkles, Sun } from "lucide-react";
+import { Activity, BarChart3, Download, Moon, RefreshCcw, Settings, SlidersHorizontal, Sparkles, Sun } from "lucide-react";
 import type { components } from "./api.generated";
 import { useBacktest } from "./hooks/useBacktest";
 import { useChartOptions } from "./hooks/useChartOptions";
@@ -7,6 +7,7 @@ import { useLlmExplanation } from "./hooks/useLlmExplanation";
 import { ChartWrapper } from "./components/ChartWrapper";
 import { Metric } from "./components/Metric";
 import { ParamControl, RangeControl } from "./components/ParamControl";
+import { SettingsPage } from "./components/SettingsPage";
 import { QUICK_BACKTEST_PERIODS } from "./constants";
 import { clampToRange, currencySymbol, describeConfig, exportBacktestCsv, metric } from "./utils";
 import { todayIso } from "./constants";
@@ -14,9 +15,18 @@ import { ErrorBanner } from "./components/ErrorBanner";
 import type { PresetMode, Frequency, StrategyConfigPayload } from "./types";
 
 type SchemaStrategyConfig = components["schemas"]["StrategyConfig"];
+type SelectionAction = { text: string; left: number; top: number };
+
+function selectionTargetIsEditable(node: Node | null): boolean {
+  const element = node instanceof Element ? node : node?.parentElement;
+  return Boolean(element?.closest("input, textarea, select, [contenteditable='true']"));
+}
 
 export function App() {
   const state = useBacktest();
+  const [activeView, setActiveView] = React.useState<"workbench" | "settings">("workbench");
+  const [selectionAction, setSelectionAction] = React.useState<SelectionAction | null>(null);
+  const [aiPanelMode, setAiPanelMode] = React.useState<"current" | "selection">("current");
   const charts = useChartOptions(state.result, state.selectedStrategy, state.strategyNameByType, state.darkMode);
   const moneySymbol = currencySymbol(state.activeAsset?.currency);
 
@@ -56,6 +66,58 @@ export function App() {
     state.setSymbol(symbol);
     state.setActiveScenarioId(null);
   };
+  const selectionExplanationVisible = Boolean(
+    llmState.selectionText || llmState.selectionExplanation || llmState.selectionLoading || llmState.selectionError,
+  );
+  const activeAiPanelMode = aiPanelMode === "selection" && selectionExplanationVisible ? "selection" : "current";
+
+  const updateSelectionAction = React.useCallback(() => {
+    if (activeView !== "workbench" || !llmState.enabled || !llmState.canExplain) {
+      setSelectionAction(null);
+      return;
+    }
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+      setSelectionAction(null);
+      return;
+    }
+    if (selectionTargetIsEditable(selection.anchorNode) || selectionTargetIsEditable(selection.focusNode)) {
+      setSelectionAction(null);
+      return;
+    }
+    const text = selection.toString().trim().replace(/\s+/g, " ");
+    if (text.length < 2 || text.length > 800) {
+      setSelectionAction(null);
+      return;
+    }
+    const rect = selection.getRangeAt(0).getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      setSelectionAction(null);
+      return;
+    }
+    const left = Math.min(Math.max(rect.left + rect.width / 2 - 46, 8), window.innerWidth - 104);
+    const top = Math.max(rect.top - 42, 8);
+    setSelectionAction({ text, left, top });
+  }, [activeView, llmState.canExplain, llmState.enabled]);
+
+  React.useEffect(() => {
+    window.addEventListener("mouseup", updateSelectionAction);
+    window.addEventListener("keyup", updateSelectionAction);
+    window.addEventListener("scroll", updateSelectionAction, true);
+    return () => {
+      window.removeEventListener("mouseup", updateSelectionAction);
+      window.removeEventListener("keyup", updateSelectionAction);
+      window.removeEventListener("scroll", updateSelectionAction, true);
+    };
+  }, [updateSelectionAction]);
+
+  const explainSelectedText = () => {
+    if (!selectionAction) return;
+    llmState.requestSelectionExplanation(selectionAction.text);
+    setAiPanelMode("selection");
+    setSelectionAction(null);
+    window.getSelection()?.removeAllRanges();
+  };
 
   return (
     <main className="app-shell" data-theme={state.darkMode ? "dark" : "light"}>
@@ -71,9 +133,32 @@ export function App() {
           <button className={state.loading ? "icon-button spinning" : "icon-button"} onClick={state.refresh} title="刷新" disabled={state.loading}>
             <RefreshCcw size={18} />
           </button>
+          <button
+            className={activeView === "settings" ? "icon-button active" : "icon-button"}
+            onClick={() => setActiveView((view) => (view === "settings" ? "workbench" : "settings"))}
+            title={activeView === "settings" ? "返回工作台" : "打开设置"}
+          >
+            <Settings size={18} />
+          </button>
         </div>
       </header>
 
+      {selectionAction && (
+        <button
+          type="button"
+          className="selection-ai-action"
+          style={{ left: selectionAction.left, top: selectionAction.top }}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={explainSelectedText}
+        >
+          <Sparkles size={14} />AI 解释
+        </button>
+      )}
+
+      {activeView === "settings" ? (
+        <SettingsPage state={state} llmState={llmState} onBack={() => setActiveView("workbench")} />
+      ) : (
+      <>
       {/* ─── Control Strip ─────────────────────────────────────────────── */}
       <section className="control-strip">
         <label>
@@ -264,31 +349,6 @@ export function App() {
             )}
           </div>
 
-          {llmState.enabled && (
-            <div className="ai-explanation">
-              <div className="ai-explanation-head">
-                <span className="ai-explanation-title"><Sparkles size={15} />AI 解读{llmState.explanationModel ? ` · ${llmState.explanationModel}` : ""}</span>
-                <button
-                  type="button"
-                  className="reason-toggle"
-                  onClick={llmState.retryExplanation}
-                  disabled={llmState.explanationLoading || !llmState.canExplain}
-                >
-                  {llmState.explanationLoading ? "生成中" : llmState.explanation ? "重新解读" : "生成解读"}
-                </button>
-              </div>
-              {llmState.explanationLoading && !llmState.explanation && <p className="muted">正在请求 AI 解读...</p>}
-              {!llmState.canExplain && <p className="muted">参数或时间已变化，等待新的建议结果后可生成解读。</p>}
-              {llmState.canExplain && !llmState.llm.autoGenerate && !llmState.explanation && !llmState.explanationLoading && !llmState.explanationError && (
-                <p className="muted">已关闭自动生成，点击“生成解读”手动请求。</p>
-              )}
-              {llmState.explanationError && (
-                <p className="ai-explanation-error">{llmState.explanationError.message}</p>
-              )}
-              {llmState.explanation && <p className="ai-explanation-body">{llmState.explanation}</p>}
-            </div>
-          )}
-
           {/* Metrics */}
           <div className="metrics-grid">
             <Metric label="总投入" value={`${moneySymbol}${metric(state.result?.metrics.totalInvested)}`} hint="区间内累计买入金额，不含滑点和费率扣减。" />
@@ -411,6 +471,60 @@ export function App() {
 
         {/* Right sidebar: params */}
         <aside className="param-panel">
+          {llmState.enabled && (
+            <div className="ai-explanation sidebar-ai-explanation">
+              <div className="ai-explanation-head">
+                <span className="ai-explanation-title">
+                  <Sparkles size={15} />
+                  {activeAiPanelMode === "selection" ? "选中内容解释" : "AI 解读"}
+                  {activeAiPanelMode === "selection" && llmState.selectionModel ? ` · ${llmState.selectionModel}` : ""}
+                  {activeAiPanelMode === "current" && llmState.explanationModel ? ` · ${llmState.explanationModel}` : ""}
+                </span>
+                {selectionExplanationVisible && (
+                  <div className="ai-mode-tabs">
+                    <button type="button" className={activeAiPanelMode === "current" ? "active" : ""} onClick={() => setAiPanelMode("current")}>
+                      当前建议
+                    </button>
+                    <button type="button" className={activeAiPanelMode === "selection" ? "active" : ""} onClick={() => setAiPanelMode("selection")}>
+                      选中文字
+                    </button>
+                  </div>
+                )}
+              </div>
+              {activeAiPanelMode === "current" && (
+                <>
+                  <button
+                    type="button"
+                    className="reason-toggle ai-full-button"
+                    onClick={llmState.retryExplanation}
+                    disabled={llmState.explanationLoading || !llmState.canExplain}
+                  >
+                    {llmState.explanationLoading ? "生成中" : llmState.explanation ? "重新解读" : "生成解读"}
+                  </button>
+                  {llmState.explanationLoading && !llmState.explanation && <p className="muted">正在请求 AI 解读...</p>}
+                  {!llmState.canExplain && <p className="muted">参数或时间已变化，等待新的建议结果后可生成解读。</p>}
+                  {llmState.canExplain && !llmState.llm.autoGenerate && !llmState.explanation && !llmState.explanationLoading && !llmState.explanationError && (
+                    <p className="muted">已关闭自动生成，点击“生成解读”手动请求。</p>
+                  )}
+                  {llmState.explanationError && (
+                    <p className="ai-explanation-error">{llmState.explanationError.message}</p>
+                  )}
+                  {llmState.explanation && <p className="ai-explanation-body">{llmState.explanation}</p>}
+                </>
+              )}
+              {activeAiPanelMode === "selection" && (
+                <>
+                  {llmState.selectionText && <p className="selected-text-preview">“{llmState.selectionText}”</p>}
+                  {llmState.selectionLoading && <p className="muted">正在解释选中的文字...</p>}
+                  {llmState.selectionError && <p className="ai-explanation-error">{llmState.selectionError.message}</p>}
+                  {llmState.selectionExplanation && <p className="ai-explanation-body">{llmState.selectionExplanation}</p>}
+                  <button type="button" className="reason-toggle ai-full-button" onClick={llmState.clearSelectionExplanation}>
+                    清除选中解释
+                  </button>
+                </>
+              )}
+            </div>
+          )}
           <div className="section-title"><SlidersHorizontal size={17} />参数</div>
           {state.selectedStrategy && <p className="strategy-note">{state.selectedStrategy.description}</p>}
           <RangeControl label="最低倍率" value={state.minMultiplier} min={0} max={1} step={0.05} onChange={(v) => { state.setMinMultiplier(v); state.markCustom(); }} />
@@ -420,35 +534,9 @@ export function App() {
               key={param.key}
               param={param}
               value={state.params[param.key] ?? param.default}
-              onChange={(v) => { state.setParams((cur) => ({ ...cur, [param.key]: v })); state.markCustom(); }}
+              onChange={(v) => { state.setStrategyParam(param.key, v); state.markCustom(); }}
             />
           ))}
-          <RangeControl
-            label="无风险利率"
-            value={Number((state.riskFreeRate * 100).toFixed(2))}
-            min={0}
-            max={10}
-            step={0.25}
-            onChange={(v) => { state.setRiskFreeRate(v / 100); state.markCustom(); }}
-          />
-          <p className="strategy-note">夏普/索提诺比率以此为基准。默认 4% 接近 2024 年美国短期国债收益率，2020 年前后实际更接近 0-2%。</p>
-          <RangeControl
-            label="交易费率"
-            value={Number((state.feeRate * 100).toFixed(3))}
-            min={0}
-            max={0.5}
-            step={0.01}
-            onChange={(v) => { state.setFeeRate(v / 100); state.markCustom(); }}
-          />
-          <RangeControl
-            label="滑点率"
-            value={Number((state.slippageRate * 100).toFixed(3))}
-            min={0}
-            max={0.5}
-            step={0.01}
-            onChange={(v) => { state.setSlippageRate(v / 100); state.markCustom(); }}
-          />
-          <p className="strategy-note">回测时按比例扣减买入金额并抬高执行价。0% 表示忽略，常见 ETF 在零佣金券商上 0-0.05%。</p>
           <div className="optimizer-card">
             <strong>稳健参数建议</strong>
             <span>跨多个市场阶段搜索更稳定的参数。默认限制为最低 0.6-0.8x、最高 1.2-1.5x，不把功能变成择时交易。</span>
@@ -463,53 +551,14 @@ export function App() {
               <div key={k}><span>{k}</span><b>{v ?? "-"}</b></div>
             ))}
           </div>
-          <div className="llm-card">
-            <strong>AI 解读设置</strong>
-            <span>填入 OpenAI 兼容的 API Key 后，建议卡会自动用大白话解释为什么本期投这个金额。Key 只存在你本机浏览器，请求时经由本地后端转发，不会被保存或记录。</span>
-            <label className="llm-field">
-              API Base URL
-              <input
-                type="text"
-                value={llmState.llm.baseUrl}
-                placeholder="https://api.openai.com/v1"
-                onChange={(e) => llmState.setLlm((cur) => ({ ...cur, baseUrl: e.target.value }))}
-              />
-            </label>
-            <label className="llm-field">
-              模型
-              <input
-                type="text"
-                value={llmState.llm.model}
-                placeholder="gpt-4o-mini"
-                onChange={(e) => llmState.setLlm((cur) => ({ ...cur, model: e.target.value }))}
-              />
-            </label>
-            <label className="llm-field">
-              API Key
-              <input
-                type="password"
-                value={llmState.llm.apiKey}
-                placeholder="sk-..."
-                autoComplete="off"
-                onChange={(e) => llmState.setLlm((cur) => ({ ...cur, apiKey: e.target.value }))}
-              />
-            </label>
-            <label className="llm-toggle">
-              <input
-                type="checkbox"
-                checked={llmState.llm.autoGenerate}
-                onChange={(e) => llmState.setLlm((cur) => ({ ...cur, autoGenerate: e.target.checked }))}
-              />
-              <span>建议变化后自动生成解读</span>
-            </label>
-            <span className="llm-hint">DeepSeek 填 https://api.deepseek.com + deepseek-v4-pro；更快可用 deepseek-v4-flash。其它 OpenAI 兼容服务同理。</span>
-          </div>
           {(state.loading || state.recommendationLoading || state.optimizationLoading) && (
             <p className="muted">{state.optimizationActive ? "调优任务在后台运行，可以继续查看页面。" : "正在刷新策略结果..."}</p>
           )}
           <p className="muted">数据：{state.dataSource} · {state.cacheStatus}</p>
         </aside>
       </section>
+      </>
+      )}
     </main>
   );
 }

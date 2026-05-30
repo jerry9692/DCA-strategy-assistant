@@ -453,6 +453,23 @@ class ExplanationResponse(BaseModel):
     cacheStatus: str
 
 
+class SelectionExplanationRequest(BaseModel):
+    symbol: str = "QQQ"
+    config: StrategyConfig = Field(default_factory=StrategyConfig)
+    asOf: date | None = None
+    selectedText: str = Field(min_length=2, max_length=1000)
+    llm: LlmSettings
+
+
+class SelectionExplanationResponse(BaseModel):
+    symbol: str
+    selectedText: str
+    explanation: str
+    model: str
+    dataSource: str
+    cacheStatus: str
+
+
 class OptimizationRequest(BaseModel):
     symbol: str = "QQQ"
     config: StrategyConfig = Field(default_factory=StrategyConfig)

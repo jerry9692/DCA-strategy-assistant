@@ -10,6 +10,8 @@ import {
   withUtf8Bom,
   readUrlSettings,
   buildShareableSearch,
+  multipliersForStrategy,
+  normalizeStrategyOverrides,
 } from "./utils";
 import type { Backtest, Contribution } from "./types";
 
@@ -272,5 +274,72 @@ describe("URL state", () => {
     expect(query).toBe(
       "start=2021-01-01&end=2024-12-31&preset=custom&compare=drawdown_boost&p.rsiWeight=1.2&p.smooth=false",
     );
+  });
+
+  it("does not serialize AI credentials into shareable URLs", () => {
+    const query = buildShareableSearch({
+      symbol: "SPY",
+      strategyType: "composite_score",
+      baseAmount: 150,
+      frequency: "monthly",
+      minMultiplier: 0.7,
+      maxMultiplier: 1.4,
+      startDate: "2021-01-01",
+      endDate: "2024-12-31",
+      params: {},
+      presetMode: "custom",
+      activeScenarioId: null,
+      comparisonStrategyTypes: [],
+      riskFreeRate: 0.03,
+      feeRate: 0.001,
+      slippageRate: 0.0005,
+    });
+
+    expect(query).toContain("fee=0.001");
+    expect(query).toContain("slippage=0.0005");
+    expect(query).toContain("riskFree=0.03");
+    expect(query).not.toContain("apiKey");
+    expect(query).not.toContain("baseUrl");
+    expect(query).not.toContain("model=");
+  });
+});
+
+describe("strategy defaults", () => {
+  it("uses global default multipliers for strategies without overrides", () => {
+    expect(
+      multipliersForStrategy(
+        "ma_deviation",
+        { minMultiplier: 0.7, maxMultiplier: 1.4 },
+        { composite_score: { minMultiplier: 0.6, maxMultiplier: 1.8 } },
+      ),
+    ).toEqual({ minMultiplier: 0.7, maxMultiplier: 1.4 });
+  });
+
+  it("uses strategy-specific multipliers when a strategy was individually modified", () => {
+    expect(
+      multipliersForStrategy(
+        "composite_score",
+        { minMultiplier: 0.7, maxMultiplier: 1.4 },
+        { composite_score: { minMultiplier: 0.6, maxMultiplier: 1.8 } },
+      ),
+    ).toEqual({ minMultiplier: 0.6, maxMultiplier: 1.8 });
+  });
+
+  it("normalizes persisted strategy override params defensively", () => {
+    expect(
+      normalizeStrategyOverrides({
+        composite_score: {
+          minMultiplier: 0.65,
+          maxMultiplier: 1.45,
+          params: { smooth: true, rsiWeight: 1.2, bad: { nested: true } },
+        },
+      }),
+    ).toEqual({
+      composite_score: {
+        minMultiplier: 0.65,
+        maxMultiplier: 1.45,
+        params: { smooth: true, rsiWeight: 1.2 },
+      },
+    });
   });
 });
