@@ -241,6 +241,19 @@ class AssetRange(BaseModel):
     maxDate: date
 
 
+class HealthResponse(BaseModel):
+    """Lightweight liveness/readiness probe. Aggregates cheap runtime
+    signals (process uptime, cache row count, finished optimization
+    jobs) so an operator or reverse proxy can tell whether the app is
+    healthy without running a full backtest."""
+
+    status: str
+    version: str
+    dataCacheSize: int
+    optimizationJobs: int
+    uptimeSeconds: float
+
+
 class ParameterOption(BaseModel):
     label: str
     value: str | int | float | bool

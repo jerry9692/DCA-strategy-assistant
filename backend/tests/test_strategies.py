@@ -19,6 +19,7 @@ from app.main import (
     _rolling_window_years,
     asset_range,
     assets,
+    health,
 )
 from app.models import BacktestMetrics, ContributionEvent, OptimizationRequest, OptimizationResult, StrategyConfig
 from app.optimization_jobs import cancel_optimization_job, create_optimization_job, get_optimization_job
@@ -799,6 +800,69 @@ def test_asset_range_endpoint_rejects_unsupported_symbol():
     detail = exc_info.value.detail
     assert isinstance(detail, dict)
     assert detail.get("code") == "invalid_symbol"
+
+
+def test_health_endpoint_reports_ok_status_and_runtime_signals():
+    """/api/health must return a populated HealthResponse without touching
+    yfinance or running a backtest. Guards the operator-facing liveness
+    probe and the fields surfaced in the JSON payload."""
+    from app.main import app
+
+    response = health()
+    assert response.status == "ok"
+    # version mirrors the FastAPI constructor arg, not a hand-maintained copy
+    assert response.version == app.version == "0.4.0"
+    assert response.dataCacheSize >= 0
+    assert response.optimizationJobs >= 0
+    # uptime is captured at import time, so it must be non-negative
+    assert response.uptimeSeconds >= 0
+
+
+def test_finished_optimization_jobs_are_pruned_past_the_cap():
+    """The in-memory _jobs dict must not grow without bound under a
+    long-lived worker. Terminated records (completed/failed/cancelled)
+    are capped at _MAX_FINISHED_JOBS; the oldest are evicted first."""
+
+    from datetime import timedelta
+
+    from app import optimization_jobs
+    from app.optimization_jobs import _MAX_FINISHED_JOBS, OptimizationJobRecord, _jobs
+
+    # Build a synthetic history directly so we don't spawn 100+ real
+    # optimization threads. We use distinct created_at timestamps so the
+    # oldest-first eviction order is deterministic.
+    base = pd.Timestamp("2024-01-01T00:00:00Z")
+    surplus = 5
+    count = _MAX_FINISHED_JOBS + surplus
+    records = [
+        OptimizationJobRecord(
+            job_id=f"synthetic-{i:04d}",
+            request=OptimizationRequest(config=StrategyConfig()),
+            status="completed",
+            created_at=base + timedelta(seconds=i),
+        )
+        for i in range(count)
+    ]
+
+    # Reset to a clean slate, populate, then prune.
+    original = dict(_jobs)
+    _jobs.clear()
+    try:
+        _jobs.update({rec.job_id: rec for rec in records})
+        with optimization_jobs._lock:
+            optimization_jobs._prune_finished_jobs()
+
+        assert len(_jobs) == _MAX_FINISHED_JOBS
+        # The oldest `surplus` records must be the ones evicted.
+        remaining_ids = set(_jobs)
+        evicted_expected = {f"synthetic-{i:04d}" for i in range(surplus)}
+        assert remaining_ids.isdisjoint(evicted_expected)
+        # The newest record must still be present.
+        assert f"synthetic-{count - 1:04d}" in _jobs
+    finally:
+        # Restore so this test doesn't bleed into other tests sharing _jobs.
+        _jobs.clear()
+        _jobs.update(original)
 
 
 def test_cached_fixed_backtest_reuses_same_parameter_result(monkeypatch):

@@ -28,7 +28,7 @@ jobs:
         run: ruff format --check backend/
 
       - name: Run tests
-        run: pytest backend/tests -q
+        run: pytest backend/tests -q --cov=app --cov-report=term-missing
         env:
           PYTHONPATH: backend
 
@@ -41,6 +41,16 @@ jobs:
         run: |
           python export_openapi.py
           git diff --exit-code openapi.json
+
+      # Non-blocking dependency vulnerability scan. Surfaces known CVEs
+      # in the PR logs without failing the build — see roadmap Q7. Kept
+      # out of the blocking path so a fresh advisory can't stall a PR
+      # while we triage it.
+      - name: Security audit (non-blocking)
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt
 
   frontend:
     runs-on: ubuntu-latest
@@ -80,3 +90,11 @@ jobs:
         run: |
           npm run generate:api
           git diff --exit-code src/api.generated.ts
+
+      # Non-blocking dependency vulnerability scan. Mirrors the backend
+      # pip-audit step; continue-on-error so a new advisory shows up in
+      # the PR logs without blocking merges (roadmap Q7).
+      - name: Security audit (non-blocking)
+        continue-on-error: true
+        working-directory: frontend
+        run: npm audit --omit=dev

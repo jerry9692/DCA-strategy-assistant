@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
 
@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.backtester import DcaBacktester, rolling_annualized_returns, rolling_lump_sum_annualized_returns
-from app.data import PriceDataError, get_available_range, get_price_history, validate_symbol
+from app.data import PriceDataError, count_cached_bars, get_available_range, get_price_history, validate_symbol
 from app.explanations import explain_decision, explain_selection
 from app.models import (
     SUPPORTED_ASSETS,
@@ -20,6 +20,7 @@ from app.models import (
     ContributionEvent,
     ExplanationRequest,
     ExplanationResponse,
+    HealthResponse,
     MarketState,
     OptimizationJobCreateResponse,
     OptimizationJobStatus,
@@ -35,12 +36,22 @@ from app.models import (
     StrategyConfig,
     StrategyDefinitionsResponse,
 )
-from app.optimization_jobs import cancel_optimization_job, create_optimization_job, get_optimization_job
+from app.optimization_jobs import (
+    cancel_optimization_job,
+    count_finished_jobs,
+    create_optimization_job,
+    get_optimization_job,
+)
 from app.optimizer import optimize_parameters
 from app.strategies import clear_prepare_cache, evaluate_prepared_strategy, evaluate_strategy, prepare_market
 from app.strategy_definitions import COMMON_PARAMETERS, STRATEGIES
 
 app = FastAPI(title="DCA Strategy Assistant", version="0.4.0")
+
+# Captured once at import time; /api/health reports elapsed seconds since.
+# Module-level (not inside the handler) so a long-lived worker reports
+# real uptime rather than "time since first request".
+_STARTED_AT = datetime.now(timezone.utc)
 
 app.add_middleware(
     CORSMiddleware,
@@ -60,6 +71,25 @@ def _raise_api_error(exc: Exception) -> None:
     raise HTTPException(
         status_code=400, detail={"message": str(exc), "code": "request_failed", "retryable": False}
     ) from exc
+
+
+@app.get("/api/health", response_model=HealthResponse)
+def health() -> HealthResponse:
+    """Liveness + cache-size probe for reverse proxies and operators.
+
+    Deliberately touches only cheap, local signals (no yfinance, no
+    backtest) so it stays fast even when the app is under load or
+    offline. The route is registered before the catch-all SPA mount at
+    the end of this module, so /api/health wins over static file
+    serving regardless of mount order.
+    """
+    return HealthResponse(
+        status="ok",
+        version=app.version,
+        dataCacheSize=count_cached_bars(),
+        optimizationJobs=count_finished_jobs(),
+        uptimeSeconds=round((datetime.now(timezone.utc) - _STARTED_AT).total_seconds(), 1),
+    )
 
 
 @app.get("/api/assets", response_model=list[Asset])
