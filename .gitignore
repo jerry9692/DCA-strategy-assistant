@@ -10,6 +10,10 @@ backend/data/*.sqlite
 backend/data/*.sqlite-*
 backend/data/yfinance-cache/
 
+dist-portable/
+cache-patches/
+portable-build/
+
 .vscode/
 .playwright-mcp/
 backend/server.*.log

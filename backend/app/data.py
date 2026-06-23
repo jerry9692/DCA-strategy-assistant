@@ -1,3 +1,4 @@
+import os
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -24,6 +25,11 @@ YFINANCE_CACHE_DIR.mkdir(exist_ok=True)
 yf.set_tz_cache_location(str(YFINANCE_CACHE_DIR))
 DB_PATH = DATA_DIR / "dca_assistant.sqlite"
 engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
+
+
+def _offline_mode() -> bool:
+    value = os.getenv("DCA_OFFLINE_MODE", "")
+    return value.lower() in {"1", "true", "yes", "on"}
 
 
 class PriceBar(SQLModel, table=True):
@@ -141,7 +147,8 @@ def get_available_range(symbol: str) -> tuple[date, date]:
     """
     normalized = validate_symbol(symbol)
     floor = _YFINANCE_EARLIEST_AVAILABLE.get(normalized, date(1990, 1, 1))
-    ceiling = date.today()
+    _, cached_ceiling = get_cached_range(normalized)
+    ceiling = cached_ceiling if _offline_mode() and cached_ceiling is not None else date.today()
     return floor, ceiling
 
 
@@ -242,6 +249,13 @@ def get_price_history(symbol: str, start: date | None = None, end: date | None =
     cached = _load_cached(normalized, final_start, final_end)
     if _cache_covers(cached, final_start, final_end):
         return cached, "Yahoo Finance cache", "cache-hit"
+
+    if _offline_mode():
+        raise PriceDataError(
+            f"当前为离线模式，且 {_cache_range_text(cached)}，无法覆盖所选区间。请导入更新的缓存补丁，或把回测日期调到缓存范围内。",
+            code="offline_cache_miss",
+            retryable=False,
+        )
 
     try:
         downloaded = _download(normalized, final_start, final_end)

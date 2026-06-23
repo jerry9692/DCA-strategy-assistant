@@ -51,6 +51,26 @@ def test_price_history_does_not_return_incomplete_cache_after_empty_download(mon
     assert exc_info.value.code == "stale_cache"
 
 
+def test_price_history_offline_mode_never_downloads_when_cache_is_incomplete(monkeypatch):
+    cached = pd.DataFrame(
+        {"close": [100.0]},
+        index=pd.to_datetime(["2024-01-02"]),
+    )
+    monkeypatch.setenv("DCA_OFFLINE_MODE", "1")
+    monkeypatch.setattr("app.data._load_cached", lambda symbol, start, end: cached)
+
+    def fail_download(*args, **kwargs):
+        raise AssertionError("offline mode must not call yfinance")
+
+    monkeypatch.setattr("app.data._download", fail_download)
+
+    with pytest.raises(PriceDataError) as exc_info:
+        get_price_history("QQQ", date(2024, 1, 1), date(2024, 2, 1))
+
+    assert exc_info.value.code == "offline_cache_miss"
+    assert exc_info.value.retryable is False
+
+
 def test_get_available_range_uses_hardcoded_floor_regardless_of_cache(monkeypatch):
     """The available range floor must be the symbol's true earliest
     date on yfinance, not the earliest entry in the local cache —
@@ -67,6 +87,16 @@ def test_get_available_range_uses_hardcoded_floor_regardless_of_cache(monkeypatc
     floor, ceiling = get_available_range("QQQ")
     assert floor == date(1999, 3, 10)
     assert ceiling == date.today()
+
+
+def test_get_available_range_uses_cached_ceiling_in_offline_mode(monkeypatch):
+    from app.data import get_available_range
+
+    monkeypatch.setenv("DCA_OFFLINE_MODE", "1")
+    monkeypatch.setattr("app.data.get_cached_range", lambda symbol: (date(2018, 1, 2), date(2024, 12, 31)))
+    floor, ceiling = get_available_range("QQQ")
+    assert floor == date(1999, 3, 10)
+    assert ceiling == date(2024, 12, 31)
 
 
 def test_get_available_range_falls_back_when_no_hardcoded_entry(monkeypatch):

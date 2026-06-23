@@ -100,6 +100,17 @@ API 运行在 `http://127.0.0.1:8000`。首次请求时自动从 Yahoo Finance �
 PYTHONPATH=backend pytest backend/tests -q
 ```
 
+### 便携版和离线缓存
+
+如果要给没有 Python/Node 环境、且无法访问 Yahoo Finance 的用户试用，可以构建 Windows 便携版，并单独导出行情缓存补丁：
+
+```powershell
+.\scripts\portable\build_portable.ps1
+backend\.venv\Scripts\python.exe scripts\portable\export_cache_patch.py --symbols QQQ,SPY,510300 --start 2018-01-01 --end 2026-05-30
+```
+
+便携版产物在 `dist-portable/`，缓存补丁在 `cache-patches/`，都不会提交到仓库。详见 [便携版与缓存补丁](docs/portable-release.md)。
+
 ## API 端点
 
 | 方法 | 端点 | 说明 |
