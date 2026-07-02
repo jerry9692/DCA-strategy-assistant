@@ -32,6 +32,34 @@ class OptimizationJobRecord:
 _jobs: dict[str, OptimizationJobRecord] = {}
 _lock = Lock()
 
+_MAX_TERMINAL_JOBS = 100
+
+
+def cleanup_old_jobs() -> int:
+    """Remove terminated jobs beyond _MAX_TERMINAL_JOBS to bound memory growth.
+
+    Only removes jobs in a terminal state (completed/failed/cancelled).
+    Returns the number of removed entries.
+    """
+    removed = 0
+    with _lock:
+        terminal_ids = [
+            jid for jid, rec in _jobs.items()
+            if rec.status in {"completed", "failed", "cancelled"}
+        ]
+        if len(terminal_ids) <= _MAX_TERMINAL_JOBS:
+            return 0
+        excess = len(terminal_ids) - _MAX_TERMINAL_JOBS
+        for jid in terminal_ids[:excess]:
+            del _jobs[jid]
+            removed += 1
+    return removed
+
+
+def job_count() -> int:
+    with _lock:
+        return len(_jobs)
+
 
 def _to_status(record: OptimizationJobRecord) -> OptimizationJobStatus:
     return OptimizationJobStatus(
@@ -107,6 +135,7 @@ def create_optimization_job(request: OptimizationRequest) -> str:
     with _lock:
         _jobs[job_id] = record
     Thread(target=_run_job, args=(record,), daemon=True).start()
+    cleanup_old_jobs()
     return job_id
 
 

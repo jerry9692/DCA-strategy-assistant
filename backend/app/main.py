@@ -1,14 +1,16 @@
 from datetime import date, timedelta
 from functools import lru_cache
 from pathlib import Path
+from time import monotonic
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlmodel import Session, func, select
 
 from app.backtester import DcaBacktester, rolling_annualized_returns, rolling_lump_sum_annualized_returns
-from app.data import PriceDataError, get_available_range, get_price_history, validate_symbol
+from app.data import PriceBar, PriceDataError, engine, get_available_range, get_price_history, validate_symbol
 from app.explanations import explain_decision, explain_selection
 from app.models import (
     SUPPORTED_ASSETS,
@@ -35,12 +37,26 @@ from app.models import (
     StrategyConfig,
     StrategyDefinitionsResponse,
 )
-from app.optimization_jobs import cancel_optimization_job, create_optimization_job, get_optimization_job
+from app.optimization_jobs import (
+    cancel_optimization_job,
+    cleanup_old_jobs,
+    create_optimization_job,
+    get_optimization_job,
+    job_count,
+)
 from app.optimizer import optimize_parameters
-from app.strategies import clear_prepare_cache, evaluate_prepared_strategy, evaluate_strategy, prepare_market
+from app.strategies import (
+    _prepare_cache,
+    clear_prepare_cache,
+    evaluate_prepared_strategy,
+    evaluate_strategy,
+    prepare_market,
+)
 from app.strategy_definitions import COMMON_PARAMETERS, STRATEGIES
 
 app = FastAPI(title="DCA Strategy Assistant", version="0.4.0")
+
+_start_time = monotonic()
 
 app.add_middleware(
     CORSMiddleware,
@@ -60,6 +76,23 @@ def _raise_api_error(exc: Exception) -> None:
     raise HTTPException(
         status_code=400, detail={"message": str(exc), "code": "request_failed", "retryable": False}
     ) from exc
+
+
+@app.get("/api/health")
+def health_check():
+    """Return service status, cache sizes, and uptime."""
+    with Session(engine) as session:
+        price_cache_size = session.exec(select(func.count(PriceBar.bar_date))).first() or 0
+
+    cleanup_old_jobs()
+
+    return {
+        "status": "ok",
+        "uptimeSeconds": round(monotonic() - _start_time, 1),
+        "dataCacheSize": price_cache_size,
+        "prepareCacheSize": len(_prepare_cache),
+        "optimizationJobs": job_count(),
+    }
 
 
 @app.get("/api/assets", response_model=list[Asset])
