@@ -48,11 +48,32 @@ export function App() {
   const [activeChartTab, setActiveChartTab] = React.useState<ChartTab>("price");
   const [configDrawerOpen, setConfigDrawerOpen] = React.useState(false);
   const [settingsDrawerOpen, setSettingsDrawerOpen] = React.useState(false);
-  const [inspectorCollapsed, setInspectorCollapsed] = React.useState(false);
+  const [inspectorCollapsed, setInspectorCollapsed] = React.useState(() => {
+    if (typeof window !== "undefined") return window.innerWidth <= 1100;
+    return false;
+  });
   const [fullscreenChart, setFullscreenChart] = React.useState<ChartTab | null>(null);
   const [selectionAction, setSelectionAction] = React.useState<SelectionAction | null>(null);
   const [aiPanelMode, setAiPanelMode] = React.useState<"current" | "selection">("current");
   const inspectorRef = React.useRef<HTMLElement | null>(null);
+  const [viewportSize, setViewportSize] = React.useState(() => ({
+    w: typeof window !== "undefined" ? window.innerWidth : 1280,
+    h: typeof window !== "undefined" ? window.innerHeight : 800,
+  }));
+
+  React.useEffect(() => {
+    const onResize = () => setViewportSize({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  React.useEffect(() => {
+    if (fullscreenChart) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => { document.body.style.overflow = prev; };
+    }
+  }, [fullscreenChart]);
 
   const scrollInspectorToTop = React.useCallback(() => {
     requestAnimationFrame(() => {
@@ -158,6 +179,7 @@ export function App() {
     const handler = (event: KeyboardEvent) => {
       const target = event.target as Element | null;
       if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.key === "Escape") {
         if (fullscreenChart) setFullscreenChart(null);
         else if (anyDrawerOpen) { setConfigDrawerOpen(false); setSettingsDrawerOpen(false); }
@@ -269,8 +291,8 @@ export function App() {
       <NavRail
         activeView={activeView}
         onViewChange={setActiveView}
-        onConfigOpen={() => setConfigDrawerOpen(true)}
-        onSettingsOpen={() => setSettingsDrawerOpen(true)}
+        onConfigOpen={() => { setInspectorCollapsed(true); setConfigDrawerOpen(true); }}
+        onSettingsOpen={() => { setInspectorCollapsed(true); setSettingsDrawerOpen(true); }}
       />
 
       {selectionAction && (
@@ -287,6 +309,12 @@ export function App() {
 
       {/* ─── Main Workspace ─────────────────────────────────────────── */}
       <section className={state.loading ? "main-workspace is-loading" : "main-workspace"}>
+        {state.loading && !state.result && !state.error && (
+          <div className="initial-loading">
+            <RefreshCcw size={22} />
+            <span>正在加载回测数据...</span>
+          </div>
+        )}
         {state.loading && state.result && (
           <div className="loading-overlay">
             <RefreshCcw size={16} />
@@ -626,6 +654,12 @@ export function App() {
         <p className="muted">数据：{state.dataSource} · {state.cacheStatus}</p>
       </aside>
 
+      {/* ─── Inspector Overlay (mobile only) ─────────────────────── */}
+      <div
+        className={`inspector-overlay ${!inspectorCollapsed ? "open" : ""}`}
+        onClick={() => setInspectorCollapsed(true)}
+      />
+
       {/* ─── Config Drawer ────────────────────────────────────────── */}
       <div className={`drawer-overlay ${configDrawerOpen ? "open" : ""}`} onClick={() => setConfigDrawerOpen(false)} />
       <aside className={`config-drawer ${configDrawerOpen ? "open" : ""}`} aria-hidden={!configDrawerOpen}>
@@ -798,7 +832,7 @@ export function App() {
                 {charts.rollingWindowYears ? ` 当前窗口 ${charts.rollingWindowYears} 年。` : ""}
               </p>
             )}
-            {renderChart(fullscreenChart, window.innerHeight - 200)}
+            {renderChart(fullscreenChart, Math.max(320, viewportSize.h - 180))}
             {fullscreenChart === "showdown" && comparisonTable}
           </div>
         </div>

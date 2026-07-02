@@ -13,12 +13,15 @@ export function useChartOptions(
     const legend = darkMode ? "#e8eaed" : "#1a1f2e";
     const gridLine = darkMode ? "#1c2530" : "#e8ecf0";
     const axisLine = darkMode ? "#243044" : "#d1d9e6";
+    const zoomBg = darkMode ? "#151b23" : "#f0f2f5";
+    const zoomFiller = darkMode ? "#243044" : "#c8d0dc";
     return {
       tooltip: {
         trigger: "axis",
         backgroundColor: darkMode ? "#11161e" : "#ffffff",
         borderColor: darkMode ? "#243044" : "#e8ecf0",
         textStyle: { color: darkMode ? "#e8eaed" : "#1a1f2e", fontFamily: "JetBrains Mono, monospace" },
+        axisPointer: { type: "cross" as const, label: { backgroundColor: darkMode ? "#243044" : "#e8ecf0", color: darkMode ? "#e8eaed" : "#1a1f2e" } },
       },
       legend: { top: 0, textStyle: { color: legend, fontSize: 11 } },
       xAxis: {
@@ -35,6 +38,13 @@ export function useChartOptions(
         axisTick: { lineStyle: { color: axisLine } },
         splitLine: { lineStyle: { color: gridLine } },
       },
+      dataZoom: [
+        { type: "inside" as const, zoomOnMouseWheel: true, moveOnMouseMove: true },
+        { type: "slider" as const, height: 18, bottom: 4, backgroundColor: zoomBg, fillerColor: zoomFiller, borderColor: "transparent", textStyle: { color: text, fontSize: 10 }, handleSize: 18 },
+      ],
+      grid: (extra: Partial<{ left: number; right: number; top: number; bottom: number }> = {}) => ({
+        left: 64, right: 18, top: 24, bottom: 44, ...extra,
+      }),
     };
   }, [darkMode]);
 
@@ -51,7 +61,9 @@ export function useChartOptions(
   const priceOption = useMemo(
     () => ({
       tooltip: chartTheme.tooltip,
-      grid: { left: 64, right: 18, top: 24, bottom: 34 },
+      legend: chartTheme.legend,
+      grid: chartTheme.grid(),
+      dataZoom: chartTheme.dataZoom,
       xAxis: chartTheme.xAxis,
       yAxis: { ...chartTheme.valueAxis, scale: true },
       series: [
@@ -78,7 +90,8 @@ export function useChartOptions(
     () => ({
       tooltip: chartTheme.tooltip,
       legend: chartTheme.legend,
-      grid: { left: 64, right: 20, top: 36, bottom: 34 },
+      grid: chartTheme.grid({ top: 36 }),
+      dataZoom: chartTheme.dataZoom,
       xAxis: chartTheme.xAxis,
       yAxis: [
         { ...chartTheme.valueAxis, name: "组合价值", nameTextStyle: { color: chartTheme.valueAxis.axisLabel.color } },
@@ -99,7 +112,8 @@ export function useChartOptions(
     () => ({
       tooltip: chartTheme.tooltip,
       legend: chartTheme.legend,
-      grid: { left: 64, right: 20, top: 36, bottom: 34 },
+      grid: chartTheme.grid({ top: 36 }),
+      dataZoom: chartTheme.dataZoom,
       xAxis: chartTheme.xAxis,
       yAxis: { ...chartTheme.valueAxis, max: 0 },
       series: [
@@ -134,7 +148,8 @@ export function useChartOptions(
     () => ({
       tooltip: chartTheme.tooltip,
       legend: chartTheme.legend,
-      grid: { left: 64, right: 20, top: 36, bottom: 34 },
+      grid: chartTheme.grid({ top: 36 }),
+      dataZoom: chartTheme.dataZoom,
       xAxis: chartTheme.xAxis,
       yAxis: [
         { ...chartTheme.valueAxis, min: 0, max: 1 },
@@ -169,7 +184,8 @@ export function useChartOptions(
         valueFormatter: (value: number | string | null) => (typeof value === "number" ? `${value.toFixed(2)}%` : "-"),
       },
       legend: chartTheme.legend,
-      grid: { left: 64, right: 20, top: 42, bottom: 34 },
+      grid: chartTheme.grid({ top: 42 }),
+      dataZoom: chartTheme.dataZoom,
       xAxis: chartTheme.xAxis,
       yAxis: { ...chartTheme.valueAxis, axisLabel: { ...chartTheme.valueAxis.axisLabel, formatter: "{value}%" } },
       series: [
@@ -203,7 +219,8 @@ export function useChartOptions(
     () => ({
       tooltip: chartTheme.tooltip,
       legend: chartTheme.legend,
-      grid: { left: 64, right: 20, top: 42, bottom: 34 },
+      grid: chartTheme.grid({ top: 42 }),
+      dataZoom: chartTheme.dataZoom,
       xAxis: chartTheme.xAxis,
       yAxis: { ...chartTheme.valueAxis, name: "组合价值", nameTextStyle: { color: chartTheme.valueAxis.axisLabel.color } },
       series: [
