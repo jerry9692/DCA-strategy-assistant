@@ -751,6 +751,33 @@ h1, h2, h3, h4, p {
   min-height: 280px;
 }
 
+.chart-stage.is-loading::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: var(--bg-panel);
+  opacity: 0.7;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.chart-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chart-loading svg {
+  animation: spin 0.8s linear infinite;
+}
+
 .chart-stage__note {
   margin: 0 0 var(--space-2);
   color: var(--text-muted);
@@ -1368,6 +1395,13 @@ h1, h2, h3, h4, p {
   font-variant-numeric: tabular-nums;
 }
 
+.range-control.is-disabled span,
+.toggle.is-disabled span,
+.config-field.is-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 input[type="range"] {
   width: 100%;
   min-width: 100%;
@@ -1733,7 +1767,7 @@ input[type="range"]::-moz-range-thumb {
 
 .selection-ai-action {
   position: fixed;
-  z-index: 30;
+  z-index: 60;
   display: inline-flex;
   align-items: center;
   gap: 4px;

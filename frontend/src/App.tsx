@@ -196,7 +196,10 @@ export function App() {
         return;
       }
       switch (event.key.toLowerCase()) {
-        case "c": setConfigDrawerOpen((v) => !v); break;
+        case "c":
+          if (configDrawerOpen) { setConfigDrawerOpen(false); }
+          else { setSettingsDrawerOpen(false); setConfigDrawerOpen(true); }
+          break;
         case "i": setInspectorCollapsed((v) => !v); break;
         case "r": if (!state.loading) state.refresh(); break;
         case "t": state.setDarkMode((v) => !v); break;
@@ -204,7 +207,7 @@ export function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [anyDrawerOpen, fullscreenChart, activeView, state]);
+  }, [anyDrawerOpen, configDrawerOpen, fullscreenChart, activeView, state]);
 
   // Entering comparison view focuses the showdown chart.
   React.useEffect(() => {
@@ -291,8 +294,8 @@ export function App() {
       <NavRail
         activeView={activeView}
         onViewChange={setActiveView}
-        onConfigOpen={() => { setInspectorCollapsed(true); setConfigDrawerOpen(true); }}
-        onSettingsOpen={() => { setInspectorCollapsed(true); setSettingsDrawerOpen(true); }}
+        onConfigOpen={() => { setInspectorCollapsed(true); setSettingsDrawerOpen(false); setConfigDrawerOpen(true); }}
+        onSettingsOpen={() => { setInspectorCollapsed(true); setConfigDrawerOpen(false); setSettingsDrawerOpen(true); }}
       />
 
       {selectionAction && (
@@ -467,7 +470,13 @@ export function App() {
               <div className="chart-tabs">
                 <button className="chart-tab active">策略对决</button>
               </div>
-              <div className="chart-stage">
+              <div className={`chart-stage ${state.loading ? "is-loading" : ""}`}>
+                {state.loading && (
+                  <div className="chart-loading">
+                    <RefreshCcw size={16} />
+                    <span>正在刷新对比数据...</span>
+                  </div>
+                )}
                 <button
                   className="icon-button chart-stage__expand"
                   onClick={() => setFullscreenChart("showdown")}
@@ -537,11 +546,18 @@ export function App() {
                 optimizationRecommendedActive={state.optimizationRecommendedActive}
                 activeOptimizationCandidateRank={state.activeOptimizationCandidateRank}
               />
+            ) : state.strategyType === "fixed_dca" ? (
+              <div className="chart-placeholder" style={{ height: 160 }}>固定定投策略不进行参数调优。</div>
+            ) : state.error && !state.result ? (
+              <ErrorBanner error={state.error} onRetry={state.retryError} />
+            ) : state.optimizationJob?.status === "failed" ? (
+              <div className="error-banner">
+                <span>参数调优失败：{state.error?.message || "未知错误，请重试。"}</span>
+                <button type="button" className="secondary-action" onClick={state.runOptimization}>重试</button>
+              </div>
             ) : (
               <div className="chart-placeholder" style={{ height: 160 }}>
-                {state.strategyType === "fixed_dca"
-                  ? "固定定投策略不进行参数调优。"
-                  : "尚未运行自动调优。点击右上角“自动调优”开始跨多市场阶段的稳健参数搜索。"}
+                尚未运行自动调优。点击右上角"自动调优"开始跨多市场阶段的稳健参数搜索。
               </div>
             )}
           </>
@@ -604,7 +620,14 @@ export function App() {
                 {llmState.selectionLoading && <p className="muted">正在解释选中的文字...</p>}
                 {llmState.selectionError && <p className="ai-explanation-error">{llmState.selectionError.message}</p>}
                 {llmState.selectionExplanation && <p className="ai-explanation-body">{llmState.selectionExplanation}</p>}
-                <button type="button" className="reason-toggle ai-full-button" onClick={llmState.clearSelectionExplanation}>
+                <button
+                  type="button"
+                  className="reason-toggle ai-full-button"
+                  onClick={() => {
+                    llmState.clearSelectionExplanation();
+                    setAiPanelMode("current");
+                  }}
+                >
                   清除选中解释
                 </button>
               </>
@@ -615,13 +638,14 @@ export function App() {
         <div className="inspector-section">
           <div className="inspector-section__title">参数</div>
           {state.selectedStrategy && <p className="strategy-note">{state.selectedStrategy.description}</p>}
-          <RangeControl label="最低倍率" value={state.minMultiplier} min={0} max={1} step={0.05} onChange={(v) => { state.setMinMultiplier(v); state.markCustom(); }} />
-          <RangeControl label="最高倍率" value={state.maxMultiplier} min={1} max={5} step={0.1} onChange={(v) => { state.setMaxMultiplier(v); state.markCustom(); }} />
+          <RangeControl label="最低倍率" value={state.minMultiplier} min={0} max={1} step={0.05} disabled={state.loading} onChange={(v) => { state.setMinMultiplier(v); state.markCustom(); }} />
+          <RangeControl label="最高倍率" value={state.maxMultiplier} min={1} max={5} step={0.1} disabled={state.loading} onChange={(v) => { state.setMaxMultiplier(v); state.markCustom(); }} />
           {state.selectedStrategy?.parameters.map((param) => (
             <ParamControl
               key={param.key}
               param={param}
               value={state.params[param.key] ?? param.default}
+              disabled={state.loading}
               onChange={(v) => { state.setStrategyParam(param.key, v); state.markCustom(); }}
             />
           ))}
