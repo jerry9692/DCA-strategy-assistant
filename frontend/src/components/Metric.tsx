@@ -1,21 +1,19 @@
-import React from "react";
-import { Info } from "lucide-react";
-
-export function Metric({ label, value, hint }: { label: string; value: string; hint?: string }) {
+export function Metric({ label, value, hint, trend }: { label: string; value: string; hint?: string; trend?: "up" | "down" | "neutral" }) {
+  const valueClass = trend === "up" ? "metric-cell__value positive" : trend === "down" ? "metric-cell__value negative" : "metric-cell__value";
   return (
-    <div className="metric">
-      <span>
+    <div className="metric-cell">
+      <span className="metric-cell__label">
         {label}
         {hint && (
-          // Native title attribute keeps the implementation tooltip-
-          // dependency-free and renders on hover (desktop) or
-          // long-press (mobile). Screen readers also read the title.
           <span className="metric-hint" title={hint} aria-label={hint}>
-            <Info size={12} aria-hidden />
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4M12 8h.01" />
+            </svg>
           </span>
         )}
       </span>
-      <strong>{value}</strong>
+      <span className={valueClass}>{value}</span>
     </div>
   );
 }

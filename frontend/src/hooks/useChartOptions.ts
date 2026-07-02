@@ -9,34 +9,44 @@ export function useChartOptions(
   darkMode: boolean,
 ) {
   const chartTheme = useMemo(() => {
-    const text = darkMode ? "#cbd5e1" : "#64748b";
-    const legend = darkMode ? "#dbeafe" : "#475569";
-    const gridLine = darkMode ? "#243244" : "#e2e8f0";
-    const axisLine = darkMode ? "#334155" : "#cbd5e1";
+    const text = darkMode ? "#8b95a5" : "#6b7689";
+    const legend = darkMode ? "#e8eaed" : "#1a1f2e";
+    const gridLine = darkMode ? "#1c2530" : "#e8ecf0";
+    const axisLine = darkMode ? "#243044" : "#d1d9e6";
     return {
       tooltip: {
         trigger: "axis",
-        backgroundColor: darkMode ? "#0f172a" : "#ffffff",
-        borderColor: darkMode ? "#334155" : "#e2e8f0",
-        textStyle: { color: darkMode ? "#e5e7eb" : "#334155" },
+        backgroundColor: darkMode ? "#11161e" : "#ffffff",
+        borderColor: darkMode ? "#243044" : "#e8ecf0",
+        textStyle: { color: darkMode ? "#e8eaed" : "#1a1f2e", fontFamily: "JetBrains Mono, monospace" },
       },
-      legend: { top: 0, textStyle: { color: legend } },
+      legend: { top: 0, textStyle: { color: legend, fontSize: 11 } },
       xAxis: {
         type: "time",
-        axisLabel: { color: text },
+        axisLabel: { color: text, fontSize: 11 },
         axisLine: { lineStyle: { color: axisLine } },
         axisTick: { lineStyle: { color: axisLine } },
         splitLine: { lineStyle: { color: gridLine } },
       },
       valueAxis: {
         type: "value",
-        axisLabel: { color: text },
+        axisLabel: { color: text, fontSize: 11 },
         axisLine: { lineStyle: { color: axisLine } },
         axisTick: { lineStyle: { color: axisLine } },
         splitLine: { lineStyle: { color: gridLine } },
       },
     };
   }, [darkMode]);
+
+  // Series color palette — amber gold accent, soft blue for strategy,
+  // muted gray for fixed baseline, red for lump sum.
+  const C = {
+    accent: "#f0b232",      // amber gold — buy points, multiplier, main strategy in showdown
+    strategy: "#6ea8fe",    // soft blue — strategy value, score, drawdown
+    fixed: "#8b95a5",       // muted gray — fixed DCA baseline
+    lumpSum: "#ef5350",     // red — lump sum
+    comparison: ["#26d07c", "#6ea8fe", "#f0b232"], // green, blue, gold
+  };
 
   const priceOption = useMemo(
     () => ({
@@ -50,14 +60,14 @@ export function useChartOptions(
           type: "line",
           showSymbol: false,
           data: result?.priceSeries.map((point) => [point.date, point.close]) ?? [],
-          lineStyle: { color: "#2563eb", width: 2 },
+          lineStyle: { color: C.strategy, width: 2 },
         },
         {
           name: "买入点",
           type: "scatter",
           data: result?.contributions.filter((event) => event.amount > 0).map((event) => [event.date, event.price]) ?? [],
           symbolSize: 6,
-          itemStyle: { color: "#059669" },
+          itemStyle: { color: C.accent },
         },
       ],
     }),
@@ -75,11 +85,11 @@ export function useChartOptions(
         { ...chartTheme.valueAxis, name: "投入金额", nameTextStyle: { color: chartTheme.valueAxis.axisLabel.color } },
       ],
       series: [
-        { name: "本策略投入", type: "bar", yAxisIndex: 1, data: pairSeries(result?.contributions, (e) => e.amount), itemStyle: { color: "#0f766e" } },
-        { name: "固定投入", type: "bar", yAxisIndex: 1, data: pairSeries(result?.fixedContributions, (e) => e.amount), itemStyle: { color: "#94a3b8", opacity: 0.5 } },
-        { name: "本策略价值", type: "line", yAxisIndex: 0, data: pairSeries(result?.contributions, (e) => e.portfolioValue), showSymbol: false, lineStyle: { color: "#7c3aed", width: 2 } },
-        { name: "固定DCA价值", type: "line", yAxisIndex: 0, data: pairSeries(result?.fixedContributions, (e) => e.portfolioValue), showSymbol: false, lineStyle: { color: "#64748b", width: 2, type: "dashed" } },
-        { name: "一次性买入", type: "line", yAxisIndex: 0, data: pairSeries(result?.lumpSumContributions, (e) => e.portfolioValue), showSymbol: false, lineStyle: { color: "#dc2626", width: 2, type: "dotted" } },
+        { name: "本策略投入", type: "bar", yAxisIndex: 1, data: pairSeries(result?.contributions, (e) => e.amount), itemStyle: { color: C.accent } },
+        { name: "固定投入", type: "bar", yAxisIndex: 1, data: pairSeries(result?.fixedContributions, (e) => e.amount), itemStyle: { color: C.fixed, opacity: 0.5 } },
+        { name: "本策略价值", type: "line", yAxisIndex: 0, data: pairSeries(result?.contributions, (e) => e.portfolioValue), showSymbol: false, lineStyle: { color: C.strategy, width: 2 } },
+        { name: "固定DCA价值", type: "line", yAxisIndex: 0, data: pairSeries(result?.fixedContributions, (e) => e.portfolioValue), showSymbol: false, lineStyle: { color: C.fixed, width: 2, type: "dashed" } },
+        { name: "一次性买入", type: "line", yAxisIndex: 0, data: pairSeries(result?.lumpSumContributions, (e) => e.portfolioValue), showSymbol: false, lineStyle: { color: C.lumpSum, width: 2, type: "dotted" } },
       ],
     }),
     [chartTheme, result],
@@ -98,22 +108,22 @@ export function useChartOptions(
           type: "line",
           showSymbol: false,
           data: pairSeries(result?.contributions, accountDrawdown),
-          areaStyle: { color: "rgba(124, 58, 237, 0.08)" },
-          lineStyle: { color: "#7c3aed", width: 2 },
+          areaStyle: { color: "rgba(110, 168, 254, 0.08)" },
+          lineStyle: { color: C.strategy, width: 2 },
         },
         ...(result?.strategyComparisons?.map((item, index) => ({
           name: `${item.name}账户回撤`,
           type: "line",
           showSymbol: false,
           data: pairSeries(item.contributions, accountDrawdown),
-          lineStyle: { color: ["#0f766e", "#2563eb", "#d97706"][index % 3], width: 2 },
+          lineStyle: { color: C.comparison[index % 3], width: 2 },
         })) ?? []),
         {
           name: "固定DCA账户回撤",
           type: "line",
           showSymbol: false,
           data: pairSeries(result?.fixedContributions, accountDrawdown),
-          lineStyle: { color: "#64748b", width: 2, type: "dashed" },
+          lineStyle: { color: C.fixed, width: 2, type: "dashed" },
         },
       ],
     }),
@@ -136,7 +146,7 @@ export function useChartOptions(
           type: "line",
           showSymbol: false,
           data: pairSeries(result?.contributions, (e) => e.score),
-          lineStyle: { color: "#2563eb", width: 2 },
+          lineStyle: { color: C.strategy, width: 2 },
         },
         {
           name: "投入倍率",
@@ -144,7 +154,7 @@ export function useChartOptions(
           yAxisIndex: 1,
           showSymbol: false,
           data: pairSeries(result?.contributions, (e) => e.multiplier),
-          lineStyle: { color: "#0f766e", width: 2 },
+          lineStyle: { color: C.accent, width: 2 },
         },
       ],
     }),
@@ -168,21 +178,21 @@ export function useChartOptions(
           type: "line",
           showSymbol: false,
           data: pairSeries(result?.rollingPerformance, (e) => e.strategyAnnualizedReturnPct),
-          lineStyle: { color: "#7c3aed", width: 2 },
+          lineStyle: { color: C.strategy, width: 2 },
         },
         {
           name: "固定DCA",
           type: "line",
           showSymbol: false,
           data: pairSeries(result?.rollingPerformance, (e) => e.fixedAnnualizedReturnPct),
-          lineStyle: { color: "#64748b", width: 2, type: "dashed" },
+          lineStyle: { color: C.fixed, width: 2, type: "dashed" },
         },
         {
           name: "一次性买入",
           type: "line",
           showSymbol: false,
           data: pairSeries(result?.rollingPerformance, (e) => e.lumpSumAnnualizedReturnPct),
-          lineStyle: { color: "#dc2626", width: 2, type: "dotted" },
+          lineStyle: { color: C.lumpSum, width: 2, type: "dotted" },
         },
       ],
     }),
@@ -202,21 +212,21 @@ export function useChartOptions(
           type: "line",
           showSymbol: false,
           data: pairSeries(result?.contributions, (e) => e.portfolioValue),
-          lineStyle: { color: "#7c3aed", width: 2 },
+          lineStyle: { color: C.accent, width: 2 },
         },
         ...(result?.strategyComparisons?.map((item, index) => ({
           name: item.name,
           type: "line",
           showSymbol: false,
           data: pairSeries(item.contributions, (e) => e.portfolioValue),
-          lineStyle: { color: ["#0f766e", "#2563eb", "#d97706"][index % 3], width: 2 },
+          lineStyle: { color: C.comparison[index % 3], width: 2 },
         })) ?? []),
         {
           name: "固定DCA",
           type: "line",
           showSymbol: false,
           data: pairSeries(result?.fixedContributions, (e) => e.portfolioValue),
-          lineStyle: { color: "#64748b", width: 2, type: "dashed" },
+          lineStyle: { color: C.fixed, width: 2, type: "dashed" },
         },
       ],
     }),

@@ -58,7 +58,7 @@ export function ErrorBanner({ error, onRetry }: ErrorBannerProps) {
   };
 
   return (
-    <div className="error">
+    <div className="error-banner">
       <span>{error.message}</span>
       {error.retryable && (
         <button type="button" onClick={handleRetryNow}>

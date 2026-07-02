@@ -46,7 +46,7 @@ export function ParamControl({
   }
   if (param.type === "select") {
     return (
-      <label>
+      <label className="config-field">
         {param.label}
         <select value={String(value)} onChange={(event) => onChange(event.target.value)}>
           {param.options?.map((option) => (
@@ -71,7 +71,7 @@ export function ParamControl({
     );
   }
   return (
-    <label>
+    <label className="config-field">
       {param.label}
       <input
         type="number"
