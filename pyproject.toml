@@ -15,6 +15,8 @@ ignore = [
     "B008",    # function call in default argument (FastAPI Depends pattern)
     "B905",    # zip-without-explicit-strict — existing code is intentional
     "RUF001",  # ambiguous unicode — false positive on Chinese punctuation
+    "RUF002",  # ambiguous unicode in docstrings — same as RUF001
+    "RUF003",  # ambiguous unicode in comments — same as RUF001
     "RUF005",  # list concatenation vs spread — existing style is fine
     "RUF007",  # zip-instead-of-pairwise — readability preference
     "RUF012",  # mutable class variable — Pydantic models use this

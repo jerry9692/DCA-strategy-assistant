@@ -1,4 +1,4 @@
-export type View = "overview" | "performance" | "comparison" | "optimization";
+export type View = "overview" | "performance" | "comparison" | "optimization" | "montecarlo";
 
 interface NavRailProps {
   activeView: View;
@@ -35,6 +35,14 @@ const ICONS = {
       <path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4-6.3-4.6L5.7 21l2.3-7.4-6-4.6h7.6z" />
     </svg>
   ),
+  montecarlo: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 20h18" />
+      <path d="M4 16c2-4 4-4 6 0s4 4 6 0 4-4 4 0" opacity="0.4" />
+      <path d="M4 16c2-3 4-3 6 0s4 3 6 0 4-3 4 0" />
+      <path d="M4 16c2-2 4-2 6 0s4 2 6 0 4-2 4 0" strokeWidth="2.5" />
+    </svg>
+  ),
   config: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
@@ -55,6 +63,7 @@ export function NavRail({ activeView, onViewChange, onConfigOpen, onSettingsOpen
     { view: "performance", label: "表现", icon: ICONS.performance },
     { view: "comparison", label: "对比", icon: ICONS.comparison },
     { view: "optimization", label: "调优", icon: ICONS.optimization },
+    { view: "montecarlo", label: "推演", icon: ICONS.montecarlo },
   ];
 
   return (

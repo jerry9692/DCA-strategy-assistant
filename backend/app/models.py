@@ -470,6 +470,31 @@ class SelectionExplanationResponse(BaseModel):
     cacheStatus: str
 
 
+class ChatMessage(BaseModel):
+    # A single turn in the multi-turn Q&A conversation. role is either
+    # "user" or "assistant"; the system prompt is injected server-side
+    # from the current decision context and never appears here.
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class ChatRequest(BaseModel):
+    symbol: str = "QQQ"
+    config: StrategyConfig = Field(default_factory=StrategyConfig)
+    asOf: date | None = None
+    question: str = Field(min_length=1, max_length=1000)
+    history: list[ChatMessage] = Field(default_factory=list, max_length=20)
+    llm: LlmSettings
+
+
+class ChatResponse(BaseModel):
+    symbol: str
+    answer: str
+    model: str
+    dataSource: str
+    cacheStatus: str
+
+
 class OptimizationRequest(BaseModel):
     symbol: str = "QQQ"
     config: StrategyConfig = Field(default_factory=StrategyConfig)
@@ -533,3 +558,79 @@ class OptimizationJobStatus(BaseModel):
     bestSoFar: OptimizationCandidate | None = None
     result: OptimizationResult | None = None
     error: str | None = None
+
+
+# ─── D3 Monte Carlo simulation ────────────────────────────────────────────────
+
+
+# Whitelisted path counts. Keeping this a closed list stops users from
+# requesting 100k paths and locking the worker for minutes.
+MONTE_CARLO_ALLOWED_PATHS: tuple[int, ...] = (100, 500, 1000, 2000)
+
+
+class MonteCarloRequest(BaseModel):
+    symbol: str = "QQQ"
+    startDate: date | None = None
+    endDate: date | None = None
+    config: StrategyConfig = Field(default_factory=StrategyConfig)
+    horizonMonths: int = Field(default=60, ge=12, le=120)
+    numPaths: int = Field(default=1000)
+    seed: int | None = None
+
+    @model_validator(mode="after")
+    def _validate_num_paths(self) -> "MonteCarloRequest":
+        if self.numPaths not in MONTE_CARLO_ALLOWED_PATHS:
+            raise ValueError(
+                f"numPaths must be one of {MONTE_CARLO_ALLOWED_PATHS}, got {self.numPaths}."
+            )
+        return self
+
+
+class FittedParams(BaseModel):
+    muDaily: float
+    sigmaDaily: float
+    muAnnualized: float
+    sigmaAnnualized: float
+    sampleSize: int
+    startPrice: float
+
+
+class ScenarioStats(BaseModel):
+    p5: float
+    p25: float
+    p50: float
+    p75: float
+    p95: float
+    mean: float
+    std: float
+
+
+class MonteCarloBand(BaseModel):
+    # Per-month (lower, upper) percentile envelope. Two bands are sent
+    # so the chart can render a darker inner (25-75) over a lighter
+    # outer (5-95) without the frontend computing anything.
+    lower: list[float]
+    upper: list[float]
+
+
+class MonteCarloChartData(BaseModel):
+    months: list[int]
+    strategyMedian: list[float]
+    strategyBand5_95: MonteCarloBand
+    strategyBand25_75: MonteCarloBand
+    fixedDcaMedian: list[float]
+    lumpSumMedian: list[float]
+
+
+class MonteCarloResponse(BaseModel):
+    symbol: str
+    horizonMonths: int
+    numPaths: int
+    seed: int
+    fittedParams: FittedParams
+    strategy: ScenarioStats
+    fixedDca: ScenarioStats
+    lumpSum: ScenarioStats
+    beatFixedDcaProbability: float
+    chart: MonteCarloChartData
+    disclaimer: str

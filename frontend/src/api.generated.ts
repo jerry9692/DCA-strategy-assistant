@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Health Check
+         * @description Return service status, cache sizes, and uptime.
+         */
+        get: operations["health_check_api_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets": {
         parameters: {
             query?: never;
@@ -123,6 +143,60 @@ export interface paths {
          *     the same per-request forwarding rules as /api/explanations/run.
          */
         post: operations["selection_explanation_api_explanations_selection_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/explanations/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Chat
+         * @description Answer a follow-up question in a multi-turn conversation.
+         *
+         *     The decision context (current recommendation, signals, market
+         *     state) is injected server-side into the system prompt so the user
+         *     doesn't need to re-state it. History carries the prior turns. The
+         *     API key follows the same per-request forwarding rules as
+         *     /api/explanations/run.
+         */
+        post: operations["chat_api_explanations_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/simulations/montecarlo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Monte Carlo Simulation
+         * @description Run a Monte Carlo simulation of future price paths and return
+         *     the distribution of final portfolio values for the current
+         *     strategy, fixed DCA, and lump sum.
+         *
+         *     Paths are generated via GBM fitted on the historical daily log
+         *     returns over the same window the backtest uses. The response
+         *     carries percentiles, a "beat fixed DCA" probability, and a
+         *     per-month chart payload. This is a probability distribution, not
+         *     a forecast — see the disclaimer in the response.
+         */
+        post: operations["monte_carlo_simulation_api_simulations_montecarlo_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -328,6 +402,45 @@ export interface components {
             /** Cachestatus */
             cacheStatus: string;
         };
+        /** ChatMessage */
+        ChatMessage: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+            /** Content */
+            content: string;
+        };
+        /** ChatRequest */
+        ChatRequest: {
+            /**
+             * Symbol
+             * @default QQQ
+             */
+            symbol: string;
+            config?: components["schemas"]["StrategyConfig"];
+            /** Asof */
+            asOf?: string | null;
+            /** Question */
+            question: string;
+            /** History */
+            history?: components["schemas"]["ChatMessage"][];
+            llm: components["schemas"]["LlmSettings"];
+        };
+        /** ChatResponse */
+        ChatResponse: {
+            /** Symbol */
+            symbol: string;
+            /** Answer */
+            answer: string;
+            /** Model */
+            model: string;
+            /** Datasource */
+            dataSource: string;
+            /** Cachestatus */
+            cacheStatus: string;
+        };
         /** ContributionEvent */
         ContributionEvent: {
             /** Date */
@@ -387,6 +500,21 @@ export interface components {
             /** Cachestatus */
             cacheStatus: string;
         };
+        /** FittedParams */
+        FittedParams: {
+            /** Mudaily */
+            muDaily: number;
+            /** Sigmadaily */
+            sigmaDaily: number;
+            /** Muannualized */
+            muAnnualized: number;
+            /** Sigmaannualized */
+            sigmaAnnualized: number;
+            /** Samplesize */
+            sampleSize: number;
+            /** Startprice */
+            startPrice: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -426,6 +554,71 @@ export interface components {
             sma200?: number | null;
             /** Distancetosma200Pct */
             distanceToSma200Pct?: number | null;
+        };
+        /** MonteCarloBand */
+        MonteCarloBand: {
+            /** Lower */
+            lower: number[];
+            /** Upper */
+            upper: number[];
+        };
+        /** MonteCarloChartData */
+        MonteCarloChartData: {
+            /** Months */
+            months: number[];
+            /** Strategymedian */
+            strategyMedian: number[];
+            strategyBand5_95: components["schemas"]["MonteCarloBand"];
+            strategyBand25_75: components["schemas"]["MonteCarloBand"];
+            /** Fixeddcamedian */
+            fixedDcaMedian: number[];
+            /** Lumpsummedian */
+            lumpSumMedian: number[];
+        };
+        /** MonteCarloRequest */
+        MonteCarloRequest: {
+            /**
+             * Symbol
+             * @default QQQ
+             */
+            symbol: string;
+            /** Startdate */
+            startDate?: string | null;
+            /** Enddate */
+            endDate?: string | null;
+            config?: components["schemas"]["StrategyConfig"];
+            /**
+             * Horizonmonths
+             * @default 60
+             */
+            horizonMonths: number;
+            /**
+             * Numpaths
+             * @default 1000
+             */
+            numPaths: number;
+            /** Seed */
+            seed?: number | null;
+        };
+        /** MonteCarloResponse */
+        MonteCarloResponse: {
+            /** Symbol */
+            symbol: string;
+            /** Horizonmonths */
+            horizonMonths: number;
+            /** Numpaths */
+            numPaths: number;
+            /** Seed */
+            seed: number;
+            fittedParams: components["schemas"]["FittedParams"];
+            strategy: components["schemas"]["ScenarioStats"];
+            fixedDca: components["schemas"]["ScenarioStats"];
+            lumpSum: components["schemas"]["ScenarioStats"];
+            /** Beatfixeddcaprobability */
+            beatFixedDcaProbability: number;
+            chart: components["schemas"]["MonteCarloChartData"];
+            /** Disclaimer */
+            disclaimer: string;
         };
         /** OptimizationCandidate */
         OptimizationCandidate: {
@@ -604,6 +797,23 @@ export interface components {
             /** Lumpsumannualizedreturnpct */
             lumpSumAnnualizedReturnPct?: number | null;
         };
+        /** ScenarioStats */
+        ScenarioStats: {
+            /** P5 */
+            p5: number;
+            /** P25 */
+            p25: number;
+            /** P50 */
+            p50: number;
+            /** P75 */
+            p75: number;
+            /** P95 */
+            p95: number;
+            /** Mean */
+            mean: number;
+            /** Std */
+            std: number;
+        };
         /** SelectionExplanationRequest */
         SelectionExplanationRequest: {
             /**
@@ -753,10 +963,6 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
-            /** Input */
-            input?: unknown;
-            /** Context */
-            ctx?: Record<string, never>;
         };
     };
     responses: never;
@@ -767,6 +973,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    health_check_api_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     assets_api_assets_get: {
         parameters: {
             query?: never;
@@ -924,6 +1150,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SelectionExplanationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chat_api_explanations_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    monte_carlo_simulation_api_simulations_montecarlo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MonteCarloRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonteCarloResponse"];
                 };
             };
             /** @description Validation Error */

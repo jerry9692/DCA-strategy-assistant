@@ -5,6 +5,23 @@
     "version": "0.4.0"
   },
   "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Return service status, cache sizes, and uptime.",
+        "operationId": "health_check_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/assets": {
       "get": {
         "summary": "Assets",
@@ -184,6 +201,84 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SelectionExplanationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/explanations/chat": {
+      "post": {
+        "summary": "Chat",
+        "description": "Answer a follow-up question in a multi-turn conversation.\n\nThe decision context (current recommendation, signals, market\nstate) is injected server-side into the system prompt so the user\ndoesn't need to re-state it. History carries the prior turns. The\nAPI key follows the same per-request forwarding rules as\n/api/explanations/run.",
+        "operationId": "chat_api_explanations_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/simulations/montecarlo": {
+      "post": {
+        "summary": "Monte Carlo Simulation",
+        "description": "Run a Monte Carlo simulation of future price paths and return\nthe distribution of final portfolio values for the current\nstrategy, fixed DCA, and lump sum.\n\nPaths are generated via GBM fitted on the historical daily log\nreturns over the same window the backtest uses. The response\ncarries percentiles, a \"beat fixed DCA\" probability, and a\nper-month chart payload. This is a probability distribution, not\na forecast — see the disclaimer in the response.",
+        "operationId": "monte_carlo_simulation_api_simulations_montecarlo_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MonteCarloRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonteCarloResponse"
                 }
               }
             }
@@ -739,6 +834,110 @@
         ],
         "title": "BacktestResult"
       },
+      "ChatMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatMessage"
+      },
+      "ChatRequest": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol",
+            "default": "QQQ"
+          },
+          "config": {
+            "$ref": "#/components/schemas/StrategyConfig"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asof"
+          },
+          "question": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Question"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "History"
+          },
+          "llm": {
+            "$ref": "#/components/schemas/LlmSettings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "llm"
+        ],
+        "title": "ChatRequest"
+      },
+      "ChatResponse": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "dataSource": {
+            "type": "string",
+            "title": "Datasource"
+          },
+          "cacheStatus": {
+            "type": "string",
+            "title": "Cachestatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "answer",
+          "model",
+          "dataSource",
+          "cacheStatus"
+        ],
+        "title": "ChatResponse"
+      },
       "ContributionEvent": {
         "properties": {
           "date": {
@@ -886,6 +1085,44 @@
         ],
         "title": "ExplanationResponse"
       },
+      "FittedParams": {
+        "properties": {
+          "muDaily": {
+            "type": "number",
+            "title": "Mudaily"
+          },
+          "sigmaDaily": {
+            "type": "number",
+            "title": "Sigmadaily"
+          },
+          "muAnnualized": {
+            "type": "number",
+            "title": "Muannualized"
+          },
+          "sigmaAnnualized": {
+            "type": "number",
+            "title": "Sigmaannualized"
+          },
+          "sampleSize": {
+            "type": "integer",
+            "title": "Samplesize"
+          },
+          "startPrice": {
+            "type": "number",
+            "title": "Startprice"
+          }
+        },
+        "type": "object",
+        "required": [
+          "muDaily",
+          "sigmaDaily",
+          "muAnnualized",
+          "sigmaAnnualized",
+          "sampleSize",
+          "startPrice"
+        ],
+        "title": "FittedParams"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -995,6 +1232,197 @@
           "summary"
         ],
         "title": "MarketState"
+      },
+      "MonteCarloBand": {
+        "properties": {
+          "lower": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Lower"
+          },
+          "upper": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Upper"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lower",
+          "upper"
+        ],
+        "title": "MonteCarloBand"
+      },
+      "MonteCarloChartData": {
+        "properties": {
+          "months": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Months"
+          },
+          "strategyMedian": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Strategymedian"
+          },
+          "strategyBand5_95": {
+            "$ref": "#/components/schemas/MonteCarloBand"
+          },
+          "strategyBand25_75": {
+            "$ref": "#/components/schemas/MonteCarloBand"
+          },
+          "fixedDcaMedian": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Fixeddcamedian"
+          },
+          "lumpSumMedian": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Lumpsummedian"
+          }
+        },
+        "type": "object",
+        "required": [
+          "months",
+          "strategyMedian",
+          "strategyBand5_95",
+          "strategyBand25_75",
+          "fixedDcaMedian",
+          "lumpSumMedian"
+        ],
+        "title": "MonteCarloChartData"
+      },
+      "MonteCarloRequest": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol",
+            "default": "QQQ"
+          },
+          "startDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startdate"
+          },
+          "endDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enddate"
+          },
+          "config": {
+            "$ref": "#/components/schemas/StrategyConfig"
+          },
+          "horizonMonths": {
+            "type": "integer",
+            "maximum": 120.0,
+            "minimum": 12.0,
+            "title": "Horizonmonths",
+            "default": 60
+          },
+          "numPaths": {
+            "type": "integer",
+            "title": "Numpaths",
+            "default": 1000
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "type": "object",
+        "title": "MonteCarloRequest"
+      },
+      "MonteCarloResponse": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "horizonMonths": {
+            "type": "integer",
+            "title": "Horizonmonths"
+          },
+          "numPaths": {
+            "type": "integer",
+            "title": "Numpaths"
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed"
+          },
+          "fittedParams": {
+            "$ref": "#/components/schemas/FittedParams"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/ScenarioStats"
+          },
+          "fixedDca": {
+            "$ref": "#/components/schemas/ScenarioStats"
+          },
+          "lumpSum": {
+            "$ref": "#/components/schemas/ScenarioStats"
+          },
+          "beatFixedDcaProbability": {
+            "type": "number",
+            "title": "Beatfixeddcaprobability"
+          },
+          "chart": {
+            "$ref": "#/components/schemas/MonteCarloChartData"
+          },
+          "disclaimer": {
+            "type": "string",
+            "title": "Disclaimer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "horizonMonths",
+          "numPaths",
+          "seed",
+          "fittedParams",
+          "strategy",
+          "fixedDca",
+          "lumpSum",
+          "beatFixedDcaProbability",
+          "chart",
+          "disclaimer"
+        ],
+        "title": "MonteCarloResponse"
       },
       "OptimizationCandidate": {
         "properties": {
@@ -1476,6 +1904,49 @@
         ],
         "title": "RollingPerformancePoint"
       },
+      "ScenarioStats": {
+        "properties": {
+          "p5": {
+            "type": "number",
+            "title": "P5"
+          },
+          "p25": {
+            "type": "number",
+            "title": "P25"
+          },
+          "p50": {
+            "type": "number",
+            "title": "P50"
+          },
+          "p75": {
+            "type": "number",
+            "title": "P75"
+          },
+          "p95": {
+            "type": "number",
+            "title": "P95"
+          },
+          "mean": {
+            "type": "number",
+            "title": "Mean"
+          },
+          "std": {
+            "type": "number",
+            "title": "Std"
+          }
+        },
+        "type": "object",
+        "required": [
+          "p5",
+          "p25",
+          "p50",
+          "p75",
+          "p95",
+          "mean",
+          "std"
+        ],
+        "title": "ScenarioStats"
+      },
       "SelectionExplanationRequest": {
         "properties": {
           "symbol": {
@@ -1850,13 +2321,6 @@
           "type": {
             "type": "string",
             "title": "Error Type"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "ctx": {
-            "type": "object",
-            "title": "Context"
           }
         },
         "type": "object",

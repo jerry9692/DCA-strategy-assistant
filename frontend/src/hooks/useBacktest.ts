@@ -7,6 +7,7 @@ import type {
   Backtest,
   Decision,
   Frequency,
+  MonteCarloResponse,
   OptimizationJobStatus,
   OptimizationResult,
   ParamValue,
@@ -96,6 +97,8 @@ export function useBacktest() {
   const [optimization, setOptimization] = useState<OptimizationResult | null>(null);
   const [optimizationJob, setOptimizationJob] = useState<OptimizationJobStatus | null>(null);
   const [optimizationContext, setOptimizationContext] = useState<OptimizationRunContext | null>(null);
+  const [monteCarlo, setMonteCarlo] = useState<MonteCarloResponse | null>(null);
+  const [monteCarloLoading, setMonteCarloLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [recommendationLoading, setRecommendationLoading] = useState(false);
   const [optimizationLoading, setOptimizationLoading] = useState(false);
@@ -536,6 +539,21 @@ export function useBacktest() {
       .catch((err) => setError(toUiError(err)));
   };
 
+  const runMonteCarlo = (horizonMonths: number, numPaths: number, seed?: number) => {
+    if (!selectedStrategy) return;
+    setMonteCarloLoading(true);
+    setError(null);
+    fetch(`${API_BASE}/api/simulations/montecarlo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol, startDate, endDate, config, horizonMonths, numPaths, seed }),
+    })
+      .then(readJson<MonteCarloResponse>)
+      .then((data) => setMonteCarlo(data))
+      .catch((err) => setError(toUiError(err)))
+      .finally(() => setMonteCarloLoading(false));
+  };
+
   const applyOptimizedConfig = (optimizedConfig: StrategyConfigPayload | Schemas["StrategyConfig"]) => {
     setPresetMode("custom");
     setCurrentMinMultiplier(optimizedConfig.minMultiplier);
@@ -611,6 +629,8 @@ export function useBacktest() {
     result,
     optimization,
     optimizationJob,
+    monteCarlo,
+    monteCarloLoading,
     loading,
     recommendationLoading,
     optimizationLoading,
@@ -658,6 +678,7 @@ export function useBacktest() {
     runRecommendationOnly,
     runOptimization,
     cancelOptimization,
+    runMonteCarlo,
     applyOptimizedConfig,
     toggleComparison,
     refresh,

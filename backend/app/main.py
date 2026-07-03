@@ -11,7 +11,7 @@ from sqlmodel import Session, func, select
 
 from app.backtester import DcaBacktester, rolling_annualized_returns, rolling_lump_sum_annualized_returns
 from app.data import PriceBar, PriceDataError, engine, get_available_range, get_price_history, validate_symbol
-from app.explanations import explain_decision, explain_selection
+from app.explanations import answer_question, explain_decision, explain_selection
 from app.models import (
     SUPPORTED_ASSETS,
     Asset,
@@ -19,10 +19,14 @@ from app.models import (
     BacktestMetrics,
     BacktestRequest,
     BacktestResult,
+    ChatRequest,
+    ChatResponse,
     ContributionEvent,
     ExplanationRequest,
     ExplanationResponse,
     MarketState,
+    MonteCarloRequest,
+    MonteCarloResponse,
     OptimizationJobCreateResponse,
     OptimizationJobStatus,
     OptimizationRequest,
@@ -45,6 +49,8 @@ from app.optimization_jobs import (
     job_count,
 )
 from app.optimizer import optimize_parameters
+from app.rate_limiter import chat_limiter
+from app.simulation import run_montecarlo
 from app.strategies import (
     _prepare_cache,
     clear_prepare_cache,
@@ -76,6 +82,24 @@ def _raise_api_error(exc: Exception) -> None:
     raise HTTPException(
         status_code=400, detail={"message": str(exc), "code": "request_failed", "retryable": False}
     ) from exc
+
+
+def _enforce_chat_rate_limit(api_key: str) -> None:
+    """Reject with 429 if the caller has exceeded the per-key chat quota.
+
+    All three explanation endpoints share the same limiter so a user
+    can't bypass the cap by alternating between /run, /selection, and
+    /chat. The key is hashed inside the limiter and never stored.
+    """
+    if not chat_limiter.check(api_key):
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "message": "AI 问答请求过于频繁，请稍候 1 分钟再试。",
+                "code": "rate_limited",
+                "retryable": True,
+            },
+        )
 
 
 @app.get("/api/health")
@@ -171,6 +195,7 @@ def explanation(request: ExplanationRequest) -> ExplanationResponse:
     explanations.py for the request construction.
     """
     try:
+        _enforce_chat_rate_limit(request.llm.apiKey)
         clear_prepare_cache()
         symbol = validate_symbol(request.symbol)
         end = request.asOf or date.today()
@@ -201,6 +226,7 @@ def selection_explanation(request: SelectionExplanationRequest) -> SelectionExpl
     the same per-request forwarding rules as /api/explanations/run.
     """
     try:
+        _enforce_chat_rate_limit(request.llm.apiKey)
         clear_prepare_cache()
         symbol = validate_symbol(request.symbol)
         end = request.asOf or date.today()
@@ -218,6 +244,69 @@ def selection_explanation(request: SelectionExplanationRequest) -> SelectionExpl
             dataSource=data_source,
             cacheStatus=cache_status,
         )
+    except Exception as exc:
+        _raise_api_error(exc)
+
+
+@app.post("/api/explanations/chat", response_model=ChatResponse)
+def chat(request: ChatRequest) -> ChatResponse:
+    """Answer a follow-up question in a multi-turn conversation.
+
+    The decision context (current recommendation, signals, market
+    state) is injected server-side into the system prompt so the user
+    doesn't need to re-state it. History carries the prior turns. The
+    API key follows the same per-request forwarding rules as
+    /api/explanations/run.
+    """
+    try:
+        _enforce_chat_rate_limit(request.llm.apiKey)
+        clear_prepare_cache()
+        symbol = validate_symbol(request.symbol)
+        end = request.asOf or date.today()
+        start = end - timedelta(days=365 * 10)
+        prices, data_source, cache_status = get_price_history(symbol, start, end)
+        decision = evaluate_strategy(request.config.strategyType, request.config, prices)
+        market_state = _market_state(prices, end)
+        currency = _asset_currency(symbol)
+        text = answer_question(request.model_copy(update={"symbol": symbol}), decision, market_state, currency)
+        return ChatResponse(
+            symbol=symbol,
+            answer=text,
+            model=request.llm.model,
+            dataSource=data_source,
+            cacheStatus=cache_status,
+        )
+    except Exception as exc:
+        _raise_api_error(exc)
+
+
+@app.post("/api/simulations/montecarlo", response_model=MonteCarloResponse)
+def monte_carlo_simulation(request: MonteCarloRequest) -> MonteCarloResponse:
+    """Run a Monte Carlo simulation of future price paths and return
+    the distribution of final portfolio values for the current
+    strategy, fixed DCA, and lump sum.
+
+    Paths are generated via GBM fitted on the historical daily log
+    returns over the same window the backtest uses. The response
+    carries percentiles, a "beat fixed DCA" probability, and a
+    per-month chart payload. This is a probability distribution, not
+    a forecast — see the disclaimer in the response.
+    """
+    try:
+        clear_prepare_cache()
+        symbol = validate_symbol(request.symbol)
+        end = request.endDate or date.today()
+        # Pull extra history (3y warmup) so indicators on the
+        # simulated segment have enough lookback, mirroring the
+        # backtest endpoint's warmup handling.
+        start = request.startDate or (end - timedelta(days=365 * 5))
+        warmup = start - timedelta(days=365 * 3)
+        prices, _data_source, _cache_status = get_price_history(symbol, warmup, end)
+        currency = _asset_currency(symbol)
+        result = run_montecarlo(request, prices, currency)
+        # run_montecarlo already clears the prepare_market cache at
+        # the end of each path, so we don't need another clear here.
+        return result
     except Exception as exc:
         _raise_api_error(exc)
 

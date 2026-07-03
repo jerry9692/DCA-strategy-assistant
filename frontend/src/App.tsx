@@ -1,5 +1,5 @@
 import React from "react";
-import { Download, Maximize2, Minimize2, PanelRightClose, PanelRightOpen, RefreshCcw, Sparkles, X } from "lucide-react";
+import { Download, Maximize2, MessageCircle, Minimize2, PanelRightClose, PanelRightOpen, RefreshCcw, RotateCcw, Send, Sparkles, X } from "lucide-react";
 import type { components } from "./api.generated";
 import { useBacktest } from "./hooks/useBacktest";
 import { useChartOptions } from "./hooks/useChartOptions";
@@ -11,6 +11,7 @@ import { NavRail, type View } from "./components/NavRail";
 import { StatusBar } from "./components/StatusBar";
 import { SettingsDrawer } from "./components/SettingsDrawer";
 import { ErrorBanner } from "./components/ErrorBanner";
+import { MonteCarloPanel } from "./components/MonteCarloPanel";
 import { QUICK_BACKTEST_PERIODS, todayIso } from "./constants";
 import { clampToRange, currencySymbol, describeConfig, exportBacktestCsv, metric } from "./utils";
 import type { PresetMode, Frequency, StrategyConfigPayload } from "./types";
@@ -55,6 +56,61 @@ export function App() {
   const [fullscreenChart, setFullscreenChart] = React.useState<ChartTab | null>(null);
   const [selectionAction, setSelectionAction] = React.useState<SelectionAction | null>(null);
   const [aiPanelMode, setAiPanelMode] = React.useState<"current" | "selection">("current");
+  const [chatInput, setChatInput] = React.useState("");
+  const [chatOpen, setChatOpen] = React.useState(false);
+  const [chatPos, setChatPos] = React.useState<{ x: number; y: number }>(() => ({
+    x: typeof window !== "undefined" ? window.innerWidth - 420 : 800,
+    y: typeof window !== "undefined" ? 80 : 80,
+  }));
+  const [chatSize, setChatSize] = React.useState<{ w: number; h: number }>({ w: 380, h: 520 });
+  const chatPanelRef = React.useRef<HTMLDivElement | null>(null);
+  const dragState = React.useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
+  const resizeState = React.useRef<{ startX: number; startY: number; baseW: number; baseH: number } | null>(null);
+
+  const onChatHeaderMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest("button")) return;
+    dragState.current = { startX: e.clientX, startY: e.clientY, baseX: chatPos.x, baseY: chatPos.y };
+    const onMove = (ev: MouseEvent) => {
+      if (!dragState.current) return;
+      const dx = ev.clientX - dragState.current.startX;
+      const dy = ev.clientY - dragState.current.startY;
+      const maxX = window.innerWidth - 80;
+      const maxY = window.innerHeight - 48;
+      setChatPos({
+        x: Math.min(Math.max(dragState.current.baseX + dx, 0), maxX),
+        y: Math.min(Math.max(dragState.current.baseY + dy, 0), maxY),
+      });
+    };
+    const onUp = () => {
+      dragState.current = null;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
+
+  const onChatResizeMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizeState.current = { startX: e.clientX, startY: e.clientY, baseW: chatSize.w, baseH: chatSize.h };
+    const onMove = (ev: MouseEvent) => {
+      if (!resizeState.current) return;
+      const dw = ev.clientX - resizeState.current.startX;
+      const dh = ev.clientY - resizeState.current.startY;
+      setChatSize({
+        w: Math.min(Math.max(resizeState.current.baseW + dw, 300), window.innerWidth - chatPos.x - 20),
+        h: Math.min(Math.max(resizeState.current.baseH + dh, 320), window.innerHeight - chatPos.y - 20),
+      });
+    };
+    const onUp = () => {
+      resizeState.current = null;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
   const inspectorRef = React.useRef<HTMLElement | null>(null);
   const [viewportSize, setViewportSize] = React.useState(() => ({
     w: typeof window !== "undefined" ? window.innerWidth : 1280,
@@ -83,6 +139,12 @@ export function App() {
 
   const charts = useChartOptions(state.result, state.selectedStrategy, state.strategyNameByType, state.darkMode);
   const moneySymbol = currencySymbol(state.activeAsset?.currency);
+  const monteCarloYearsLabel = React.useMemo(() => {
+    const start = new Date(`${state.startDate}T00:00:00`);
+    const end = new Date(`${state.endDate}T00:00:00`);
+    const years = (end.getTime() - start.getTime()) / (365.25 * 24 * 3600 * 1000);
+    return years >= 1 ? `${years.toFixed(1)} 年` : "不足 1 年";
+  }, [state.startDate, state.endDate]);
 
   // Re-explain when the actual decision the user is looking at changes
   // (date + amount + multiplier captures every meaningful shift without
@@ -95,6 +157,19 @@ export function App() {
       ? { symbol: state.symbol, config: state.config, asOf: state.endDate, decisionKey }
       : null,
   );
+
+  const chatScrollRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    // Auto-scroll the chat transcript to the latest message.
+    chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [llmState.chatMessages, llmState.chatLoading]);
+
+  const sendChat = () => {
+    const q = chatInput.trim();
+    if (!q || llmState.chatLoading) return;
+    llmState.sendChatQuestion(q);
+    setChatInput("");
+  };
 
   const visibleReasons = state.showAllReasons ? state.reasons : state.reasons.slice(0, 5);
   const assetMarkets = Array.from(new Set(state.assets.map((asset) => asset.market ?? "us")));
@@ -191,7 +266,7 @@ export function App() {
         const tab = CHART_TABS[Number(event.key) - 1];
         if (tab) {
           setActiveChartTab(tab.id);
-          if (activeView === "comparison" || activeView === "optimization") setActiveView("overview");
+          if (activeView === "comparison" || activeView === "optimization" || activeView === "montecarlo") setActiveView("overview");
         }
         return;
       }
@@ -289,6 +364,9 @@ export function App() {
         loading={state.loading}
         onRefresh={state.refresh}
         onToggleTheme={() => state.setDarkMode((v) => !v)}
+        onOpenChat={llmState.enabled && llmState.canExplain ? () => setChatOpen(true) : undefined}
+        chatActive={chatOpen}
+        chatBadge={llmState.chatLoading}
       />
 
       <NavRail
@@ -308,6 +386,91 @@ export function App() {
         >
           <Sparkles size={14} />AI 解释
         </button>
+      )}
+
+      {chatOpen && (
+        <div
+          className="ai-chat-panel"
+          ref={chatPanelRef}
+          style={{ left: chatPos.x, top: chatPos.y, width: chatSize.w, height: chatSize.h }}
+        >
+          <div className="ai-chat-panel__head" onMouseDown={onChatHeaderMouseDown}>
+            <span className="ai-chat-panel__title">
+              <MessageCircle size={14} />
+              AI 问答
+              {llmState.explanationModel ? <span className="ai-chat-panel__model"> · {llmState.explanationModel}</span> : null}
+            </span>
+            <button
+              type="button"
+              className="ai-chat-panel__close"
+              onClick={() => setChatOpen(false)}
+              title="关闭"
+              aria-label="关闭"
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <div className="ai-chat-panel__body">
+            {llmState.chatMessages.length === 0 && !llmState.chatLoading && (
+              <p className="ai-chat-hint">对本期建议有疑问？直接输入问题，AI 结合当前指标回答。</p>
+            )}
+            {llmState.chatMessages.length > 0 && (
+              <div className="ai-chat-transcript" ref={chatScrollRef}>
+                {llmState.chatMessages.map((msg, idx) => (
+                  <div key={idx} className={`ai-chat-bubble ai-chat-bubble--${msg.role}`}>
+                    {msg.content}
+                  </div>
+                ))}
+                {llmState.chatLoading && (
+                  <div className="ai-chat-bubble ai-chat-bubble--assistant ai-chat-typing">
+                    <span className="dot" />
+                    <span className="dot" />
+                    <span className="dot" />
+                  </div>
+                )}
+              </div>
+            )}
+            {llmState.chatError && <p className="ai-explanation-error">{llmState.chatError.message}</p>}
+          </div>
+          <div className="ai-chat-panel__foot">
+            <button
+              type="button"
+              className="ai-chat-clear-btn"
+              onClick={llmState.clearChat}
+              disabled={llmState.chatMessages.length === 0 || llmState.chatLoading}
+              title="清空对话"
+            >
+              <RotateCcw size={13} />
+              清空
+            </button>
+            <div className="ai-chat-input-row">
+              <textarea
+                className="ai-chat-input"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendChat();
+                  }
+                }}
+                placeholder="输入追问…（Enter 发送，Shift+Enter 换行）"
+                rows={1}
+                disabled={llmState.chatLoading}
+              />
+              <button
+                type="button"
+                className="ai-chat-send"
+                onClick={sendChat}
+                disabled={llmState.chatLoading || !chatInput.trim()}
+                title="发送"
+              >
+                <Send size={14} />
+              </button>
+            </div>
+          </div>
+          <div className="ai-chat-panel__resize" onMouseDown={onChatResizeMouseDown} />
+        </div>
       )}
 
       {/* ─── Main Workspace ─────────────────────────────────────────── */}
@@ -562,17 +725,46 @@ export function App() {
             )}
           </>
         )}
+
+        {/* ─── Monte Carlo View ───────────────────────────────────── */}
+        {activeView === "montecarlo" && (
+          <>
+            <div className="recommendation-bar">
+              <div className="recommendation-bar__info">
+                <span className="recommendation-bar__meta">未来推演</span>
+                <span className="recommendation-amount" style={{ fontSize: 22 }}>
+                  {state.strategyType === "fixed_dca"
+                    ? "固定定投也可推演路径分布"
+                    : "基于历史波动率模拟未来路径分布"}
+                </span>
+                <span className="recommendation-bar__detail">
+                  蒙特卡洛模拟生成多条未来价格路径，对比策略、固定定投与一次性买入的终值分布。
+                </span>
+              </div>
+            </div>
+
+            <MonteCarloPanel
+              result={state.monteCarlo}
+              loading={state.monteCarloLoading}
+              error={state.error && !state.result ? state.error : null}
+              onRun={state.runMonteCarlo}
+              moneySymbol={moneySymbol}
+              darkMode={state.darkMode}
+              yearsLabel={monteCarloYearsLabel}
+            />
+          </>
+        )}
       </section>
 
       {/* ─── Inspector ─────────────────────────────────────────────── */}
       <aside className="inspector" ref={inspectorRef}>
         <button
-          className="icon-button inspector__collapse-btn"
+          className="inspector__toggle"
           onClick={() => setInspectorCollapsed((v) => !v)}
           title={inspectorCollapsed ? "展开侧栏" : "折叠侧栏"}
           aria-label={inspectorCollapsed ? "展开侧栏" : "折叠侧栏"}
         >
-          {inspectorCollapsed ? <PanelRightOpen size={16} /> : <PanelRightClose size={16} />}
+          {inspectorCollapsed ? <PanelRightOpen size={14} /> : <PanelRightClose size={14} />}
         </button>
 
         {llmState.enabled && (

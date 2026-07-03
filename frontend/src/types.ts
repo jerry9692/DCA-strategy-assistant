@@ -38,11 +38,18 @@ export type RollingPerformancePoint = Schemas["RollingPerformancePoint"];
 export type RecommendationResponse = Schemas["RecommendationResponse"];
 export type ExplanationResponse = Schemas["ExplanationResponse"];
 export type LlmSettings = Schemas["LlmSettings"];
+export type ChatMessage = Schemas["ChatMessage"];
+export type ChatResponse = Schemas["ChatResponse"];
 export type OptimizationScenarioMetric = Schemas["OptimizationScenarioMetrics"];
 export type OptimizationCandidate = Schemas["OptimizationCandidate"];
 export type OptimizationScenarioResult = Schemas["OptimizationScenarioResult"];
 export type OptimizationResult = Schemas["OptimizationResult"];
 export type OptimizationJobStatus = Schemas["OptimizationJobStatus"];
+export type MonteCarloRequest = Schemas["MonteCarloRequest"];
+export type MonteCarloResponse = Schemas["MonteCarloResponse"];
+export type MonteCarloChartData = Schemas["MonteCarloChartData"];
+export type FittedParams = Schemas["FittedParams"];
+export type ScenarioStats = Schemas["ScenarioStats"];
 
 // `Param.default` is `Any` in the backend → `unknown` in the generated
 // type. Some defaults are booleans (toggles), others are numbers

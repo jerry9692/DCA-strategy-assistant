@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ExplanationResponse, LlmSettings, StrategyConfigPayload, UiError } from "../types";
+import type { ChatMessage, ChatResponse, ExplanationResponse, LlmSettings, StrategyConfigPayload, UiError } from "../types";
 import { API_BASE, LLM_SETTINGS_KEY } from "../constants";
 import { readJson, toUiError } from "../api";
 
@@ -162,6 +162,50 @@ export function useLlmExplanation(inputs: ExplanationInputs | null) {
     setSelectionError(null);
   };
 
+  // ─── Multi-turn chat ───────────────────────────────────────────
+  // Conversation history is cleared whenever the decision the user is
+  // looking at changes (decisionKey), so stale Q&A from an old
+  // recommendation never bleeds into a new context.
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState<UiError | null>(null);
+  const chatRequestSeq = useRef(0);
+
+  const sendChatQuestion = (question: string) => {
+    const cleanQuestion = question.trim();
+    if (!canExplain || !symbol || !config || !asOf || cleanQuestion.length < 1) return;
+    const seq = ++chatRequestSeq.current;
+    const history = chatMessages;
+    setChatMessages((prev) => [...prev, { role: "user", content: cleanQuestion }]);
+    setChatLoading(true);
+    setChatError(null);
+    fetch(`${API_BASE}/api/explanations/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol, asOf, config, question: cleanQuestion, history, llm: payloadSettings }),
+    })
+      .then(readJson<ChatResponse>)
+      .then((data) => {
+        if (seq !== chatRequestSeq.current) return;
+        setChatMessages((prev) => [...prev, { role: "assistant", content: data.answer }]);
+      })
+      .catch((err) => {
+        if (seq !== chatRequestSeq.current) return;
+        setChatError(toUiError(err));
+      })
+      .finally(() => {
+        if (seq !== chatRequestSeq.current) return;
+        setChatLoading(false);
+      });
+  };
+
+  const clearChat = () => {
+    chatRequestSeq.current += 1;
+    setChatMessages([]);
+    setChatLoading(false);
+    setChatError(null);
+  };
+
   useEffect(() => {
     if (!canExplain) {
       requestSeq.current += 1;
@@ -184,6 +228,12 @@ export function useLlmExplanation(inputs: ExplanationInputs | null) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canExplain, llm.autoGenerate, decisionKey]);
 
+  // Clear chat history when the decision context changes so stale
+  // Q&A from an old recommendation doesn't bleed into a new context.
+  useEffect(() => {
+    clearChat();
+  }, [decisionKey]);
+
   return {
     llm,
     setLlm,
@@ -201,5 +251,10 @@ export function useLlmExplanation(inputs: ExplanationInputs | null) {
     selectionError,
     requestSelectionExplanation,
     clearSelectionExplanation,
+    chatMessages,
+    chatLoading,
+    chatError,
+    sendChatQuestion,
+    clearChat,
   };
 }

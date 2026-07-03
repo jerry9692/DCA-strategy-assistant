@@ -12,6 +12,9 @@ interface StatusBarProps {
   loading: boolean;
   onRefresh: () => void;
   onToggleTheme: () => void;
+  onOpenChat?: () => void;
+  chatActive?: boolean;
+  chatBadge?: boolean;
 }
 
 export function StatusBar({
@@ -25,6 +28,9 @@ export function StatusBar({
   loading,
   onRefresh,
   onToggleTheme,
+  onOpenChat,
+  chatActive,
+  chatBadge,
 }: StatusBarProps) {
   const moneySymbol = currencySymbol(asset?.currency);
   const tone = marketState?.tone ?? "neutral";
@@ -56,6 +62,19 @@ export function StatusBar({
 
       <div className="status-bar__right">
         <span className="status-bar__data-source">{dataSource} · {cacheStatus}</span>
+        {onOpenChat && (
+          <button
+            className={`icon-button status-bar__chat-btn${chatActive ? " status-bar__chat-btn--active" : ""}`}
+            onClick={onOpenChat}
+            title="AI 问答"
+            aria-label="AI 问答"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            {chatBadge && <span className="status-bar__chat-badge" />}
+          </button>
+        )}
         <button
           className={`icon-button ${loading ? "spinning" : ""}`}
           onClick={onRefresh}
