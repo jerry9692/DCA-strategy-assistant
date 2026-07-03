@@ -33,6 +33,7 @@ from app.models import (
     MonteCarloChartData,
     MonteCarloRequest,
     MonteCarloResponse,
+    MonteCarloSamplePath,
     ScenarioStats,
     StrategyConfig,
 )
@@ -91,14 +92,18 @@ def generate_paths(
 
     Column 0 is s0 (the starting price); columns 1..steps are the
     simulated future daily closes. `steps = horizon_months * 21`.
+
+    mu_daily and sigma_daily are the sample mean and std of HISTORICAL
+    daily log returns. Under GBM, daily log returns are i.i.d.
+    N(mu_daily, sigma_daily²) — the -0.5σ² drift correction is already
+    baked into mu_daily because it is computed from log returns (not
+    arithmetic returns). So each simulated daily log return is simply
+    mu_daily + sigma_daily * Z, with no additional dt scaling.
     """
     steps = horizon_months * TRADING_DAYS_PER_MONTH
-    dt = 1.0 / TRADING_DAYS_PER_YEAR
     rng = np.random.default_rng(seed)
-    drift = (mu_daily - 0.5 * sigma_daily**2) * dt
-    diffusion = sigma_daily * np.sqrt(dt)
     z = rng.standard_normal((num_paths, steps))
-    log_returns = drift + diffusion * z
+    log_returns = mu_daily + sigma_daily * z
     log_prices = np.cumsum(log_returns, axis=1)
     future_prices = s0 * np.exp(log_prices)
     return np.column_stack([np.full(num_paths, s0), future_prices])
@@ -504,27 +509,14 @@ def run_montecarlo(
     )
 
     historical = prices.sort_index()
-    sim_start = historical.index[-1].date()
-    future_dates = pd.bdate_range(
-        start=historical.index[-1] + pd.Timedelta(days=1),
-        periods=request.horizonMonths * TRADING_DAYS_PER_MONTH,
-    )
-    sim_end = future_dates[-1].date()
 
-    # Pre-build a reusable synthetic-price frame template so the per-path
-    # loop only mutates the future close slice in-place instead of
-    # rebuilding a DataFrame via pd.concat each iteration.
-    synthetic_template, future_start_pos = _make_synthetic_builder(historical, future_dates)
-
+    # Truncate history to the minimum lookback the indicators need
+    # BEFORE building the synthetic template. The backtest endpoint
+    # passes ~8 years of prices (5y range + 3y warmup), but MC only
+    # needs enough to let rolling windows (SMA200, percentile-756,
+    # etc.) produce non-NaN values at sim_start. Going longer just
+    # multiplies the rolling-compute cost per path.
     config = request.config
-    fee_rate = float(config.params.get("feeRate", 0))
-    slippage_rate = float(config.params.get("slippageRate", 0))
-
-    # Truncate history to the minimum lookback the indicators need.
-    # The backtest endpoint passes ~8 years of prices (5y range + 3y
-    # warmup), but MC only needs enough to let rolling windows (SMA200,
-    # percentile-756, etc.) produce non-NaN values at sim_start. Going
-    # longer just multiplies the rolling-compute cost per path.
     indicator_settings = _settings(config)
     min_warmup = (
         max(
@@ -537,6 +529,21 @@ def run_montecarlo(
     )
     if len(historical) > min_warmup:
         historical = historical.tail(min_warmup)
+
+    sim_start = historical.index[-1].date()
+    future_dates = pd.bdate_range(
+        start=historical.index[-1] + pd.Timedelta(days=1),
+        periods=request.horizonMonths * TRADING_DAYS_PER_MONTH,
+    )
+    sim_end = future_dates[-1].date()
+
+    # Pre-build a reusable synthetic-price frame template so the per-path
+    # loop only mutates the future close slice in-place instead of
+    # rebuilding a DataFrame via pd.concat each iteration.
+    synthetic_template, future_start_pos = _make_synthetic_builder(historical, future_dates)
+
+    fee_rate = float(config.params.get("feeRate", 0))
+    slippage_rate = float(config.params.get("slippageRate", 0))
 
     # All paths share the same index (historical tail + same future
     # bdate_range), so the trade-day schedule is identical across
@@ -599,6 +606,21 @@ def run_montecarlo(
     beat_probability = float(np.mean(strategy_finals > fixed_finals))
 
     months = list(range(horizon + 1))
+
+    # Pick 6 representative paths by their final-value rank to overlay
+    # as thin sample lines on the chart. Using ranks (p5/p20/p40/p60/
+    # p80/p95) ensures we show a spread from worst to best outcome
+    # without cherry-picking extreme paths.
+    SAMPLE_RANKS = (5, 20, 40, 60, 80, 95)
+    ranked_indices = np.argsort(strategy_finals)
+    sample_paths: list[MonteCarloSamplePath] = []
+    for rank in SAMPLE_RANKS:
+        idx = ranked_indices[round(rank / 100 * (request.numPaths - 1))]
+        sample_paths.append(MonteCarloSamplePath(
+            rank=rank,
+            strategyValues=[float(v) for v in strategy_monthly[idx]],
+        ))
+
     chart = MonteCarloChartData(
         months=months,
         strategyMedian=_monthly_percentile_curve(strategy_monthly, 50),
@@ -612,6 +634,7 @@ def run_montecarlo(
         ),
         fixedDcaMedian=_monthly_percentile_curve(fixed_monthly, 50),
         lumpSumMedian=_monthly_percentile_curve(lump_monthly, 50),
+        samplePaths=sample_paths,
     )
 
     return MonteCarloResponse(

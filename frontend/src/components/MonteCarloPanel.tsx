@@ -12,6 +12,14 @@ const HORIZON_STEP = 6;
 const HORIZON_DEFAULT = 60;
 const PATHS_DEFAULT: PathCount = 1000;
 
+function estimateSeconds(numPaths: number, horizonMonths: number): string {
+  const basePerPath = 0.017;
+  const horizonFactor = horizonMonths / 60;
+  const seconds = Math.ceil(numPaths * basePerPath * horizonFactor);
+  if (seconds < 5) return "几秒";
+  return `${seconds}`;
+}
+
 interface MonteCarloPanelProps {
   result: MonteCarloResponse | null;
   loading: boolean;
@@ -35,6 +43,14 @@ function fullCurrency(value: number | null | undefined, symbol: string): string 
   return `${symbol}${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
+function formatMoneyWith(value: number | null | undefined, symbol: string): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "-";
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `${symbol}${(value / 1_000_000).toFixed(2)}M`;
+  if (abs >= 10_000) return `${symbol}${(value / 1_000).toFixed(1)}k`;
+  return `${symbol}${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+}
+
 export function MonteCarloPanel({
   result,
   loading,
@@ -49,13 +65,17 @@ export function MonteCarloPanel({
 
   const horizonYears = (horizon / 12).toFixed(1);
   const slowHint = numPaths >= 2000;
+  const estSec = estimateSeconds(numPaths, horizon);
 
   const handleRun = () => {
     if (loading) return;
     onRun(horizon, numPaths);
   };
 
-  const chartOption = useMemo(() => buildChartOption(result, darkMode), [result, darkMode]);
+  const chartOption = useMemo(
+    () => buildChartOption(result, darkMode, moneySymbol),
+    [result, darkMode, moneySymbol],
+  );
 
   return (
     <div className="monte-carlo-panel">
@@ -115,7 +135,14 @@ export function MonteCarloPanel({
       {loading && !result && (
         <div className="chart-placeholder monte-carlo-skeleton" style={{ height: 380 }}>
           <RefreshCcw size={18} />
-          <span>正在生成 {numPaths} 条路径，约 {numPaths >= 2000 ? "25" : "8"} 秒…</span>
+          <span>正在生成 {numPaths} 条路径，约 {estSec} 秒…</span>
+        </div>
+      )}
+
+      {loading && result && (
+        <div className="chart-placeholder monte-carlo-skeleton" style={{ height: 380 }}>
+          <RefreshCcw size={18} />
+          <span>正在重新推演 {numPaths} 条路径，约 {estSec} 秒…</span>
         </div>
       )}
 
@@ -132,7 +159,7 @@ export function MonteCarloPanel({
         </div>
       )}
 
-      {result && (
+      {result && !loading && (
         <div className="monte-carlo-body">
           <div className="monte-carlo-chart">
             <ChartWrapper option={chartOption} height={380} />
@@ -143,7 +170,7 @@ export function MonteCarloPanel({
               <span className="monte-carlo-stat__label">策略中位数终值</span>
               <span className="monte-carlo-stat__value">{fullCurrency(result.strategy.p50, moneySymbol)}</span>
               <span className="monte-carlo-stat__sub">
-                5-95 分位区间 {compactCurrency(result.strategy.p5, moneySymbol)} – {compactCurrency(result.strategy.p95, moneySymbol)}
+                5-95 分位 {compactCurrency(result.strategy.p5, moneySymbol)} – {compactCurrency(result.strategy.p95, moneySymbol)}
               </span>
             </div>
 
@@ -151,7 +178,15 @@ export function MonteCarloPanel({
               <span className="monte-carlo-stat__label">固定定投中位数</span>
               <span className="monte-carlo-stat__value muted-value">{fullCurrency(result.fixedDca.p50, moneySymbol)}</span>
               <span className="monte-carlo-stat__sub">
-                5-95 分位区间 {compactCurrency(result.fixedDca.p5, moneySymbol)} – {compactCurrency(result.fixedDca.p95, moneySymbol)}
+                5-95 分位 {compactCurrency(result.fixedDca.p5, moneySymbol)} – {compactCurrency(result.fixedDca.p95, moneySymbol)}
+              </span>
+            </div>
+
+            <div className="monte-carlo-stat">
+              <span className="monte-carlo-stat__label">一次性买入中位数</span>
+              <span className="monte-carlo-stat__value" style={{ color: "var(--loss, #ef5350)" }}>{fullCurrency(result.lumpSum.p50, moneySymbol)}</span>
+              <span className="monte-carlo-stat__sub">
+                5-95 分位 {compactCurrency(result.lumpSum.p5, moneySymbol)} – {compactCurrency(result.lumpSum.p95, moneySymbol)}
               </span>
             </div>
 
@@ -189,11 +224,14 @@ export function MonteCarloPanel({
   );
 }
 
-function buildChartOption(result: MonteCarloResponse | null, darkMode: boolean) {
+function buildChartOption(
+  result: MonteCarloResponse | null,
+  darkMode: boolean,
+  moneySymbol: string,
+) {
   if (!result) return {};
   const { chart } = result;
-  const months = chart.months;
-  const xLabels = months.map((m) => `${m}月`);
+  const xLabels = chart.months.map((m) => `${m}月`);
 
   const textColor = darkMode ? "#8b95a5" : "#6b7689";
   const legendColor = darkMode ? "#e8eaed" : "#1a1f2e";
@@ -204,18 +242,17 @@ function buildChartOption(result: MonteCarloResponse | null, darkMode: boolean) 
   const tooltipText = darkMode ? "#e8eaed" : "#1a1f2e";
 
   const accent = "#f0b232";
-  const accentBand5_95 = darkMode ? "rgba(240, 178, 50, 0.10)" : "rgba(200, 135, 10, 0.10)";
-  const accentBand25_75 = darkMode ? "rgba(240, 178, 50, 0.22)" : "rgba(200, 135, 10, 0.22)";
+  const band5Color = darkMode ? "rgba(240, 178, 50, 0.10)" : "rgba(200, 135, 10, 0.10)";
+  const band25Color = darkMode ? "rgba(240, 178, 50, 0.22)" : "rgba(200, 135, 10, 0.22)";
   const fixedColor = "#8b95a5";
-  const lumpSumColor = "#ef5350";
+  const lumpColor = "#ef5350";
 
-  // ECharts stack trick: stack lower band first, then a transparent
-  // band of width (upper - lower) so the visible lower fill spans the
-  // 5-95 range and the upper fill draws the 25-75 range on top.
-  const band5_95Lower = chart.strategyBand5_95.lower;
-  const band5_95Gap = chart.strategyBand5_95.upper.map((u, i) => u - band5_95Lower[i]);
-  const band25_75Lower = chart.strategyBand25_75.lower;
-  const band25_75Gap = chart.strategyBand25_75.upper.map((u, i) => u - band25_75Lower[i]);
+  const fmt = (v: number | null | undefined) => formatMoneyWith(v, moneySymbol);
+
+  const band5Lower = chart.strategyBand5_95.lower;
+  const band5Gap = chart.strategyBand5_95.upper.map((u, i) => u - band5Lower[i]);
+  const band25Lower = chart.strategyBand25_75.lower;
+  const band25Gap = chart.strategyBand25_75.upper.map((u, i) => u - band25Lower[i]);
 
   return {
     tooltip: {
@@ -224,31 +261,30 @@ function buildChartOption(result: MonteCarloResponse | null, darkMode: boolean) 
       borderColor: tooltipBorder,
       textStyle: { color: tooltipText, fontFamily: "JetBrains Mono, monospace" },
       axisPointer: { type: "cross", label: { backgroundColor: tooltipBorder, color: tooltipText } },
-      formatter: (params: Array<{ axisValue: string; seriesName: string; value: number | number[]; dataIndex: number }>) => {
+      formatter: (params: Array<{ axisValue: string; seriesName: string; dataIndex: number }>) => {
         if (!params.length) return "";
         const idx = params[0].dataIndex;
         const lines = [`${params[0].axisValue}`];
-        const p5 = chart.strategyBand5_95.lower[idx];
-        const p95 = chart.strategyBand5_95.upper[idx];
-        const p25 = chart.strategyBand25_75.lower[idx];
-        const p75 = chart.strategyBand25_75.upper[idx];
-        const p50 = chart.strategyMedian[idx];
-        const fd = chart.fixedDcaMedian[idx];
-        const ls = chart.lumpSumMedian[idx];
-        lines.push(`策略中位 ${formatMoney(p50)}`);
-        lines.push(`25-75 区间 ${formatMoney(p25)} – ${formatMoney(p75)}`);
-        lines.push(`5-95 区间 ${formatMoney(p5)} – ${formatMoney(p95)}`);
-        lines.push(`固定定投 ${formatMoney(fd)}`);
-        lines.push(`一次性 ${formatMoney(ls)}`);
+        lines.push(`策略中位 ${fmt(chart.strategyMedian[idx])}`);
+        lines.push(`25-75 区间 ${fmt(chart.strategyBand25_75.lower[idx])} – ${fmt(chart.strategyBand25_75.upper[idx])}`);
+        lines.push(`5-95 区间 ${fmt(chart.strategyBand5_95.lower[idx])} – ${fmt(chart.strategyBand5_95.upper[idx])}`);
+        lines.push(`固定定投 ${fmt(chart.fixedDcaMedian[idx])}`);
+        lines.push(`一次性买入 ${fmt(chart.lumpSumMedian[idx])}`);
         return lines.join("<br/>");
       },
     },
     legend: {
       top: 0,
       textStyle: { color: legendColor, fontSize: 11 },
-      data: ["策略中位数", "5-95 分位", "25-75 分位", "固定定投中位数", "一次性买入"],
+      data: [
+        { name: "策略中位数", itemStyle: { color: accent } },
+        { name: "5-95 分位", itemStyle: { color: band5Color } },
+        { name: "25-75 分位", itemStyle: { color: band25Color } },
+        { name: "固定定投中位数", itemStyle: { color: fixedColor } },
+        { name: "一次性买入", itemStyle: { color: lumpColor } },
+      ],
     },
-    grid: { left: 64, right: 18, top: 36, bottom: 32 },
+    grid: { left: 72, right: 18, top: 36, bottom: 32 },
     xAxis: {
       type: "category",
       data: xLabels,
@@ -256,30 +292,29 @@ function buildChartOption(result: MonteCarloResponse | null, darkMode: boolean) 
       axisLine: { lineStyle: { color: axisLine } },
       axisTick: { lineStyle: { color: axisLine } },
       splitLine: { show: false },
+      boundaryGap: false,
     },
     yAxis: {
       type: "value",
       axisLabel: {
         color: textColor,
         fontSize: 11,
-        formatter: (value: number) => formatMoney(value),
+        formatter: (value: number) => fmt(value),
       },
       axisLine: { lineStyle: { color: axisLine } },
       axisTick: { lineStyle: { color: axisLine } },
       splitLine: { lineStyle: { color: gridLine } },
+      scale: true,
     },
     series: [
-      // 5-95 band: stack a hidden lower baseline + the gap as visible fill.
-      // Both share the same name so the legend toggles them together; the
-      // baseline is excluded from legend.data so only one entry shows.
       {
         name: "5-95 分位",
         type: "line",
-        stack: "band-5-95",
+        stack: "band-5",
         symbol: "none",
-        data: band5_95Lower,
-        lineStyle: { width: 0, opacity: 0 },
-        areaStyle: { color: "transparent" },
+        data: band5Lower,
+        lineStyle: { width: 0 },
+        areaStyle: { color: "rgba(0,0,0,0)" },
         tooltip: { show: false },
         silent: true,
         z: 1,
@@ -287,22 +322,22 @@ function buildChartOption(result: MonteCarloResponse | null, darkMode: boolean) 
       {
         name: "5-95 分位",
         type: "line",
-        stack: "band-5-95",
+        stack: "band-5",
         symbol: "none",
-        data: band5_95Gap,
-        areaStyle: { color: accentBand5_95 },
-        lineStyle: { width: 0, opacity: 0 },
+        data: band5Gap,
+        lineStyle: { width: 0 },
+        areaStyle: { color: band5Color },
+        itemStyle: { color: band5Color },
         z: 2,
       },
-      // 25-75 band: same stack trick on a separate stack
       {
         name: "25-75 分位",
         type: "line",
-        stack: "band-25-75",
+        stack: "band-25",
         symbol: "none",
-        data: band25_75Lower,
-        lineStyle: { width: 0, opacity: 0 },
-        areaStyle: { color: "transparent" },
+        data: band25Lower,
+        lineStyle: { width: 0 },
+        areaStyle: { color: "rgba(0,0,0,0)" },
         tooltip: { show: false },
         silent: true,
         z: 3,
@@ -310,48 +345,54 @@ function buildChartOption(result: MonteCarloResponse | null, darkMode: boolean) 
       {
         name: "25-75 分位",
         type: "line",
-        stack: "band-25-75",
+        stack: "band-25",
         symbol: "none",
-        data: band25_75Gap,
-        areaStyle: { color: accentBand25_75 },
-        lineStyle: { width: 0, opacity: 0 },
+        data: band25Gap,
+        lineStyle: { width: 0 },
+        areaStyle: { color: band25Color },
+        itemStyle: { color: band25Color },
         z: 4,
       },
-      // Strategy median (thick accent line)
-      {
-        name: "策略中位数",
-        type: "line",
+      ...(chart.samplePaths ?? []).map((path) => ({
+        name: "__sample__",
+        type: "line" as const,
         symbol: "none",
-        data: chart.strategyMedian,
-        lineStyle: { color: accent, width: 2.5 },
-        z: 6,
-      },
-      // Fixed DCA median (dashed gray)
+        data: path.strategyValues,
+        lineStyle: {
+          color: darkMode ? "rgba(180, 185, 195, 0.18)" : "rgba(90, 100, 120, 0.16)",
+          width: 1,
+        },
+        tooltip: { show: false },
+        silent: true,
+        z: 5,
+      })),
       {
         name: "固定定投中位数",
         type: "line",
         symbol: "none",
         data: chart.fixedDcaMedian,
         lineStyle: { color: fixedColor, width: 1.5, type: "dashed" },
-        z: 5,
+        itemStyle: { color: fixedColor },
+        z: 6,
       },
-      // Lump sum median (dotted red)
       {
         name: "一次性买入",
         type: "line",
         symbol: "none",
         data: chart.lumpSumMedian,
-        lineStyle: { color: lumpSumColor, width: 1.5, type: "dotted" },
-        z: 5,
+        lineStyle: { color: lumpColor, width: 1.5, type: "dotted" },
+        itemStyle: { color: lumpColor },
+        z: 6,
+      },
+      {
+        name: "策略中位数",
+        type: "line",
+        symbol: "none",
+        data: chart.strategyMedian,
+        lineStyle: { color: accent, width: 2.5 },
+        itemStyle: { color: accent },
+        z: 7,
       },
     ],
   };
-}
-
-function formatMoney(value: number | null | undefined): string {
-  if (value === null || value === undefined || Number.isNaN(value)) return "-";
-  const abs = Math.abs(value);
-  if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
-  if (abs >= 10_000) return `$${(value / 1_000).toFixed(1)}k`;
-  return `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }

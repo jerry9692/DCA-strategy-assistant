@@ -1292,6 +1292,13 @@
             },
             "type": "array",
             "title": "Lumpsummedian"
+          },
+          "samplePaths": {
+            "items": {
+              "$ref": "#/components/schemas/MonteCarloSamplePath"
+            },
+            "type": "array",
+            "title": "Samplepaths"
           }
         },
         "type": "object",
@@ -1423,6 +1430,27 @@
           "disclaimer"
         ],
         "title": "MonteCarloResponse"
+      },
+      "MonteCarloSamplePath": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "strategyValues": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Strategyvalues"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rank",
+          "strategyValues"
+        ],
+        "title": "MonteCarloSamplePath"
       },
       "OptimizationCandidate": {
         "properties": {

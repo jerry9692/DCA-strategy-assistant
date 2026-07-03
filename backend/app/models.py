@@ -613,6 +613,11 @@ class MonteCarloBand(BaseModel):
     upper: list[float]
 
 
+class MonteCarloSamplePath(BaseModel):
+    rank: int
+    strategyValues: list[float]
+
+
 class MonteCarloChartData(BaseModel):
     months: list[int]
     strategyMedian: list[float]
@@ -620,6 +625,7 @@ class MonteCarloChartData(BaseModel):
     strategyBand25_75: MonteCarloBand
     fixedDcaMedian: list[float]
     lumpSumMedian: list[float]
+    samplePaths: list[MonteCarloSamplePath] = Field(default_factory=list)
 
 
 class MonteCarloResponse(BaseModel):

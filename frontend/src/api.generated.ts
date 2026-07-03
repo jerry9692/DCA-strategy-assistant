@@ -574,6 +574,8 @@ export interface components {
             fixedDcaMedian: number[];
             /** Lumpsummedian */
             lumpSumMedian: number[];
+            /** Samplepaths */
+            samplePaths?: components["schemas"]["MonteCarloSamplePath"][];
         };
         /** MonteCarloRequest */
         MonteCarloRequest: {
@@ -619,6 +621,13 @@ export interface components {
             chart: components["schemas"]["MonteCarloChartData"];
             /** Disclaimer */
             disclaimer: string;
+        };
+        /** MonteCarloSamplePath */
+        MonteCarloSamplePath: {
+            /** Rank */
+            rank: number;
+            /** Strategyvalues */
+            strategyValues: number[];
         };
         /** OptimizationCandidate */
         OptimizationCandidate: {
