@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
 
@@ -16,6 +17,10 @@ permissions:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    # pip install + pytest with coverage on a clean checkout is
+    # normally 4-5 minutes. The 12-minute cap matches the frontend
+    # job and leaves headroom for pip registry hiccups.
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
 
@@ -35,9 +40,22 @@ jobs:
         run: ruff format --check backend/
 
       - name: Run tests
-        run: pytest backend/tests -q --cov=app --cov-report=term-missing
+        run: pytest backend/tests -q --cov=app --cov-report=xml --cov-report=term-missing
         env:
           PYTHONPATH: backend
+
+      # Upload the coverage XML so reviewers can download and inspect
+      # it from the Actions run page. Uses the official
+      # actions/upload-artifact@v4 and is non-blocking (if: always())
+      # so an upload failure doesn't fail the build.
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+          if-no-files-found: warn
+          retention-days: 14
 
       # Re-export the OpenAPI schema and fail if the committed copy is
       # out of date. Forces every backend model change to land alongside

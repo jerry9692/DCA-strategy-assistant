@@ -77,22 +77,19 @@ _GUARDRAIL_FALLBACK = (
     "可以换一种方式提问，我会用当前数据解释。"
 )
 
-# 命中即视为越界的预测/建议性表达。词形覆盖：肯定/否定/疑问/劝告。
-# 注意：这些是"输出"侧的检测，不是输入过滤——用户问"要不要加仓"是被允许的，
-# 模型回答"建议你加仓"才越界。
+# Hit = out-of-bounds prediction / advice language. Forms covered:
+# affirmative/negative/questioning, plus plain suggestions.
+#
+# These are *output*-side detectors, not input filters — the user
+# asking "要不要加仓" is allowed, but the model answering "建议你
+# 加仓" is not. See `_contains_prediction` for the two-stage match.
+#
+# The list is intentionally restricted to phrases the advice_regex
+# below CANNOT catch (i.e. literal time-future claims like "未来会涨",
+# "必跌", "包赚"). Advice-shaped phrases such as "建议你加仓" or
+# "建议买入" are covered by the regex and are kept out of this list
+# to avoid double-matching.
 _PREDICTION_PATTERNS = (
-    "建议你买",
-    "建议你卖",
-    "建议你加仓",
-    "建议你减仓",
-    "建议你清仓",
-    "建议你买入",
-    "建议你卖出",
-    "建议加仓",
-    "建议减仓",
-    "建议清仓",
-    "建议买入",
-    "建议卖出",
     "应该买",
     "应该卖",
     "应该加仓",
@@ -103,10 +100,6 @@ _PREDICTION_PATTERNS = (
     "可以加仓",
     "可以减仓",
     "可以清仓",
-    "推荐买入",
-    "推荐卖出",
-    "推荐加仓",
-    "推荐减仓",
     "未来会涨",
     "未来会跌",
     "未来上涨",

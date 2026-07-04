@@ -1,4 +1,5 @@
 import logging
+import os
 from datetime import date, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -65,9 +66,27 @@ app = FastAPI(title="DCA Strategy Assistant", version="0.4.0")
 
 _start_time = monotonic()
 
+
+def _cors_origins() -> list[str]:
+    """Resolve allowed CORS origins from env, with a dev fallback.
+
+    Production deployments should set `DCA_ALLOWED_ORIGINS` to a
+    comma-separated list of exact origins (e.g.
+    `https://dca.example.com`). When unset, the dev defaults
+    (localhost:5173 / 127.0.0.1:5173) are used so a fresh checkout
+    still works out of the box. SECURITY.md calls this out under
+    "Security Best Practices for Operators".
+    """
+    raw = os.environ.get("DCA_ALLOWED_ORIGINS")
+    if not raw:
+        return ["http://localhost:5173", "http://127.0.0.1:5173"]
+    origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
+    return origins or ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -5,6 +5,11 @@ services:
       - "8000:8000"
     volumes:
       - dca-data:/app/backend/data
+    # env_file loads DCA_ALLOWED_ORIGINS, DCA_LLM_ALLOW_PRIVATE, etc.
+    # from a local .env file (gitignored). environment: stays for the
+    # PYTHONUNBUFFERED flag which is a container-internal concern.
+    env_file:
+      - .env
     environment:
       - PYTHONUNBUFFERED=1
     restart: unless-stopped

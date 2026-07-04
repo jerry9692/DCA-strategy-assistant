@@ -324,8 +324,10 @@ def test_rate_limiter_does_not_store_raw_key():
     """
     from app.rate_limiter import RateLimiter
 
+    # Use the "dummy-key-..." prefix so GitHub Secret Scanning doesn't
+    # treat the literal as a real OpenAI key and block the push.
     limiter = RateLimiter(limit=5, window_seconds=60)
-    limiter.check("sk-super-secret-key-12345")
+    limiter.check("dummy-key-hash-input-1234567890")
     for stored_key in limiter._buckets:
-        assert "sk-super" not in stored_key
-        assert "secret" not in stored_key
+        assert "dummy" not in stored_key
+        assert "1234567890" not in stored_key

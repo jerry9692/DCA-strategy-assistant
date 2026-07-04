@@ -114,7 +114,7 @@ html {
 .status-bar__price,
 .status-bar__market-detail,
 .signal-val,
-.comparison-row b,
+.comparison-table td,
 .scenario-row b,
 .candidate-row b,
 .baseline-row__items b,
@@ -834,26 +834,36 @@ h1, h2, h3, h4, p {
 }
 
 /* ─── Comparison Table ──────────────────────────────────────────── */
+/* Native <table> markup for screen-reader compatibility — the grid
+   template lives on the table so every cell aligns to the same 7-col
+   track. The previous <div> implementation had no row/col semantics
+   and was announced as a flat list of spans. */
 
 .comparison-table {
   display: grid;
-  gap: 2px;
+  grid-template-columns: minmax(130px, 1.2fr) repeat(6, minmax(88px, 1fr));
   margin-top: var(--space-3);
   overflow-x: auto;
+  min-width: 740px;
+  border-collapse: collapse;
+  gap: 2px;
 }
 
-.comparison-head,
-.comparison-row {
-  display: grid;
-  grid-template-columns: minmax(130px, 1.2fr) repeat(6, minmax(88px, 1fr));
-  gap: var(--space-2);
-  align-items: center;
-  min-width: 740px;
+.comparison-table thead,
+.comparison-table tbody,
+.comparison-table tr {
+  display: contents;
+}
+
+.comparison-table th,
+.comparison-table td {
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
+  text-align: left;
+  font-size: 12px;
 }
 
-.comparison-head {
+.comparison-table thead th {
   color: var(--text-muted);
   font-size: 11px;
   font-weight: 700;
@@ -862,20 +872,17 @@ h1, h2, h3, h4, p {
   background: var(--bg-elevated);
 }
 
-.comparison-row {
-  border-top: 1px solid var(--border-hairline);
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.comparison-row span {
+.comparison-table tbody tr th {
   font-weight: 700;
   color: var(--text-primary);
+  background: transparent;
 }
 
-.comparison-row b {
+.comparison-table tbody tr td {
   font-weight: 500;
   color: var(--text-secondary);
+  border-top: 1px solid var(--border-hairline);
+  border-radius: 0;
 }
 
 /* ─── Config Drawer ─────────────────────────────────────────────── */

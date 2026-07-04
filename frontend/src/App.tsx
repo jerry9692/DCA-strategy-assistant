@@ -64,53 +64,78 @@ export function App() {
   }));
   const [chatSize, setChatSize] = React.useState<{ w: number; h: number }>({ w: 380, h: 520 });
   const chatPanelRef = React.useRef<HTMLDivElement | null>(null);
-  const dragState = React.useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
-  const resizeState = React.useRef<{ startX: number; startY: number; baseW: number; baseH: number } | null>(null);
+  // Centralized drag/resize state. Storing the listener cleanup
+  // functions on the ref and managing attach/detach in a useEffect
+  // (rather than attaching document listeners inside the mousedown
+  // handler) means a component unmount during an in-flight drag will
+  // run the cleanup and avoid "setState on unmounted component"
+  // warnings. Also keeps the React closure rules predictable — the
+  // setState calls always reference live setters.
+  type ChatDragMode = "move" | "resize";
+  const [chatDrag, setChatDrag] = React.useState<{
+    mode: ChatDragMode;
+    startX: number;
+    startY: number;
+    baseX: number;
+    baseY: number;
+    baseW: number;
+    baseH: number;
+  } | null>(null);
 
   const onChatHeaderMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest("button")) return;
-    dragState.current = { startX: e.clientX, startY: e.clientY, baseX: chatPos.x, baseY: chatPos.y };
-    const onMove = (ev: MouseEvent) => {
-      if (!dragState.current) return;
-      const dx = ev.clientX - dragState.current.startX;
-      const dy = ev.clientY - dragState.current.startY;
-      const maxX = window.innerWidth - 80;
-      const maxY = window.innerHeight - 48;
-      setChatPos({
-        x: Math.min(Math.max(dragState.current.baseX + dx, 0), maxX),
-        y: Math.min(Math.max(dragState.current.baseY + dy, 0), maxY),
-      });
-    };
-    const onUp = () => {
-      dragState.current = null;
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-    };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
+    setChatDrag({
+      mode: "move",
+      startX: e.clientX,
+      startY: e.clientY,
+      baseX: chatPos.x,
+      baseY: chatPos.y,
+      baseW: chatSize.w,
+      baseH: chatSize.h,
+    });
   };
 
   const onChatResizeMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    resizeState.current = { startX: e.clientX, startY: e.clientY, baseW: chatSize.w, baseH: chatSize.h };
+    setChatDrag({
+      mode: "resize",
+      startX: e.clientX,
+      startY: e.clientY,
+      baseX: chatPos.x,
+      baseY: chatPos.y,
+      baseW: chatSize.w,
+      baseH: chatSize.h,
+    });
+  };
+
+  React.useEffect(() => {
+    if (!chatDrag) return;
     const onMove = (ev: MouseEvent) => {
-      if (!resizeState.current) return;
-      const dw = ev.clientX - resizeState.current.startX;
-      const dh = ev.clientY - resizeState.current.startY;
-      setChatSize({
-        w: Math.min(Math.max(resizeState.current.baseW + dw, 300), window.innerWidth - chatPos.x - 20),
-        h: Math.min(Math.max(resizeState.current.baseH + dh, 320), window.innerHeight - chatPos.y - 20),
-      });
+      const dx = ev.clientX - chatDrag.startX;
+      const dy = ev.clientY - chatDrag.startY;
+      if (chatDrag.mode === "move") {
+        const maxX = window.innerWidth - 80;
+        const maxY = window.innerHeight - 48;
+        setChatPos({
+          x: Math.min(Math.max(chatDrag.baseX + dx, 0), maxX),
+          y: Math.min(Math.max(chatDrag.baseY + dy, 0), maxY),
+        });
+      } else {
+        setChatSize({
+          w: Math.min(Math.max(chatDrag.baseW + dx, 300), window.innerWidth - chatPos.x - 20),
+          h: Math.min(Math.max(chatDrag.baseH + dy, 320), window.innerHeight - chatPos.y - 20),
+        });
+      }
     };
-    const onUp = () => {
-      resizeState.current = null;
+    const onUp = () => setChatDrag(null);
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    return () => {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
     };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  };
+  }, [chatDrag, chatPos.x, chatPos.y]);
   const inspectorRef = React.useRef<HTMLElement | null>(null);
   const [viewportSize, setViewportSize] = React.useState(() => ({
     w: typeof window !== "undefined" ? window.innerWidth : 1280,
@@ -213,10 +238,17 @@ export function App() {
     if (!next || next.symbol === state.symbol) return;
     state.setSymbol(next.symbol);
     state.setActiveScenarioId(null);
+    // Reset the AI panel back to the new decision so a stale
+    // selection explanation (from a previous symbol) can't bleed into
+    // the freshly switched asset.
+    setAiPanelMode("current");
+    llmState.clearSelectionExplanation();
   };
   const switchAsset = (symbol: string) => {
     state.setSymbol(symbol);
     state.setActiveScenarioId(null);
+    setAiPanelMode("current");
+    llmState.clearSelectionExplanation();
   };
 
   const selectionExplanationVisible = Boolean(
@@ -355,22 +387,36 @@ export function App() {
   );
 
   const comparisonTable = (
-    <div className="comparison-table">
-      <div className="comparison-head">
-        <span>策略</span><span>总投入</span><span>期末价值</span><span>收益率</span><span>最大回撤</span><span>夏普</span><span>索提诺</span>
-      </div>
-      {charts.comparisonRows.map((item) => (
-        <div key={item.strategyType} className="comparison-row">
-          <span>{item.name}</span>
-          <b>{moneySymbol}{metric(item.metrics.totalInvested)}</b>
-          <b>{moneySymbol}{metric(item.metrics.endingValue)}</b>
-          <b>{metric(item.metrics.returnPct, "%")}</b>
-          <b>{metric(item.metrics.maxDrawdownPct, "%")}</b>
-          <b>{metric(item.metrics.sharpeRatio)}</b>
-          <b>{metric(item.metrics.sortinoRatio)}</b>
-        </div>
-      ))}
-    </div>
+    // Native <table> for screen-reader compatibility — the previous
+    // <div class="comparison-table"> rendered the same data but with
+    // no row/col semantics. Headings + scope attributes give AT a
+    // real grid to navigate.
+    <table className="comparison-table">
+      <thead>
+        <tr>
+          <th scope="col">策略</th>
+          <th scope="col">总投入</th>
+          <th scope="col">期末价值</th>
+          <th scope="col">收益率</th>
+          <th scope="col">最大回撤</th>
+          <th scope="col">夏普</th>
+          <th scope="col">索提诺</th>
+        </tr>
+      </thead>
+      <tbody>
+        {charts.comparisonRows.map((item) => (
+          <tr key={item.strategyType}>
+            <th scope="row">{item.name}</th>
+            <td>{moneySymbol}{metric(item.metrics.totalInvested)}</td>
+            <td>{moneySymbol}{metric(item.metrics.endingValue)}</td>
+            <td>{metric(item.metrics.returnPct, "%")}</td>
+            <td>{metric(item.metrics.maxDrawdownPct, "%")}</td>
+            <td>{metric(item.metrics.sharpeRatio)}</td>
+            <td>{metric(item.metrics.sortinoRatio)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 
   return (
@@ -525,7 +571,10 @@ export function App() {
       )}
 
       {/* ─── Main Workspace ─────────────────────────────────────────── */}
-      <section className={state.loading ? "main-workspace is-loading" : "main-workspace"}>
+      <section
+        className={state.loading ? "main-workspace is-loading" : "main-workspace"}
+        aria-busy={state.loading || state.recommendationLoading || state.optimizationLoading || state.monteCarloLoading}
+      >
         {state.loading && !state.result && !state.error && (
           <div className="initial-loading">
             <RefreshCcw size={22} />

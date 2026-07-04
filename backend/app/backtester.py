@@ -356,21 +356,35 @@ def _metrics(
             buyCount=0,
             avgContribution=0,
         )
-    total_invested = max(event.totalInvested for event in events)
+    # Single pass: the previous version did three independent O(n)
+    # scans over `events` (total_invested, max_drawdown, buy_count) on
+    # top of two more passes inside _money_weighted_annualized_return
+    # and _risk_adjusted_ratios. For a 5-year weekly backtest that's
+    # ~260 events, so the savings are modest, but the call site is
+    # one per backtest and the same data is scanned 5 times — easy
+    # to collapse into one loop.
+    total_invested = 0.0
+    max_drawdown_pct = 0.0
+    buy_count = 0
+    for event in events:
+        if event.totalInvested > total_invested:
+            total_invested = event.totalInvested
+        if event.drawdownPct < max_drawdown_pct:
+            max_drawdown_pct = event.drawdownPct
+        if event.amount > 0:
+            buy_count += 1
     ending = events[-1].portfolioValue
-    max_drawdown = min(event.drawdownPct for event in events) / 100
     years = max((last_date - first_date).days / 365.25, 1 / 365.25)
     annualized = _money_weighted_annualized_return(events)
     if annualized is None:
         annualized = _simple_annualized_return(ending, total_invested, years)
-    buy_count = sum(1 for event in events if event.amount > 0)
     sharpe, sortino = _risk_adjusted_ratios(events, risk_free_rate=risk_free_rate)
     return BacktestMetrics(
         totalInvested=round(total_invested, 2),
         endingValue=round(ending, 2),
         returnPct=round((ending / total_invested - 1) * 100, 2) if total_invested > 0 else 0,
         annualizedReturnPct=round(annualized, 2),
-        maxDrawdownPct=round(max_drawdown * 100, 2),
+        maxDrawdownPct=round(max_drawdown_pct, 2),
         buyCount=buy_count,
         avgContribution=round(total_invested / buy_count, 2) if buy_count > 0 else 0,
         sharpeRatio=sharpe,

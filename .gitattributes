@@ -1,6 +1,14 @@
 # Normalize line endings to LF on commit, checkout as native.
 * text=auto
 
+# Generated artifacts. Excluded from language stats (GitHub counts
+# them in repo language mix) and from PR "files changed" by default
+# via the linguist-generated=true convention. Keep both openapi.json
+# (exported from FastAPI) and api.generated.ts (regenerated from
+# openapi.json by `npm run generate:api`) here.
+openapi.json linguist-generated=true
+frontend/src/api.generated.ts linguist-generated=true
+
 # Force LF for scripts and config that break on CRLF.
 *.py text eol=lf
 *.ts text eol=lf

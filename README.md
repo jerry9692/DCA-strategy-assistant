@@ -151,34 +151,38 @@ backend\.venv\Scripts\python.exe scripts\portable\export_cache_patch.py --symbol
 DCA-strategy-assistant/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py                  # FastAPI 入口
-│   │   ├── models.py                # Pydantic 数据模型
-│   │   ├── strategies.py            # 策略评估引擎
+│   │   ├── main.py                  # FastAPI 入口（含 /api/health）
+│   │   ├── models.py                # Pydantic 数据模型 + SSRF 防护
+│   │   ├── strategies.py            # 策略评估引擎 + prepare_market 缓存
 │   │   ├── strategy_definitions.py  # 策略元数据与默认参数
 │   │   ├── indicators.py            # 技术指标（SMA、RSI、回撤等）
-│   │   ├── backtester.py            # DCA 回测引擎
+│   │   ├── backtester.py            # DCA 回测引擎（IRR 数值解）
 │   │   ├── optimizer.py             # 参数优化引擎
-│   │   ├── optimization_jobs.py     # 异步优化任务管理
-│   │   ├── explanations.py          # LLM 解读模块
+│   │   ├── optimization_jobs.py     # 异步优化任务管理（CAS 状态机）
+│   │   ├── explanations.py          # LLM 解读模块（OpenAI 兼容）
+│   │   ├── rate_limiter.py          # 滑动窗口限流（IP+key 复合 key）
+│   │   ├── simulation.py            # 蒙特卡洛模拟
 │   │   └── data.py                  # yfinance 数据获取 + SQLite 缓存
 │   ├── tests/
 │   │   ├── test_strategies.py       # 策略与回测测试
 │   │   ├── test_data.py             # 数据获取测试
 │   │   └── test_explanations.py     # LLM 解读测试
 │   ├── data/                        # SQLite 缓存与 yfinance 数据
+│   ├── export_openapi.py            # 重新导出 openapi.json
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
+│   │   ├── main.tsx                 # React 入口（包 ErrorBoundary）
 │   │   ├── App.tsx                  # 主应用组件
-│   │   ├── main.tsx                 # React 入口
-│   │   ├── api.ts                   # API 客户端工具
-│   │   ├── api.generated.ts         # OpenAPI 生成的 TypeScript 类型
+│   │   ├── api.ts                   # API 客户端工具（UiAbortError）
+│   │   ├── api.generated.ts         # OpenAPI 生成的 TS 类型（标记 linguist-generated）
 │   │   ├── types.ts                 # 前端类型定义
 │   │   ├── constants.ts             # 常量与预设
 │   │   ├── utils.ts                 # 工具函数
+│   │   ├── utils.test.ts            # vitest 单元测试
 │   │   ├── Chart.tsx                # 图表组件封装
 │   │   ├── styles.css               # 应用样式
-│   │   ├── components/              # UI 组件（ChartWrapper、Metric 等）
+│   │   ├── components/              # UI 组件（ChartWrapper、Metric、SettingsDrawer、ErrorBoundary、ErrorBanner、StatusBar、NavRail、MonteCarloPanel、ParamControl）
 │   │   └── hooks/                   # React hooks（useBacktest、useChartOptions、useLlmExplanation）
 │   ├── tsconfig.json
 │   └── vite.config.ts
@@ -186,10 +190,27 @@ DCA-strategy-assistant/
 │   ├── user-guide.md                # 用户手册
 │   ├── roadmap-2026-q3.md           # 开发路线图
 │   ├── task-list.md                 # 功能待办
+│   ├── audit-report-2026-07-04.md   # 2026-07 全量代码审计
+│   ├── design-d3-monte-carlo.md     # 蒙特卡洛模块设计
+│   ├── portable-release.md          # 便携版发布说明
 │   └── change-log/                  # 按日期的实现记录
-├── start-dev.ps1                    # Windows 一键启动脚本
+├── scripts/
+│   ├── check_audit_artifacts.py     # 审计工件的元数据检查
+│   └── portable/                    # 便携版构建脚本（export_cache_patch 等）
+├── .github/
+│   ├── dependabot.yml               # 依赖自动升级
+│   └── workflows/
+│       ├── ci.yml                   # CI（ruff、pytest、tsc、eslint、vitest）
+│       └── security-audit.yml       # 每夜 pip-audit + npm audit
+├── SECURITY.md                      # 漏洞报告策略
+├── CONTRIBUTING.md                  # 贡献指南
+├── start-dev.ps1 / start-dev.bat    # 一键启动脚本
 ├── pyproject.toml                   # Python 项目配置（Ruff、Pyright、pytest）
-└── Dockerfile                       # 多阶段 Docker 构建
+├── Dockerfile                       # 多阶段 Docker 构建（非 root）
+├── docker-compose.yml               # Docker Compose（env_file: .env）
+├── LICENSE                          # MIT 许可证
+├── README.md / README.en.md         # 中英 README
+└── .gitattributes                   # 行尾与 linguist-generated 配置
 ```
 
 ## 假设与限制
