@@ -37,9 +37,17 @@ class RateLimiter:
     def check(self, identifier: str) -> bool:
         """Return True if the request is allowed, False if rate-limited.
 
-        identifier should be a stable per-client string (e.g. the
-        user's LLM API key, or the request IP if no key is available).
+        identifier should be a stable per-client string. The intended
+        call site composes it from the client IP and the user's
+        authenticated LLM key, so a single attacker can't bypass the
+        limit by rotating keys and a single user can't bypass the
+        limit by rotating IPs (NAT'ed networks).
         """
+        # Reject identifiers that are wildly oversized to keep the
+        # SHA-256 path bounded. Real inputs (IPv4 or IPv6 + an OpenAI
+        # key) are well under a kilobyte.
+        if not identifier or len(identifier) > 4096:
+            return False
         key = self._key(identifier)
         now = monotonic()
         with self._lock:

@@ -123,6 +123,28 @@ export function App() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // Auto-collapse the inspector when the window is narrow so the
+  // chart stays usable. Re-evaluated on resize (and on mount); only
+  // flips the state when it would actually change so we don't churn
+  // unrelated renders. Threshold matches the initial-mount check.
+  React.useEffect(() => {
+    const shouldCollapse = window.innerWidth <= 1100;
+    setInspectorCollapsed((current) => (current === shouldCollapse ? current : shouldCollapse));
+  }, [viewportSize.w]);
+
+  // Keep the AI chat panel on-screen. If the window shrinks below the
+  // current chat x-position + width, drag the panel left so the close
+  // button stays reachable. Only clamps inwards — we don't move the
+  // panel away from where the user put it.
+  React.useEffect(() => {
+    if (!chatOpen) return;
+    setChatPos((current) => {
+      const maxX = Math.max(16, viewportSize.w - chatSize.w - 16);
+      if (current.x <= maxX) return current;
+      return { x: maxX, y: current.y };
+    });
+  }, [chatOpen, viewportSize.w, chatSize.w]);
+
   React.useEffect(() => {
     if (fullscreenChart) {
       const prev = document.body.style.overflow;
@@ -142,7 +164,11 @@ export function App() {
   const monteCarloYearsLabel = React.useMemo(() => {
     const start = new Date(`${state.startDate}T00:00:00`);
     const end = new Date(`${state.endDate}T00:00:00`);
-    const years = (end.getTime() - start.getTime()) / (365.25 * 24 * 3600 * 1000);
+    const ms = end.getTime() - start.getTime();
+    // Guard against Invalid Date (NaN ms) and negative windows; both
+    // would otherwise render as "NaN 年" / a huge negative number.
+    if (!Number.isFinite(ms) || ms <= 0) return "—";
+    const years = ms / (365.25 * 24 * 3600 * 1000);
     return years >= 1 ? `${years.toFixed(1)} 年` : "不足 1 年";
   }, [state.startDate, state.endDate]);
 
@@ -392,10 +418,13 @@ export function App() {
         <div
           className="ai-chat-panel"
           ref={chatPanelRef}
+          role="dialog"
+          aria-modal="false"
+          aria-labelledby="ai-chat-panel-title"
           style={{ left: chatPos.x, top: chatPos.y, width: chatSize.w, height: chatSize.h }}
         >
           <div className="ai-chat-panel__head" onMouseDown={onChatHeaderMouseDown}>
-            <span className="ai-chat-panel__title">
+            <span className="ai-chat-panel__title" id="ai-chat-panel-title">
               <MessageCircle size={14} />
               AI 问答
               {llmState.explanationModel ? <span className="ai-chat-panel__model"> · {llmState.explanationModel}</span> : null}
@@ -469,7 +498,29 @@ export function App() {
               </button>
             </div>
           </div>
-          <div className="ai-chat-panel__resize" onMouseDown={onChatResizeMouseDown} />
+          <div
+            className="ai-chat-panel__resize"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="调整 AI 问答面板大小"
+            aria-valuenow={chatSize.w}
+            aria-valuemin={300}
+            aria-valuemax={1200}
+            tabIndex={0}
+            onMouseDown={onChatResizeMouseDown}
+            onKeyDown={(e) => {
+              // Mirror the drag behavior on the keyboard so the panel
+              // is operable without a mouse. ArrowLeft / Right resize
+              // horizontally; combine with Shift for larger steps.
+              if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+              e.preventDefault();
+              const step = e.shiftKey ? 32 : 8;
+              setChatSize((s) => ({
+                ...s,
+                w: Math.max(300, Math.min(1200, s.w + (e.key === "ArrowRight" ? step : -step))),
+              }));
+            }}
+          />
         </div>
       )}
 
@@ -571,10 +622,15 @@ export function App() {
             )}
 
             <div className="chart-container">
-              <div className="chart-tabs">
+              <div className="chart-tabs" role="tablist" aria-label="图表视图">
                 {CHART_TABS.map((tab) => (
                   <button
                     key={tab.id}
+                    role="tab"
+                    id={`chart-tab-${tab.id}`}
+                    aria-selected={activeChartTab === tab.id}
+                    aria-controls="chart-panel"
+                    tabIndex={activeChartTab === tab.id ? 0 : -1}
                     className={`chart-tab ${activeChartTab === tab.id ? "active" : ""}`}
                     onClick={() => setActiveChartTab(tab.id)}
                   >
@@ -582,7 +638,12 @@ export function App() {
                   </button>
                 ))}
               </div>
-              <div className="chart-stage">
+              <div
+                id="chart-panel"
+                role="tabpanel"
+                aria-labelledby={`chart-tab-${activeChartTab}`}
+                className="chart-stage"
+              >
                 <button
                   className="icon-button chart-stage__expand"
                   onClick={() => setFullscreenChart(activeChartTab)}
@@ -692,7 +753,7 @@ export function App() {
                   <button type="button" className="secondary-action" onClick={state.cancelOptimization}>取消</button>
                 </div>
                 <div className="progress-track" aria-label="自动调优进度">
-                  <span style={{ width: `${Math.max(3, state.optimizationJob.progress)}%` }} />
+                  <span style={{ width: `${Math.max(3, Number.isFinite(state.optimizationJob?.progress) ? state.optimizationJob.progress : 0)}%` }} />
                 </div>
                 <div className="progress-meta">
                   <b>{metric(state.optimizationJob.progress, "%")}</b>

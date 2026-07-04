@@ -1,10 +1,11 @@
+import logging
 from datetime import date, timedelta
 from functools import lru_cache
 from pathlib import Path
 from time import monotonic
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, func, select
@@ -74,24 +75,47 @@ app.add_middleware(
 
 
 def _raise_api_error(exc: Exception) -> None:
+    """Translate a caught exception into a 4xx HTTPException.
+
+    The detail string is intentionally generic so the wire payload
+    doesn't leak internal paths, stack-trace fragments, third-party
+    exception messages (e.g. yfinance's `HTTPSConnectionPool(...)`
+    strings that reveal proxy hosts), or Pydantic field names that
+    an attacker can use to fingerprint the schema. The full exception
+    is written to the server log so operators can still debug.
+    """
     if isinstance(exc, PriceDataError):
+        # PriceDataError carries a curated, operator-controlled
+        # message that's safe to forward.
         raise HTTPException(
             status_code=400,
             detail={"message": exc.message, "code": exc.code, "retryable": exc.retryable},
         ) from exc
+    logging.getLogger("app").exception("unhandled exception in API handler")
     raise HTTPException(
-        status_code=400, detail={"message": str(exc), "code": "request_failed", "retryable": False}
+        status_code=400,
+        detail={
+            "message": "请求处理失败，请稍后重试。",
+            "code": "request_failed",
+            "retryable": True,
+        },
     ) from exc
 
 
-def _enforce_chat_rate_limit(api_key: str) -> None:
+def _enforce_chat_rate_limit(request, api_key: str) -> None:
     """Reject with 429 if the caller has exceeded the per-key chat quota.
 
-    All three explanation endpoints share the same limiter so a user
-    can't bypass the cap by alternating between /run, /selection, and
-    /chat. The key is hashed inside the limiter and never stored.
+    The identifier is the client IP (when available) plus a short
+    hash of the LLM API key. Using either alone leaves a bypass
+    window: rotating keys gets a fresh bucket, but rotating IPs
+    (NAT exit pool, mobile carrier) is also easy. Composing both
+    forces an attacker to control both the source network and the
+    key — which they already need to do anyway.
     """
-    if not chat_limiter.check(api_key):
+    client_ip = getattr(request, "client", None)
+    client_host = client_ip.host if client_ip is not None else "unknown"
+    identifier = f"{client_host}|{api_key[:8]}"
+    if not chat_limiter.check(identifier):
         raise HTTPException(
             status_code=429,
             detail={
@@ -193,7 +217,7 @@ def _asset_currency(symbol: str) -> str:
 
 
 @app.post("/api/explanations/run", response_model=ExplanationResponse)
-def explanation(request: ExplanationRequest) -> ExplanationResponse:
+def explanation(http_request: Request, request: ExplanationRequest) -> ExplanationResponse:
     """Generate a plain-language explanation of the current
     recommendation via the user's OpenAI-compatible LLM.
 
@@ -202,7 +226,7 @@ def explanation(request: ExplanationRequest) -> ExplanationResponse:
     explanations.py for the request construction.
     """
     try:
-        _enforce_chat_rate_limit(request.llm.apiKey)
+        _enforce_chat_rate_limit(http_request, request.llm.apiKey)
         clear_prepare_cache()
         symbol = validate_symbol(request.symbol)
         end = request.asOf or date.today()
@@ -225,7 +249,7 @@ def explanation(request: ExplanationRequest) -> ExplanationResponse:
 
 
 @app.post("/api/explanations/selection", response_model=SelectionExplanationResponse)
-def selection_explanation(request: SelectionExplanationRequest) -> SelectionExplanationResponse:
+def selection_explanation(http_request: Request, request: SelectionExplanationRequest) -> SelectionExplanationResponse:
     """Explain user-selected page text with current strategy context.
 
     The selected text is treated as untrusted quoted content by the
@@ -233,7 +257,7 @@ def selection_explanation(request: SelectionExplanationRequest) -> SelectionExpl
     the same per-request forwarding rules as /api/explanations/run.
     """
     try:
-        _enforce_chat_rate_limit(request.llm.apiKey)
+        _enforce_chat_rate_limit(http_request, request.llm.apiKey)
         clear_prepare_cache()
         symbol = validate_symbol(request.symbol)
         end = request.asOf or date.today()
@@ -256,7 +280,7 @@ def selection_explanation(request: SelectionExplanationRequest) -> SelectionExpl
 
 
 @app.post("/api/explanations/chat", response_model=ChatResponse)
-def chat(request: ChatRequest) -> ChatResponse:
+def chat(http_request: Request, request: ChatRequest) -> ChatResponse:
     """Answer a follow-up question in a multi-turn conversation.
 
     The decision context (current recommendation, signals, market
@@ -266,7 +290,7 @@ def chat(request: ChatRequest) -> ChatResponse:
     /api/explanations/run.
     """
     try:
-        _enforce_chat_rate_limit(request.llm.apiKey)
+        _enforce_chat_rate_limit(http_request, request.llm.apiKey)
         clear_prepare_cache()
         symbol = validate_symbol(request.symbol)
         end = request.asOf or date.today()

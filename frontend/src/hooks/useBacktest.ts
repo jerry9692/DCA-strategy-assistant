@@ -338,6 +338,11 @@ export function useBacktest() {
       abortInFlight();
       const controller = new AbortController();
       inFlight.current = controller;
+      // 60s covers the slowest path (multi-decade backtest with
+      // comparison strategies + slow yfinance cold start). Without
+      // a cap a half-open connection would freeze the UI for the
+      // full OS-level TCP timeout (~120s on most platforms).
+      const timeoutId = window.setTimeout(() => controller.abort(), 60_000);
       setLoading(true);
       setError(null);
       fetch(`${API_BASE}/api/backtests/run`, {
@@ -365,6 +370,7 @@ export function useBacktest() {
           setError(toUiError(err));
         })
         .finally(() => {
+          window.clearTimeout(timeoutId);
           if (cancelled) return;
           setLoading(false);
         });
