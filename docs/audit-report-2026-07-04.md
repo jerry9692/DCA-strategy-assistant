@@ -32,7 +32,7 @@
 | P0-S03 | `frontend/src/components/SettingsDrawer.tsx:46-72` | `<input type="password" value={...}>` DOM value 仍含明文，可被 DevTools/扩展读取 | "未聚焦时不渲染 value"；加显示/隐藏按钮 |
 | P0-S04 | `frontend/src/hooks/useLlmExplanation.ts:103,135,185` | 用户可任意填写 `baseUrl`，API key 会被 fetch 到任意第三方 URL | baseUrl 走白名单或强制 https；显示"将发送到 X"确认 |
 | P0-S05 | `Dockerfile` 全文 | 容器以 root 身份运行，RCE 即拿到 root | 新增 `useradd dca`，`USER dca`，chown `/app` |
-| P0-S06 | `docs/user-guide.md:141` | 示例文本写 `deepseek-v4-pro`/`deepseek-v4-flash`，DeepSeek 实际无 v4 系列（v3/r1/reasoner 是当前主流） | 改为 `gpt-4o-mini`、`deepseek-chat`、`deepseek-reasoner` 等已存在模型 |
+| P0-S06 | `docs/user-guide.md:141` | 示例文本写 `deepseek-v4-pro`/`deepseek-v4-flash`，经验证属审计员误判（DeepSeek 在 2026-04 已发布 V4 双版本，旧名 `deepseek-chat`/`deepseek-reasoner` 将于 2026-07-24 弃用）—— 现保留 V4 名称并加迁移提示 | 保留 `deepseek-v4-pro`/`deepseek-v4-flash`；增加 2026-07-24 弃用告警 |
 
 ### 1.2 金融正确性
 
