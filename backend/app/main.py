@@ -24,6 +24,7 @@ from app.models import (
     ContributionEvent,
     ExplanationRequest,
     ExplanationResponse,
+    HealthResponse,
     MarketState,
     MonteCarloRequest,
     MonteCarloResponse,
@@ -52,7 +53,6 @@ from app.optimizer import optimize_parameters
 from app.rate_limiter import chat_limiter
 from app.simulation import run_montecarlo
 from app.strategies import (
-    _prepare_cache,
     clear_prepare_cache,
     evaluate_prepared_strategy,
     evaluate_strategy,
@@ -102,21 +102,28 @@ def _enforce_chat_rate_limit(api_key: str) -> None:
         )
 
 
-@app.get("/api/health")
-def health_check():
-    """Return service status, cache sizes, and uptime."""
+@app.get("/api/health", response_model=HealthResponse)
+def health() -> HealthResponse:
+    """Liveness + cache-size probe for reverse proxies and operators.
+
+    Deliberately touches only cheap, local signals (no yfinance, no
+    backtest) so it stays fast even when the app is under load or
+    offline. The route is registered before the catch-all SPA mount at
+    the end of this module, so /api/health wins over static file
+    serving regardless of mount order.
+    """
     with Session(engine) as session:
         price_cache_size = session.exec(select(func.count(PriceBar.bar_date))).first() or 0
 
     cleanup_old_jobs()
 
-    return {
-        "status": "ok",
-        "uptimeSeconds": round(monotonic() - _start_time, 1),
-        "dataCacheSize": price_cache_size,
-        "prepareCacheSize": len(_prepare_cache),
-        "optimizationJobs": job_count(),
-    }
+    return HealthResponse(
+        status="ok",
+        version=app.version,
+        dataCacheSize=price_cache_size,
+        optimizationJobs=job_count(),
+        uptimeSeconds=round(monotonic() - _start_time, 1),
+    )
 
 
 @app.get("/api/assets", response_model=list[Asset])

@@ -1,0 +1,65 @@
+name: Security Audit (nightly)
+
+on:
+  schedule:
+    # Every night at 02:00 Asia/Shanghai. Nightly cadence is enough
+    # for a personal-scale project; Dependabot handles the weekly
+    # upgrade PRs. The audit here opens an issue on the first day a
+    # new advisory appears, so it doesn't get lost in a daily diff.
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+    name: pip-audit + npm audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pip-audit
+
+      - name: Run pip-audit (strict, JSON)
+        working-directory: backend
+        run: |
+          mkdir -p ../artifacts
+          pip-audit --strict --format json --output ../artifacts/pip-audit.json || AUDIT_EXIT=$?
+          echo "pip-audit exit: ${AUDIT_EXIT:-0}"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run npm audit (JSON, all deps)
+        working-directory: frontend
+        run: |
+          npm audit --json --audit-level=high > ../artifacts/npm-audit.json || true
+
+      - name: Open issue on new findings
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/check_audit_artifacts.py artifacts/ || true

@@ -1,4 +1,5 @@
-import { KeyRound, Percent, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react";
+import { useState } from "react";
+import { Eye, EyeOff, KeyRound, Percent, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react";
 import type { useBacktest } from "../hooks/useBacktest";
 import type { useLlmExplanation } from "../hooks/useLlmExplanation";
 import type { Frequency } from "../types";
@@ -28,6 +29,11 @@ export function SettingsDrawer({
   state: BacktestState;
   llmState: LlmState;
 }) {
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [confirmedBaseUrl, setConfirmedBaseUrl] = useState<string | null>(null);
+  const currentBaseUrl = llmState.llm.baseUrl.trim();
+  const baseUrlChanged =
+    currentBaseUrl.length > 0 && currentBaseUrl !== confirmedBaseUrl;
   return (
     <>
       <div className={`drawer-overlay ${open ? "open" : ""}`} onClick={onClose} />
@@ -62,14 +68,40 @@ export function SettingsDrawer({
             </label>
             <label className="llm-field">
               API Key
-              <input
-                type="password"
-                value={llmState.llm.apiKey}
-                placeholder="sk-..."
-                autoComplete="off"
-                onChange={(event) => llmState.setLlm((current) => ({ ...current, apiKey: event.target.value }))}
-              />
+              <div className="llm-key-row">
+                <input
+                  type={showApiKey ? "text" : "password"}
+                  value={llmState.llm.apiKey}
+                  placeholder="sk-..."
+                  autoComplete="off"
+                  spellCheck={false}
+                  onChange={(event) => llmState.setLlm((current) => ({ ...current, apiKey: event.target.value }))}
+                />
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => setShowApiKey((v) => !v)}
+                  title={showApiKey ? "隐藏 Key" : "显示 Key"}
+                  aria-label={showApiKey ? "隐藏 API Key" : "显示 API Key"}
+                  aria-pressed={showApiKey}
+                >
+                  {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
             </label>
+            {baseUrlChanged && (
+              <div className="settings-hint settings-hint--warn" role="alert">
+                <KeyRound size={14} />
+                将把您的 API Key 发送到 <code>{currentBaseUrl}</code>。请确认这是您信任的地址。
+                <button
+                  type="button"
+                  className="link-action"
+                  onClick={() => setConfirmedBaseUrl(currentBaseUrl)}
+                >
+                  我已知晓
+                </button>
+              </div>
+            )}
             <label className="llm-toggle">
               <input
                 type="checkbox"

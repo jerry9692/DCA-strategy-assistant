@@ -138,7 +138,7 @@ npm run dev
 
 **AI 解读怎么配置？** 在设置页的"AI 解读"里填入：
 - API Base URL：服务商地址（OpenAI 用 `https://api.openai.com/v1`，DeepSeek 用 `https://api.deepseek.com`）
-- 模型：如 `gpt-4o-mini`、`deepseek-v4-pro`、`deepseek-v4-flash`
+- 模型：常见选项如 `gpt-4o-mini`、`gpt-4o`、`deepseek-chat`、`deepseek-reasoner`，请按你所选服务商的最新文档填写
 - API Key：你的 API 密钥（仅存浏览器 localStorage，每次请求由本地后端转发，不被记录）
 - 勾上"建议变化后自动生成解读"，每次切策略或调参都会自动刷新
 

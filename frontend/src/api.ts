@@ -1,5 +1,12 @@
 import type { UiError } from "./types";
 
+export class UiAbortError extends Error {
+  constructor() {
+    super("请求已取消。");
+    this.name = "UiAbortError";
+  }
+}
+
 export async function readJson<T>(res: Response): Promise<T> {
   const contentType = res.headers.get("content-type") ?? "";
   const text = await res.text();
@@ -12,7 +19,7 @@ export async function readJson<T>(res: Response): Promise<T> {
   }
   let payload: unknown = null;
   try {
-    payload = text ? JSON.parse(text) : null;
+    if (text) payload = JSON.parse(text);
   } catch {
     throw { message: "后端返回了无法解析的数据，请重试。", code: "parse_error", retryable: true };
   }
@@ -37,6 +44,15 @@ export async function readJson<T>(res: Response): Promise<T> {
 }
 
 export function toUiError(err: unknown): UiError {
+  // AbortError from a cancelled fetch should surface as a benign
+  // message, not a "请求失败" banner. The hook layer also checks for
+  // this and skips the state update entirely.
+  if (err instanceof Error && err.name === "AbortError") {
+    return { message: "请求已取消。", code: "aborted", retryable: false };
+  }
+  if (err instanceof UiAbortError) {
+    return { message: err.message, code: "aborted", retryable: false };
+  }
   if (typeof err === "object" && err !== null && "message" in err) {
     const shaped = err as { message?: unknown; code?: unknown; retryable?: unknown };
     return {

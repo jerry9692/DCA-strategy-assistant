@@ -7,15 +7,17 @@
   "paths": {
     "/api/health": {
       "get": {
-        "summary": "Health Check",
-        "description": "Return service status, cache sizes, and uptime.",
-        "operationId": "health_check_api_health_get",
+        "summary": "Health",
+        "description": "Liveness + cache-size probe for reverse proxies and operators.\n\nDeliberately touches only cheap, local signals (no yfinance, no\nbacktest) so it stays fast even when the app is under load or\noffline. The route is registered before the catch-all SPA mount at\nthe end of this module, so /api/health wins over static file\nserving regardless of mount order.",
+        "operationId": "health_api_health_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
               }
             }
           }
@@ -1135,6 +1137,40 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "dataCacheSize": {
+            "type": "integer",
+            "title": "Datacachesize"
+          },
+          "optimizationJobs": {
+            "type": "integer",
+            "title": "Optimizationjobs"
+          },
+          "uptimeSeconds": {
+            "type": "number",
+            "title": "Uptimeseconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "version",
+          "dataCacheSize",
+          "optimizationJobs",
+          "uptimeSeconds"
+        ],
+        "title": "HealthResponse",
+        "description": "Lightweight liveness/readiness probe. Aggregates cheap runtime\nsignals (process uptime, cache row count, finished optimization\njobs) so an operator or reverse proxy can tell whether the app is\nhealthy without running a full backtest."
       },
       "LlmSettings": {
         "properties": {
@@ -2349,6 +2385,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { components } from "../api.generated";
 import type {
   AppDefaults,
@@ -41,6 +41,23 @@ type OptimizationRunContext = {
 };
 
 export function useBacktest() {
+  // Single AbortController shared by every fetch the hook makes. When
+  // the hook's effects re-run (or the component unmounts) we abort
+  // the previous controller so an in-flight request can't clobber
+  // newer state. This is the foundation of the P0-R01 fix.
+  const inFlight = useRef<AbortController | null>(null);
+  const abortInFlight = () => {
+    if (inFlight.current) {
+      inFlight.current.abort();
+      inFlight.current = null;
+    }
+  };
+  useEffect(() => {
+    return () => {
+      abortInFlight();
+    };
+  }, []);
+
   const savedSettings = useMemo(() => readSavedSettings(), []);
   const urlSettings = useMemo(() => readUrlSettings(), []);
   const initialSettings = useMemo(() => urlSettings ?? savedSettings ?? {}, [savedSettings, urlSettings]);
@@ -231,19 +248,21 @@ export function useBacktest() {
   // a window the local cache won't cover. Failures are silent — the
   // inputs just fall back to no constraint.
   useEffect(() => {
+    const controller = new AbortController();
     let cancelled = false;
-    fetch(`${API_BASE}/api/assets/${symbol}/range`)
+    fetch(`${API_BASE}/api/assets/${symbol}/range`, { signal: controller.signal })
       .then(readJson<AssetRange>)
       .then((range) => {
         if (cancelled) return;
         setAssetRange(range);
       })
-      .catch(() => {
-        if (cancelled) return;
+      .catch((err) => {
+        if (cancelled || err?.name === "AbortError") return;
         setAssetRange(null);
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [symbol]);
 
@@ -316,12 +335,16 @@ export function useBacktest() {
     if (!selectedStrategy) return;
     let cancelled = false;
     const handle = window.setTimeout(() => {
+      abortInFlight();
+      const controller = new AbortController();
+      inFlight.current = controller;
       setLoading(true);
       setError(null);
       fetch(`${API_BASE}/api/backtests/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ symbol, startDate, endDate, config, comparisonStrategyTypes: comparisonTypes, riskFreeRate }),
+        signal: controller.signal,
       })
         .then((res) => readJson<Backtest>(res))
         .then((data) => {
@@ -338,7 +361,7 @@ export function useBacktest() {
           setDecisionContextKey(recommendationContextKey);
         })
         .catch((err) => {
-          if (cancelled) return;
+          if (cancelled || err?.name === "AbortError") return;
           setError(toUiError(err));
         })
         .finally(() => {
@@ -485,17 +508,29 @@ export function useBacktest() {
     setActiveScenarioId(null);
   };
 
+  // Track the latest recommendation-only call so a slow earlier
+  // response can't clobber a newer one when the user clicks "refresh"
+  // twice in quick succession.
+  const recommendSeq = useRef(0);
+  const monteCarloSeq = useRef(0);
+
   const runRecommendationOnly = () => {
     if (!selectedStrategy) return;
+    const seq = ++recommendSeq.current;
     setRecommendationLoading(true);
     setError(null);
+    abortInFlight();
+    const controller = new AbortController();
+    inFlight.current = controller;
     fetch(`${API_BASE}/api/recommendations/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ symbol, asOf: endDate, config }),
+      signal: controller.signal,
     })
       .then(readJson<RecommendationResponse>)
       .then((data) => {
+        if (seq !== recommendSeq.current) return;
         setQuickDecision(data.decision);
         setQuickData({ dataSource: data.dataSource, cacheStatus: data.cacheStatus });
         setDecisionContextKey(recommendationContextKey);
@@ -503,8 +538,13 @@ export function useBacktest() {
           current ? { ...current, recommendation: data.decision, dataSource: data.dataSource, cacheStatus: data.cacheStatus } : current,
         );
       })
-      .catch((err) => setError(toUiError(err)))
-      .finally(() => setRecommendationLoading(false));
+      .catch((err) => {
+        if (seq !== recommendSeq.current || err?.name === "AbortError") return;
+        setError(toUiError(err));
+      })
+      .finally(() => {
+        if (seq === recommendSeq.current) setRecommendationLoading(false);
+      });
   };
 
   const runOptimization = () => {
@@ -521,10 +561,11 @@ export function useBacktest() {
     })
       .then(readJson<{ jobId: string }>)
       .then((data) => setOptimizationJob({ jobId: data.jobId, status: "queued", progress: 0, evaluatedCount: 0, totalCount: 0 }))
-      .catch((err) => {
-        setError(toUiError(err));
-        setOptimizationLoading(false);
-        setOptimizationContext(null);
+      .catch((err) => setError(toUiError(err)))
+      .finally(() => {
+        // On any failure of the create call the loading flag is
+        // cleared; on success the polling effect takes over.
+        if (!optimizationActive) setOptimizationLoading(false);
       });
   };
 
@@ -536,11 +577,17 @@ export function useBacktest() {
         setOptimizationJob(job);
         setOptimizationLoading(false);
       })
-      .catch((err) => setError(toUiError(err)));
+      .catch((err) => {
+        setError(toUiError(err));
+        // The DELETE itself failed; keep loading=false so the UI is
+        // responsive and let the next polling cycle reconcile.
+        setOptimizationLoading(false);
+      });
   };
 
   const runMonteCarlo = (horizonMonths: number, numPaths: number, seed?: number) => {
     if (!selectedStrategy) return;
+    const seq = ++monteCarloSeq.current;
     setMonteCarloLoading(true);
     setError(null);
     fetch(`${API_BASE}/api/simulations/montecarlo`, {
@@ -549,9 +596,17 @@ export function useBacktest() {
       body: JSON.stringify({ symbol, startDate, endDate, config, horizonMonths, numPaths, seed }),
     })
       .then(readJson<MonteCarloResponse>)
-      .then((data) => setMonteCarlo(data))
-      .catch((err) => setError(toUiError(err)))
-      .finally(() => setMonteCarloLoading(false));
+      .then((data) => {
+        if (seq !== monteCarloSeq.current) return;
+        setMonteCarlo(data);
+      })
+      .catch((err) => {
+        if (seq !== monteCarloSeq.current) return;
+        setError(toUiError(err));
+      })
+      .finally(() => {
+        if (seq === monteCarloSeq.current) setMonteCarloLoading(false);
+      });
   };
 
   const applyOptimizedConfig = (optimizedConfig: StrategyConfigPayload | Schemas["StrategyConfig"]) => {

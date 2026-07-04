@@ -12,10 +12,16 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Health Check
-         * @description Return service status, cache sizes, and uptime.
+         * Health
+         * @description Liveness + cache-size probe for reverse proxies and operators.
+         *
+         *     Deliberately touches only cheap, local signals (no yfinance, no
+         *     backtest) so it stays fast even when the app is under load or
+         *     offline. The route is registered before the catch-all SPA mount at
+         *     the end of this module, so /api/health wins over static file
+         *     serving regardless of mount order.
          */
-        get: operations["health_check_api_health_get"];
+        get: operations["health_api_health_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -520,6 +526,25 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * HealthResponse
+         * @description Lightweight liveness/readiness probe. Aggregates cheap runtime
+         *     signals (process uptime, cache row count, finished optimization
+         *     jobs) so an operator or reverse proxy can tell whether the app is
+         *     healthy without running a full backtest.
+         */
+        HealthResponse: {
+            /** Status */
+            status: string;
+            /** Version */
+            version: string;
+            /** Datacachesize */
+            dataCacheSize: number;
+            /** Optimizationjobs */
+            optimizationJobs: number;
+            /** Uptimeseconds */
+            uptimeSeconds: number;
+        };
         /** LlmSettings */
         LlmSettings: {
             /**
@@ -972,6 +997,10 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
         };
     };
     responses: never;
@@ -982,7 +1011,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    health_check_api_health_get: {
+    health_api_health_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -997,7 +1026,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["HealthResponse"];
                 };
             };
         };

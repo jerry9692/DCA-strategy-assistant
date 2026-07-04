@@ -449,6 +449,66 @@ class LlmSettings(BaseModel):
             raise ValueError("baseUrl must start with http:// or https://.")
         return self
 
+    @model_validator(mode="after")
+    def _enforce_ssrf_safe_base_url(self) -> "LlmSettings":
+        """Reject baseUrls that target link-local / metadata endpoints.
+
+        The backend proxies the user's LLM credentials to a host they
+        choose. Without this guard, a malicious request can ask the
+        backend to POST those credentials to an internal metadata
+        service (AWS / GCP / Azure all expose one on 169.254.169.254)
+        or to other reserved address ranges. Public hosts, loopback
+        (for local LLM proxies like Ollama) and RFC1918 (for
+        self-hosted gateways) are allowed so that dev / on-prem
+        deployments still work — but the dangerous ranges are always
+        blocked.
+        """
+        from urllib.parse import urlparse
+
+        parsed = urlparse(self.baseUrl)
+        hostname = (parsed.hostname or "").lower()
+        if not hostname:
+            raise ValueError("baseUrl is missing a hostname.")
+
+        # Always-block: unspecified, multicast, and link-local metadata
+        # addresses. Loopback and RFC1918 are allowed for self-hosted
+        # setups; the operator can lock this down further by setting
+        # DCA_LLM_ALLOW_PRIVATE=0 in the deployment environment.
+        import os
+
+        if os.environ.get("DCA_LLM_ALLOW_PRIVATE", "1") == "0":
+            allow_private = False
+        else:
+            allow_private = True
+
+        import ipaddress
+        import socket
+
+        try:
+            infos = socket.getaddrinfo(hostname, None)
+        except socket.gaierror as exc:
+            raise ValueError(f"baseUrl host {hostname!r} could not be resolved.") from exc
+
+        for info in infos:
+            sockaddr = info[4]
+            ip = ipaddress.ip_address(sockaddr[0])
+            if (
+                ip.is_unspecified
+                or ip.is_multicast
+                or ip.is_reserved
+                or ip.is_link_local
+            ):
+                raise ValueError(
+                    f"baseUrl host {hostname!r} resolves to a reserved/metadata address ({ip})."
+                )
+            if not allow_private and (ip.is_private or ip.is_loopback):
+                raise ValueError(
+                    f"baseUrl host {hostname!r} resolves to a private/loopback address ({ip}); "
+                    "set DCA_LLM_ALLOW_PRIVATE=1 to permit local LLM proxies."
+                )
+
+        return self
+
 
 class ExplanationRequest(BaseModel):
     symbol: str = "QQQ"

@@ -456,8 +456,13 @@ def _fast_strategy_run(
             + np.where(active_rsi, s_rsi * w_rsi, 0.0)
             + np.where(active_grid, s_grid * w_grid, 0.0)
         )
+        # If every signal is in warmup (total_w == 0), match the
+        # strategies.py evaluator and buy the base amount instead of
+        # the midpoint of min/max — otherwise the MC probability will
+        # disagree with the backtest even when no signal has fired.
         score = np.where(total_w > 0, weighted / np.where(total_w > 0, total_w, 1.0), 0.5)
         amounts = _amounts_from_score(score)
+        amounts = np.where(total_w > 0, amounts, round(base, 2))
     else:
         # Fallback: per-row evaluator call (slower but correct for any
         # future strategy that doesn't have a vectorized path yet).

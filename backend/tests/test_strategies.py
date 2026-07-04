@@ -850,7 +850,7 @@ def test_finished_optimization_jobs_are_pruned_past_the_cap():
     try:
         _jobs.update({rec.job_id: rec for rec in records})
         with optimization_jobs._lock:
-            optimization_jobs._prune_finished_jobs()
+            optimization_jobs._prune_finished_jobs_locked()
 
         assert len(_jobs) == _MAX_FINISHED_JOBS
         # The oldest `surplus` records must be the ones evicted.
