@@ -3,9 +3,19 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .coverage
+backend/.coverage
+backend/coverage.xml
+**/htmlcov/
+
+.env
+.env.*
+!.env.example
 
 frontend/node_modules/
 frontend/dist/
+frontend/.vite/
+frontend/.env.local
+frontend/.env.*.local
 
 backend/data/*.sqlite
 backend/data/*.sqlite-*

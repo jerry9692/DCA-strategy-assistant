@@ -41,8 +41,11 @@ dist-portable\DCA-strategy-assistant-portable.zip
 backend\.venv\Scripts\python.exe scripts\portable\export_cache_patch.py `
   --symbols QQQ,SPY,VOO,510300 `
   --start 2018-01-01 `
-  --end 2026-05-30
+  --end 2026-06-30
 ```
+
+> 示例的 `--end` 选取最近一个完整季度末，随时间漂移。请用当月
+> 实际的当前日期替换以确保缓存能下载到最新数据。
 
 默认输出到：
 

@@ -28,7 +28,7 @@ Windows 下建议直接用启动脚本：
 
 ```bash
 cd backend
-pip install fastapi uvicorn pandas numpy yfinance sqlmodel
+pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 

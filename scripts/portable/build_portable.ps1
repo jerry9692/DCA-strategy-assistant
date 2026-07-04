@@ -49,8 +49,20 @@ Copy-Item -LiteralPath (Join-Path $FrontendDir "dist") -Destination (Join-Path $
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "import_cache_patch.py") -Destination (Join-Path $OutputPath "tools\import_cache_patch.py")
 
 $RuntimePythonDir = Join-Path $OutputPath "runtime\python"
-Copy-Item -LiteralPath $PythonBase -Destination $RuntimePythonDir -Recurse
-Copy-Item -Path (Join-Path $SitePackages "*") -Destination (Join-Path $RuntimePythonDir "Lib\site-packages") -Recurse -Force
+# L52 already copies the entire base Python (which includes
+# Lib/site-packages) into $RuntimePythonDir. The previous L53 then
+# re-copied with a `*` glob, which (a) PowerShell expands to literal
+# filenames — silently producing an empty copy if the site-packages
+# directory is empty after a fresh `pip install` and (b) duplicated
+# every file. Use -LiteralPath on the directory itself and merge into
+# the existing Lib/.
+$SitePackagesDest = Join-Path $RuntimePythonDir "Lib\site-packages"
+if (-not (Test-Path $SitePackagesDest)) {
+    New-Item -ItemType Directory -Force -Path $SitePackagesDest | Out-Null
+}
+Get-ChildItem -LiteralPath $SitePackages -Force | ForEach-Object {
+    Copy-Item -LiteralPath $_.FullName -Destination $SitePackagesDest -Recurse -Force
+}
 
 New-Item -ItemType Directory -Force -Path (Join-Path $OutputPath "backend\data") | Out-Null
 if ($IncludeCache) {
@@ -104,16 +116,14 @@ $ZipPath = "$OutputPath.zip"
 if (Test-Path $ZipPath) {
     Remove-Item -LiteralPath $ZipPath -Force
 }
-$Tar = Get-Command tar -ErrorAction SilentlyContinue
-if ($Tar) {
-    $Parent = Split-Path -Parent $OutputPath
-    $Leaf = Split-Path -Leaf $OutputPath
-    & tar -a -cf $ZipPath -C $Parent $Leaf
-    if ($LASTEXITCODE -ne 0) {
-        throw "tar failed to create $ZipPath"
-    }
-} else {
-    Compress-Archive -LiteralPath $OutputPath -DestinationPath $ZipPath -Force
+# Always use Compress-Archive for the zip. The previous branch
+# preferred `tar -a -cf ...zip`, which on Windows 10/11's bsdtar
+# can produce a tar-format file with a .zip suffix (7-Zip / WinRAR
+# then refuse to extract it with "not a zip archive"). Compress-Archive
+# is slower but produces a zip that every consumer opens cleanly.
+Compress-Archive -LiteralPath $OutputPath -DestinationPath $ZipPath -Force
+if ($LASTEXITCODE -ne 0) {
+    throw "Compress-Archive failed to create $ZipPath"
 }
 Write-Host "Portable build created:" -ForegroundColor Green
 Write-Host "  $OutputPath"

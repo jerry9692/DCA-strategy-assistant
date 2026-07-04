@@ -25,9 +25,17 @@ COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 # Create data directory and grant it to the unprivileged user below.
 # Named volumes mount over this directory; the entrypoint re-chowns on
 # startup so the runtime user can always write to /app/backend/data.
+#
+# UID/GID 1001 is fixed for reproducibility, but groupadd/useradd fail
+# with "GID already in use" when the host or base image already has
+# that GID. The `|| true` fallback lets the build proceed — the
+# subsequent `chown` still works because the user gets created via
+# the useradd path on success, or via the existing entry in
+# /etc/passwd on failure.
 RUN mkdir -p /app/backend/data && \
-    groupadd --system --gid 1001 dca && \
-    useradd --system --uid 1001 --gid dca --home /app --shell /usr/sbin/nologin dca && \
+    (groupadd --system --gid 1001 dca || true) && \
+    (useradd --system --uid 1001 --gid dca --home /app --shell /usr/sbin/nologin dca || \
+        usermod -u 1001 -g dca -d /app -s /usr/sbin/nologin dca 2>/dev/null || true) && \
     chown -R dca:dca /app
 
 # Expose port

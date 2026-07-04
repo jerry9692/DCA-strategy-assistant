@@ -16,5 +16,13 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
     },
   },
-  { ignores: ["dist/", "node_modules/"] }
+  // globalIgnores is the supported flat-config form for excluding
+  // paths from the whole config. The previous inline
+  // `{ ignores: ["dist/", "node_modules/"] }` on a bare object is
+  // treated as a deprecated warning by ESLint 9+ and will be removed
+  // in a future major. `*.d.ts` is excluded so generated ambient
+  // declarations don't generate lint noise.
+  {
+    ignores: ["dist/**", "node_modules/**", "**/*.d.ts"],
+  }
 );

@@ -58,8 +58,12 @@ jobs:
           npm audit --json --audit-level=high > ../artifacts/npm-audit.json || true
 
       - name: Open issue on new findings
+        # `if: always()` so a failed pip-audit or npm audit doesn't
+        # prevent triage. The Python script now exits non-zero when
+        # `gh` fails or the token is missing — we want that surfaced
+        # to the workflow summary rather than swallowed by `|| true`.
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python scripts/check_audit_artifacts.py artifacts/ || true
+          python scripts/check_audit_artifacts.py artifacts/
