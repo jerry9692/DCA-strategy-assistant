@@ -457,11 +457,18 @@ class LlmSettings(BaseModel):
         choose. Without this guard, a malicious request can ask the
         backend to POST those credentials to an internal metadata
         service (AWS / GCP / Azure all expose one on 169.254.169.254)
-        or to other reserved address ranges. Public hosts, loopback
-        (for local LLM proxies like Ollama) and RFC1918 (for
-        self-hosted gateways) are allowed so that dev / on-prem
-        deployments still work — but the dangerous ranges are always
-        blocked.
+        or to other reserved address ranges.
+
+        Safety rules:
+        1. Reject URLs containing credentials (userinfo) — e.g.
+           `https://attacker.com@10.0.0.1/v1` would otherwise parse
+           with hostname=10.0.0.1 while the request is still routed
+           to the private IP.
+        2. Always block unspecified / multicast / reserved / link-local
+           addresses, independent of the private-address toggle.
+        3. By default, also block loopback and RFC1918 addresses. Set
+           `DCA_LLM_ALLOW_PRIVATE=1` to permit local LLM proxies such
+           as Ollama in controlled environments.
         """
         from urllib.parse import urlparse
 
@@ -470,16 +477,19 @@ class LlmSettings(BaseModel):
         if not hostname:
             raise ValueError("baseUrl is missing a hostname.")
 
-        # Always-block: unspecified, multicast, and link-local metadata
-        # addresses. Loopback and RFC1918 are allowed for self-hosted
-        # setups; the operator can lock this down further by setting
-        # DCA_LLM_ALLOW_PRIVATE=0 in the deployment environment.
+        if parsed.username is not None or parsed.password is not None:
+            raise ValueError(
+                "baseUrl must not contain credentials (user:pass@host). "
+                "Pass the API key in the request body, not the URL."
+            )
+
         import os
 
-        if os.environ.get("DCA_LLM_ALLOW_PRIVATE", "1") == "0":
-            allow_private = False
-        else:
-            allow_private = True
+        # Default to the safer posture: private/loopback LLM endpoints
+        # are only allowed when the operator explicitly opts in. This
+        # closes the SSRF window on fresh deployments that expose the
+        # API to a network.
+        allow_private = os.environ.get("DCA_LLM_ALLOW_PRIVATE", "0") == "1"
 
         import ipaddress
         import socket

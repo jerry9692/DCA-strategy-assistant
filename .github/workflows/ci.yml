@@ -40,9 +40,10 @@ jobs:
         run: ruff format --check backend/
 
       - name: Run tests
-        run: pytest backend/tests -q --cov=app --cov-report=xml --cov-report=term-missing
+        working-directory: backend
+        run: pytest tests -q --cov=app --cov-report=xml --cov-report=term-missing
         env:
-          PYTHONPATH: backend
+          PYTHONPATH: .
 
       # Upload the coverage XML so reviewers can download and inspect
       # it from the Actions run page. Uses the official

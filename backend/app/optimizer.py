@@ -216,9 +216,23 @@ def _scenarios(start: date, end: date) -> list[Scenario]:
     ]
 
 
+def _execution_rates(params: dict[str, Any]) -> tuple[float, float, float]:
+    """Extract fee/slippage/risk-free rates from config params.
+
+    The frontend merges feeRate and slippageRate into config.params at
+    the request boundary. If they are absent (older callers, tests), we
+    fall back to the defaults that match the backtester.run defaults.
+    """
+    fee_rate = float(params.get("feeRate", 0.0))
+    slippage_rate = float(params.get("slippageRate", 0.0))
+    risk_free_rate = float(params.get("riskFreeRate", 0.04))
+    return fee_rate, slippage_rate, risk_free_rate
+
+
 def _fixed_for_scenario(
     backtester: DcaBacktester, scenario: Scenario, config: StrategyConfig
 ) -> BacktestMetrics | None:
+    fee_rate, slippage_rate, risk_free_rate = _execution_rates(config.params)
     fixed_events, fixed_metrics = backtester.run(
         "fixed_dca",
         StrategyConfig(
@@ -231,6 +245,9 @@ def _fixed_for_scenario(
         ),
         scenario.start,
         scenario.end,
+        fee_rate=fee_rate,
+        slippage_rate=slippage_rate,
+        risk_free_rate=risk_free_rate,
     )
     if len(fixed_events) < MIN_BUYS_PER_SCENARIO:
         return None
@@ -244,7 +261,17 @@ def _run_candidate(
     config: StrategyConfig,
     fixed_metrics: BacktestMetrics,
 ) -> BacktestMetrics | None:
-    events, metrics = backtester.run(config.strategyType, config, scenario.start, scenario.end, prepared=prepared)
+    fee_rate, slippage_rate, risk_free_rate = _execution_rates(config.params)
+    events, metrics = backtester.run(
+        config.strategyType,
+        config,
+        scenario.start,
+        scenario.end,
+        fee_rate=fee_rate,
+        slippage_rate=slippage_rate,
+        risk_free_rate=risk_free_rate,
+        prepared=prepared,
+    )
     if len(events) < MIN_BUYS_PER_SCENARIO:
         return None
     return _with_fixed_comparison(metrics, fixed_metrics)

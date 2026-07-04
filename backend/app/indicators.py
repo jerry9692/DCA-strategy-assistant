@@ -41,16 +41,23 @@ def rsi(close: pd.Series, window: int) -> pd.Series:
     if n > window:
         g_full = (cg[window:] - cg[:-window]) / window
         l_full = (cl[window:] - cl[:-window]) / window
-        valid = l_full > 0
-        rs = np.where(valid, g_full / np.where(valid, l_full, 1.0), 0.0)
+        # RSI convention:
+        # - avg_loss == 0 and avg_gain == 0 → undefined, keep default 50.
+        # - avg_loss == 0 and avg_gain  > 0 → perfect uptrend, RSI = 100.
+        # - avg_loss  > 0 → standard formula.
+        pure_up = (l_full == 0.0) & (g_full > 0.0)
+        mixed = l_full > 0.0
+        rs = np.where(mixed, g_full / np.where(mixed, l_full, 1.0), 0.0)
         rsi_vals = 100.0 - 100.0 / (1.0 + rs)
-        result[window:] = np.where(valid, rsi_vals, 50.0)
+        result[window:] = np.where(pure_up, 100.0, np.where(mixed, rsi_vals, 50.0))
     # Partial windows: min_periods <= i < window → mean over i+1 samples.
     # Small loop (at most `window - min_periods` iterations, typically 7).
     for i in range(min_periods, min(window, n)):
         g = gain[: i + 1].mean()
         avg_loss = loss[: i + 1].mean()
-        if avg_loss > 0:
+        if avg_loss == 0.0 and g > 0.0:
+            result[i] = 100.0
+        elif avg_loss > 0.0:
             result[i] = 100.0 - 100.0 / (1.0 + g / avg_loss)
     return pd.Series(result, index=close.index)
 

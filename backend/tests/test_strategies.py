@@ -192,6 +192,21 @@ def test_rsi_sentiment_invests_more_when_oversold_than_overheated():
     assert cold.recommendedAmount > hot.recommendedAmount
 
 
+def test_rsi_is_100_on_sustained_uptrend():
+    """Regression test: a previous numpy RSI implementation returned 50
+    when the average loss over the window was exactly zero (a sustained
+    uptrend). RSI convention says a zero-loss window should be 100.
+    """
+    from app.indicators import rsi
+
+    # 30 days of strictly rising prices → every delta > 0 → avg_loss == 0.
+    prices = pd.Series(range(1, 31), index=pd.date_range("2024-01-01", periods=30))
+    result = rsi(prices, window=14)
+    # Use the first full window (index 14) onward; should be 100.0.
+    full_window_values = result.iloc[14:]
+    assert (full_window_values == 100.0).all(), f"expected RSI=100, got {full_window_values.tolist()}"
+
+
 def test_historical_percentile_invests_more_at_low_percentile():
     high_last = fixture_prices(list(range(100, 180)))
     low_last = fixture_prices(list(range(100, 180)) + [90])

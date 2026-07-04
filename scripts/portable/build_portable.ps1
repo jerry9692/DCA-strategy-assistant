@@ -49,18 +49,20 @@ Copy-Item -LiteralPath (Join-Path $FrontendDir "dist") -Destination (Join-Path $
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "import_cache_patch.py") -Destination (Join-Path $OutputPath "tools\import_cache_patch.py")
 
 $RuntimePythonDir = Join-Path $OutputPath "runtime\python"
-# L52 already copies the entire base Python (which includes
-# Lib/site-packages) into $RuntimePythonDir. The previous L53 then
-# re-copied with a `*` glob, which (a) PowerShell expands to literal
-# filenames — silently producing an empty copy if the site-packages
-# directory is empty after a fresh `pip install` and (b) duplicated
-# every file. Use -LiteralPath on the directory itself and merge into
-# the existing Lib/.
+# Stage 1: copy the entire base Python installation (python.exe,
+# standard library, DLLs, etc.) from the venv's base_prefix. This is
+# the runtime that start-offline.bat points %PYTHON% to.
+Copy-Item -LiteralPath $PythonBase -Destination $RuntimePythonDir -Recurse -Force
+# Stage 2: merge the venv-specific site-packages on top of the base
+# Lib/site-packages. The base install's site-packages is typically
+# empty or minimal; the project's dependencies live in the venv's
+# site-packages directory. Using Get-ChildItem + Copy-Item per child
+# avoids the PowerShell glob-expansion trap of the old `*`-path.
 $SitePackagesDest = Join-Path $RuntimePythonDir "Lib\site-packages"
 if (-not (Test-Path $SitePackagesDest)) {
     New-Item -ItemType Directory -Force -Path $SitePackagesDest | Out-Null
 }
-Get-ChildItem -LiteralPath $SitePackages -Force | ForEach-Object {
+Get-ChildItem -LiteralPath $SitePackages -Force -ErrorAction SilentlyContinue | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination $SitePackagesDest -Recurse -Force
 }
 
@@ -121,9 +123,13 @@ if (Test-Path $ZipPath) {
 # can produce a tar-format file with a .zip suffix (7-Zip / WinRAR
 # then refuse to extract it with "not a zip archive"). Compress-Archive
 # is slower but produces a zip that every consumer opens cleanly.
-Compress-Archive -LiteralPath $OutputPath -DestinationPath $ZipPath -Force
-if ($LASTEXITCODE -ne 0) {
-    throw "Compress-Archive failed to create $ZipPath"
+# `-ErrorAction Stop` turns cmdlet failures into catchable exceptions;
+# `$LASTEXITCODE` is not meaningful for PowerShell cmdlets, so we don't
+# inspect it here.
+try {
+    Compress-Archive -LiteralPath $OutputPath -DestinationPath $ZipPath -Force -ErrorAction Stop
+} catch {
+    throw "Compress-Archive failed to create ${ZipPath}: $_"
 }
 Write-Host "Portable build created:" -ForegroundColor Green
 Write-Host "  $OutputPath"

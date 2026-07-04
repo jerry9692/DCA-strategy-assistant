@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from datetime import date, timedelta
@@ -102,7 +103,20 @@ def _raise_api_error(exc: Exception) -> None:
     strings that reveal proxy hosts), or Pydantic field names that
     an attacker can use to fingerprint the schema. The full exception
     is written to the server log so operators can still debug.
+
+    Exceptions that already have an HTTP semantic (HTTPException) or
+    that are part of the async cancellation protocol
+    (asyncio.CancelledError) are re-raised untouched so status codes
+    and cancellation propagate correctly.
     """
+    if isinstance(exc, HTTPException):
+        # Already an HTTP-aware exception with a specific status code;
+        # don't rewrite it into a generic 400.
+        raise
+    if isinstance(exc, asyncio.CancelledError):
+        # Cancellation must be re-raised so uvicorn/ASGI can clean up
+        # the request correctly.
+        raise
     if isinstance(exc, PriceDataError):
         # PriceDataError carries a curated, operator-controlled
         # message that's safe to forward.
@@ -124,16 +138,24 @@ def _raise_api_error(exc: Exception) -> None:
 def _enforce_chat_rate_limit(request, api_key: str) -> None:
     """Reject with 429 if the caller has exceeded the per-key chat quota.
 
-    The identifier is the client IP (when available) plus a short
+    The identifier is the client IP (when available) plus a SHA-256
     hash of the LLM API key. Using either alone leaves a bypass
     window: rotating keys gets a fresh bucket, but rotating IPs
     (NAT exit pool, mobile carrier) is also easy. Composing both
     forces an attacker to control both the source network and the
     key — which they already need to do anyway.
+
+    The key is hashed with a stable salt so that the limiter state
+    never contains the secret (or even a short prefix that can be
+    rainbow-tabled) and so two keys with the same OpenAI-style prefix
+    don't share a bucket.
     """
+    import hashlib
+
     client_ip = getattr(request, "client", None)
     client_host = client_ip.host if client_ip is not None else "unknown"
-    identifier = f"{client_host}|{api_key[:8]}"
+    key_hash = hashlib.sha256(api_key.encode("utf-8")).hexdigest()[:16]
+    identifier = f"{client_host}|{key_hash}"
     if not chat_limiter.check(identifier):
         raise HTTPException(
             status_code=429,

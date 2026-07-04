@@ -91,6 +91,15 @@ def _open_issue(title: str, body: str) -> int:
     ]
     print("Creating issue:", title, flush=True)
     result = subprocess.run(cmd, check=False, env=env, capture_output=True, text=True)
+    if result.returncode != 0 and "could not add label" in (result.stderr or "").lower():
+        # Labels may not exist on forks / fresh repos. Fall back to an
+        # unlabeled issue so the advisory is still surfaced rather than
+        # dropped.
+        print("Labels not available, retrying without labels.", file=sys.stderr, flush=True)
+        cmd_no_label = cmd.copy()
+        idx = cmd_no_label.index("--label")
+        cmd_no_label = cmd_no_label[:idx] + cmd_no_label[idx + 2 :]
+        result = subprocess.run(cmd_no_label, check=False, env=env, capture_output=True, text=True)
     if result.returncode != 0:
         print(f"gh issue create failed (exit={result.returncode}):", file=sys.stderr)
         if result.stdout:
