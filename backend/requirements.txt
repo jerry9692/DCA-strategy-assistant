@@ -1,4 +1,4 @@
-fastapi>=0.115
+fastapi>=0.139.0
 pydantic>=2.7
 uvicorn[standard]>=0.34
 pandas>=2.3
