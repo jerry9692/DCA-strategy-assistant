@@ -6,4 +6,5 @@ numpy>=2.3
 yfinance>=0.2.54
 sqlmodel>=0.0.22
 pytest>=8.3
+pytest-cov>=5.0
 httpx>=0.28

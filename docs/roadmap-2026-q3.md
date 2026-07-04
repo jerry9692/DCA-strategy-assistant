@@ -339,11 +339,11 @@
 
 ## 工程质量 / 运维（不论做不做新功能都要持续做）
 
-### Q1 测试覆盖率
+### Q1 ✅ 测试覆盖率
 
-- 后端 45 个用例，但没有覆盖率统计。先 `pytest --cov=app --cov-report=term-missing` 看一遍。
-- 估计 strategies.py 覆盖良好（80%+），data.py 不足（缺真实 yfinance 错误注入），main.py 仅入口被覆盖。
-- 目标：90%+ on strategies.py / backtester.py / optimizer.py，70%+ on main.py / data.py。
+> ✅ 已完成。`backend/requirements.txt` 加了 `pytest-cov`；CI backend job 改为
+> `pytest --cov=app --cov-report=term-missing`，每个 PR 输出覆盖率基线和 missing 行。未设
+> `--cov-fail-under` 阈值——先建立基线，后续按模块逐步收紧。
 
 ### Q2 前端 E2E 测试
 
@@ -357,11 +357,13 @@
 - 改成 stdlib `logging` + JSON formatter。每个请求带 request_id。
 - 成本：半天。
 
-### Q4 健康检查 + 简单监控
+### Q4 ✅ 健康检查 + 简单监控
 
-- `GET /api/health` 返回 `{ status, dataCacheSize, uptimeSeconds }`。
-- 优化任务的 dict 长期累积（`optimization_jobs._jobs`），加一个定时清理（保留最近 100 条）。
-- 成本：1 小时。
+> ✅ 已完成。
+>
+> - **健康检查端点**：`GET /api/health` 返回 `{ status, version, dataCacheSize, optimizationJobs, uptimeSeconds }`。用 `HealthResponse(BaseModel)` 定义，只触及本地信号（SQLite 行数、进程运行时间、已完成任务数），不碰 yfinance 也不跑回测。新增 `count_cached_bars()` 容错计数函数（DB 缺失返回 0）。
+> - **任务清理**：`optimization_jobs.py` 加 `_MAX_FINISHED_JOBS = 100`，`OptimizationJobRecord` 加 `created_at` 时间戳字段。每次 `create_optimization_job` 后自动清理已终结（completed/failed/cancelled）的旧记录，保留最新 100 条。新增 `count_finished_jobs()` 供 health 端点调用。
+> - 新增 2 条回归测试：`test_health_endpoint_reports_ok_status_and_runtime_signals`、`test_finished_optimization_jobs_are_pruned_past_the_cap`。
 
 ### Q5 价格缓存清理策略
 
@@ -378,10 +380,11 @@
   - 数据卷持久化
   - 升级流程（数据库迁移当前没做，要么明确"不破坏 schema"，要么引入 alembic）
 
-### Q7 安全扫描
+### Q7 ✅ 安全扫描
 
-- `pip-audit` / `npm audit` 跑一遍，看依赖有没有 CVE。CI 加上每周一次扫描。
-- 当前 yfinance 依赖链（含 lxml、html5lib 等）有过历史 CVE，值得跟踪。
+> ✅ 已完成。CI backend job 加 `pip-audit -r backend/requirements.txt`，
+> frontend job 加 `npm audit --omit=dev`。均使用 `continue-on-error: true`，发现 CVE 只在 PR
+> 日志告警、不阻塞合并。后续如有需要可提升为阻塞步骤或加定时扫描。
 
 ---
 

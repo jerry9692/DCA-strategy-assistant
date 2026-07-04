@@ -130,6 +130,24 @@ def get_cached_range(symbol: str) -> tuple[date | None, date | None]:
     return min_row, max_row
 
 
+def count_cached_bars() -> int:
+    """Total row count across all symbols in the price cache.
+
+    Used by the /api/health endpoint to surface cache size. Must never
+    raise — a missing DB file or empty table means "no data cached yet",
+    not an unhealthy app. We read directly instead of going through
+    get_cached_range (which validates against SUPPORTED_ASSETS) so the
+    count reflects every row ever written, including retired symbols.
+    """
+    if not DB_PATH.exists():
+        return 0
+    try:
+        with Session(engine) as session:
+            return len(session.exec(select(PriceBar)).all())
+    except Exception:
+        return 0
+
+
 def get_available_range(symbol: str) -> tuple[date, date]:
     """Return (min_date, max_date) the UI can present as the date-input
     floor/ceiling.
