@@ -27,5 +27,6 @@ portable-build/
 
 .vscode/
 .playwright-mcp/
+.trae-html-share-packages/
 backend/server.*.log
 backend/uvicorn.log
