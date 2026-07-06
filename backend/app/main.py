@@ -44,6 +44,8 @@ from app.models import (
     StrategyComparison,
     StrategyConfig,
     StrategyDefinitionsResponse,
+    StressTestRequest,
+    StressTestResponse,
 )
 from app.optimization_jobs import (
     cancel_optimization_job,
@@ -62,6 +64,7 @@ from app.strategies import (
     prepare_market,
 )
 from app.strategy_definitions import COMMON_PARAMETERS, STRATEGIES
+from app.stress_test import run_stress_test
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -742,6 +745,31 @@ def backtest(request: BacktestRequest) -> BacktestResult:
             dataSource=data_source,
             cacheStatus=cache_status,
         )
+    except Exception as exc:
+        _raise_api_error(exc)
+
+
+@app.post("/api/stress-tests/run", response_model=StressTestResponse)
+def stress_test(request: StressTestRequest) -> StressTestResponse:
+    """Run a single-path stress test (What-if) on the current strategy.
+
+    The user picks a price-path shape (one-time / gradual / v-shape)
+    and a total % change. The backend generates that deterministic
+    future path, appends it to the historical price series, and runs
+    the full backtester on the combined series so the strategy's
+    indicators react to the simulated crash. The response carries the
+    future-segment buy plan, max floating loss, and a comparison with
+    fixed DCA and lump sum. This is a what-if scenario, not a forecast.
+    """
+    try:
+        clear_prepare_cache()
+        symbol = validate_symbol(request.symbol)
+        end = request.endDate or date.today()
+        start = request.startDate or (end - timedelta(days=365 * 5))
+        warmup = start - timedelta(days=365 * 3)
+        prices, _data_source, _cache_status = get_price_history(symbol, warmup, end)
+        currency = _asset_currency(symbol)
+        return run_stress_test(request, prices, currency)
     except Exception as exc:
         _raise_api_error(exc)
 

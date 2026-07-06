@@ -485,32 +485,23 @@ class LlmSettings(BaseModel):
 
         import os
 
-        # Default to the safer posture: private/loopback LLM endpoints
-        # are only allowed when the operator explicitly opts in. This
-        # closes the SSRF window on fresh deployments that expose the
-        # API to a network.
         allow_private = os.environ.get("DCA_LLM_ALLOW_PRIVATE", "0") == "1"
 
-        import ipaddress
-        import socket
-
+        # DNS resolution is delegated to a module-level helper so tests
+        # can monkeypatch it without hitting the real network. The IP
+        # classification logic below still runs against whatever the
+        # resolver returns, so SSRF protections are not bypassed.
         try:
-            infos = socket.getaddrinfo(hostname, None)
-        except socket.gaierror as exc:
+            ips = _resolve_hostname_ips(hostname)
+        except _DnsResolutionError as exc:
             raise ValueError(f"baseUrl host {hostname!r} could not be resolved.") from exc
 
-        for info in infos:
-            sockaddr = info[4]
-            ip = ipaddress.ip_address(sockaddr[0])
-            if (
-                ip.is_unspecified
-                or ip.is_multicast
-                or ip.is_reserved
-                or ip.is_link_local
-            ):
-                raise ValueError(
-                    f"baseUrl host {hostname!r} resolves to a reserved/metadata address ({ip})."
-                )
+        import ipaddress
+
+        for ip_str in ips:
+            ip = ipaddress.ip_address(ip_str)
+            if ip.is_unspecified or ip.is_multicast or ip.is_reserved or ip.is_link_local:
+                raise ValueError(f"baseUrl host {hostname!r} resolves to a reserved/metadata address ({ip}).")
             if not allow_private and (ip.is_private or ip.is_loopback):
                 raise ValueError(
                     f"baseUrl host {hostname!r} resolves to a private/loopback address ({ip}); "
@@ -518,6 +509,33 @@ class LlmSettings(BaseModel):
                 )
 
         return self
+
+
+class _DnsResolutionError(Exception):
+    """Internal sentinel raised by ``_resolve_hostname_ips`` on DNS failure.
+
+    Kept as a dedicated exception type (instead of re-raising
+    ``socket.gaierror``) so the validator above can catch it without
+    importing ``socket`` at module scope, and tests can raise it
+    cleanly when mocking the resolver.
+    """
+
+
+def _resolve_hostname_ips(hostname: str) -> list[str]:
+    """Resolve ``hostname`` to a list of IP literal strings.
+
+    Extracted as a module-level function so the SSRF validator can be
+    unit-tested without performing real DNS lookups — tests monkeypatch
+    this function to return deterministic IPs. Production code keeps
+    using the system resolver via ``socket.getaddrinfo``.
+    """
+    import socket
+
+    try:
+        infos = socket.getaddrinfo(hostname, None)
+    except socket.gaierror as exc:
+        raise _DnsResolutionError(str(exc)) from exc
+    return [info[4][0] for info in infos]
 
 
 class ExplanationRequest(BaseModel):
@@ -663,9 +681,7 @@ class MonteCarloRequest(BaseModel):
     @model_validator(mode="after")
     def _validate_num_paths(self) -> "MonteCarloRequest":
         if self.numPaths not in MONTE_CARLO_ALLOWED_PATHS:
-            raise ValueError(
-                f"numPaths must be one of {MONTE_CARLO_ALLOWED_PATHS}, got {self.numPaths}."
-            )
+            raise ValueError(f"numPaths must be one of {MONTE_CARLO_ALLOWED_PATHS}, got {self.numPaths}.")
         return self
 
 
@@ -722,4 +738,64 @@ class MonteCarloResponse(BaseModel):
     lumpSum: ScenarioStats
     beatFixedDcaProbability: float
     chart: MonteCarloChartData
+    disclaimer: str
+
+
+# ─── D5 Stress Test (What-if) ─────────────────────────────────────────────────
+#
+# Single deterministic forward path. The user picks a shape (one-time /
+# gradual / v-shape) and a total % change; we generate the path, append it
+# to history, run the full backtester on the combined series, and return
+# the future-segment buy plan + max floating loss.
+#
+# Unlike Monte Carlo (distribution), this answers "if it crashes tomorrow
+# exactly like this, what happens to my DCA plan?"
+
+STRESS_TEST_SHAPES = {"one_time", "gradual", "v_shape"}
+STRESS_TEST_HORIZONS = {1, 3, 6, 12}
+
+
+class StressTestMetrics(BaseModel):
+    totalInvested: float
+    endingValue: float
+    returnPct: float
+    maxFloatingLossPct: float  # (portfolioValue - totalInvested) / totalInvested, min over future segment
+    buyCount: int
+
+
+class StressTestRequest(BaseModel):
+    symbol: str = "QQQ"
+    startDate: date | None = None
+    endDate: date | None = None
+    config: StrategyConfig = Field(default_factory=StrategyConfig)
+    shape: str = "v_shape"
+    totalChangePct: float = -20.0
+    horizonMonths: int = 3
+
+    @model_validator(mode="after")
+    def _validate_scenario(self) -> "StressTestRequest":
+        if self.shape not in STRESS_TEST_SHAPES:
+            raise ValueError(f"shape must be one of {sorted(STRESS_TEST_SHAPES)}, got {self.shape!r}.")
+        if self.horizonMonths not in STRESS_TEST_HORIZONS:
+            raise ValueError(f"horizonMonths must be one of {sorted(STRESS_TEST_HORIZONS)}, got {self.horizonMonths}.")
+        if not -60 <= self.totalChangePct <= 60:
+            raise ValueError(f"totalChangePct must be between -60 and +60, got {self.totalChangePct}.")
+        return self
+
+
+class StressTestResponse(BaseModel):
+    symbol: str
+    shape: str
+    totalChangePct: float
+    horizonMonths: int
+    startPrice: float
+    endPrice: float
+    minPrice: float
+    strategyContributions: list[ContributionEvent]
+    fixedDcaContributions: list[ContributionEvent]
+    lumpSumContributions: list[ContributionEvent]
+    strategyMetrics: StressTestMetrics
+    fixedDcaMetrics: StressTestMetrics
+    lumpSumMetrics: StressTestMetrics
+    futurePriceSeries: list[PricePoint]
     disclaimer: str

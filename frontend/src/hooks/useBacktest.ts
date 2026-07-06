@@ -13,6 +13,7 @@ import type {
   ParamValue,
   PresetMode,
   RecommendationResponse,
+  StressTestResponse,
   StrategyConfigPayload,
   StrategyDef,
   StrategyOverride,
@@ -116,6 +117,8 @@ export function useBacktest() {
   const [optimizationContext, setOptimizationContext] = useState<OptimizationRunContext | null>(null);
   const [monteCarlo, setMonteCarlo] = useState<MonteCarloResponse | null>(null);
   const [monteCarloLoading, setMonteCarloLoading] = useState(false);
+  const [stressTest, setStressTest] = useState<StressTestResponse | null>(null);
+  const [stressTestLoading, setStressTestLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [recommendationLoading, setRecommendationLoading] = useState(false);
   const [optimizationLoading, setOptimizationLoading] = useState(false);
@@ -615,6 +618,31 @@ export function useBacktest() {
       });
   };
 
+  const stressTestSeq = useRef(0);
+  const runStressTest = (shape: string, totalChangePct: number, horizonMonths: number) => {
+    if (!selectedStrategy) return;
+    const seq = ++stressTestSeq.current;
+    setStressTestLoading(true);
+    setError(null);
+    fetch(`${API_BASE}/api/stress-tests/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol, startDate, endDate, config, shape, totalChangePct, horizonMonths }),
+    })
+      .then(readJson<StressTestResponse>)
+      .then((data) => {
+        if (seq !== stressTestSeq.current) return;
+        setStressTest(data);
+      })
+      .catch((err) => {
+        if (seq !== stressTestSeq.current) return;
+        setError(toUiError(err));
+      })
+      .finally(() => {
+        if (seq === stressTestSeq.current) setStressTestLoading(false);
+      });
+  };
+
   const applyOptimizedConfig = (optimizedConfig: StrategyConfigPayload | Schemas["StrategyConfig"]) => {
     setPresetMode("custom");
     setCurrentMinMultiplier(optimizedConfig.minMultiplier);
@@ -692,6 +720,8 @@ export function useBacktest() {
     optimizationJob,
     monteCarlo,
     monteCarloLoading,
+    stressTest,
+    stressTestLoading,
     loading,
     recommendationLoading,
     optimizationLoading,
@@ -740,6 +770,7 @@ export function useBacktest() {
     runOptimization,
     cancelOptimization,
     runMonteCarlo,
+    runStressTest,
     applyOptimizedConfig,
     toggleComparison,
     refresh,

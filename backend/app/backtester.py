@@ -331,15 +331,11 @@ def _money_weighted_annualized_return(events: list[ContributionEvent]) -> float 
     buy_events = [event for event in events if event.amount > 0]
     if len(buy_events) < 1:
         return None
-    cashflows = [
-        (pd.Timestamp(event.date).date(), -event.amount) for event in buy_events
-    ]
+    cashflows = [(pd.Timestamp(event.date).date(), -event.amount) for event in buy_events]
     # Terminal value is the final event's portfolio value (typically the
     # MTM snapshot — that's fine, it represents what the holdings are
     # worth on the last day of the window).
-    cashflows.append(
-        (pd.Timestamp(events[-1].date).date(), events[-1].portfolioValue)
-    )
+    cashflows.append((pd.Timestamp(events[-1].date).date(), events[-1].portfolioValue))
     return _annualized_return_from_cashflows(cashflows)
 
 

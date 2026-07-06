@@ -50,6 +50,9 @@ export type MonteCarloResponse = Schemas["MonteCarloResponse"];
 export type MonteCarloChartData = Schemas["MonteCarloChartData"];
 export type FittedParams = Schemas["FittedParams"];
 export type ScenarioStats = Schemas["ScenarioStats"];
+export type StressTestRequest = Schemas["StressTestRequest"];
+export type StressTestResponse = Schemas["StressTestResponse"];
+export type StressTestMetrics = Schemas["StressTestMetrics"];
 
 // `Param.default` is `Any` in the backend → `unknown` in the generated
 // type. Some defaults are booleans (toggles), others are numbers

@@ -12,6 +12,7 @@ import { StatusBar } from "./components/StatusBar";
 import { SettingsDrawer } from "./components/SettingsDrawer";
 import { ErrorBanner } from "./components/ErrorBanner";
 import { MonteCarloPanel } from "./components/MonteCarloPanel";
+import { StressTestPanel } from "./components/StressTestPanel";
 import { QUICK_BACKTEST_PERIODS, todayIso } from "./constants";
 import { clampToRange, currencySymbol, describeConfig, exportBacktestCsv, metric } from "./utils";
 import type { PresetMode, Frequency, StrategyConfigPayload } from "./types";
@@ -861,6 +862,15 @@ export function App() {
               moneySymbol={moneySymbol}
               darkMode={state.darkMode}
               yearsLabel={monteCarloYearsLabel}
+            />
+
+            <StressTestPanel
+              result={state.stressTest}
+              loading={state.stressTestLoading}
+              error={state.error && !state.stressTest ? state.error : null}
+              onRun={state.runStressTest}
+              moneySymbol={moneySymbol}
+              darkMode={state.darkMode}
             />
           </>
         )}

@@ -129,9 +129,7 @@ def _build_synthetic_prices(historical: pd.DataFrame, future_path: np.ndarray) -
     return pd.concat([historical[["close"]], future_df])
 
 
-def _make_synthetic_builder(
-    historical: pd.DataFrame, future_dates: pd.DatetimeIndex
-) -> tuple[pd.DataFrame, int]:
+def _make_synthetic_builder(historical: pd.DataFrame, future_dates: pd.DatetimeIndex) -> tuple[pd.DataFrame, int]:
     """Pre-build a reusable synthetic-price frame template.
 
     Returns (template_df, future_start_pos). The caller fills the
@@ -168,9 +166,7 @@ def _monthly_values(events: list, sim_start: date, horizon_months: int) -> np.nd
     sim_start_ts = pd.Timestamp(sim_start)
     for event in events:
         event_ts = pd.Timestamp(event.date)
-        months_diff = (event_ts.year - sim_start_ts.year) * 12 + (
-            event_ts.month - sim_start_ts.month
-        )
+        months_diff = (event_ts.year - sim_start_ts.year) * 12 + (event_ts.month - sim_start_ts.month)
         if 0 <= months_diff <= horizon_months:
             result[months_diff] = event.portfolioValue
     # Forward-fill zeros (months with no event).
@@ -289,8 +285,7 @@ def _fast_lump_sum(
     sim_start: date,
     horizon: int,
 ) -> tuple[float, np.ndarray]:
-    """Vectorized lump sum: invest total_amount on the first trade day.
-    """
+    """Vectorized lump sum: invest total_amount on the first trade day."""
     if len(trade_days) == 0 or total_amount <= 0:
         return 0.0, np.zeros(horizon + 1)
     closes = prices.loc[trade_days, "close"].astype(float).values
@@ -586,22 +581,39 @@ def run_montecarlo(
         # StrategyDecision construction — MC only needs the value curve.
         prepared = prepare_market(synthetic_prices, config)
         strategy_finals[i], strategy_monthly[i] = _fast_strategy_run(
-            synthetic_prices, prepared, config.strategyType, config,
-            trade_days, fee_rate, slippage_rate, sim_start, horizon,
+            synthetic_prices,
+            prepared,
+            config.strategyType,
+            config,
+            trade_days,
+            fee_rate,
+            slippage_rate,
+            sim_start,
+            horizon,
         )
 
         # Fixed DCA: vectorized, no indicators needed.
         fixed_finals[i], fixed_monthly[i] = _fast_fixed_dca(
-            synthetic_prices, trade_days, config.baseAmount,
-            fee_rate, slippage_rate, sim_start, horizon,
+            synthetic_prices,
+            trade_days,
+            config.baseAmount,
+            fee_rate,
+            slippage_rate,
+            sim_start,
+            horizon,
         )
 
         # Lump sum invests the same total as fixed DCA would have over
         # the horizon, on day one. This keeps the comparison about
         # timing, not about total budget.
         lump_finals[i], lump_monthly[i] = _fast_lump_sum(
-            synthetic_prices, trade_days, lump_total,
-            fee_rate, slippage_rate, sim_start, horizon,
+            synthetic_prices,
+            trade_days,
+            lump_total,
+            fee_rate,
+            slippage_rate,
+            sim_start,
+            horizon,
         )
 
     # Final cleanup so the cache doesn't leak simulated frames into
@@ -621,10 +633,12 @@ def run_montecarlo(
     sample_paths: list[MonteCarloSamplePath] = []
     for rank in SAMPLE_RANKS:
         idx = ranked_indices[round(rank / 100 * (request.numPaths - 1))]
-        sample_paths.append(MonteCarloSamplePath(
-            rank=rank,
-            strategyValues=[float(v) for v in strategy_monthly[idx]],
-        ))
+        sample_paths.append(
+            MonteCarloSamplePath(
+                rank=rank,
+                strategyValues=[float(v) for v in strategy_monthly[idx]],
+            )
+        )
 
     chart = MonteCarloChartData(
         months=months,
