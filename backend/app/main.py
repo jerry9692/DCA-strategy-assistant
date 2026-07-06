@@ -63,6 +63,8 @@ from app.strategies import (
 )
 from app.strategy_definitions import COMMON_PARAMETERS, STRATEGIES
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
 app = FastAPI(title="DCA Strategy Assistant", version="0.4.0")
 
 _start_time = monotonic()
@@ -119,7 +121,13 @@ def _raise_api_error(exc: Exception) -> None:
         raise
     if isinstance(exc, PriceDataError):
         # PriceDataError carries a curated, operator-controlled
-        # message that's safe to forward.
+        # message that's safe to forward. Log the detail for debugging.
+        logging.getLogger("app").warning(
+            "price data error for explanation: code=%s message=%s retryable=%s",
+            exc.code,
+            exc.message,
+            exc.retryable,
+        )
         raise HTTPException(
             status_code=400,
             detail={"message": exc.message, "code": exc.code, "retryable": exc.retryable},
@@ -239,8 +247,8 @@ def recommendation(request: RecommendationRequest) -> RecommendationResponse:
         clear_prepare_cache()
         symbol = validate_symbol(request.symbol)
         end = request.asOf or date.today()
-        start = end - timedelta(days=365 * 10)
-        prices, data_source, cache_status = get_price_history(symbol, start, end)
+        start = end - timedelta(days=365 * 5)
+        prices, data_source, cache_status = get_price_history(symbol, start, end, allow_partial_cache=True)
         decision = evaluate_strategy(request.config.strategyType, request.config, prices)
         return RecommendationResponse(
             symbol=symbol, decision=decision, dataSource=data_source, cacheStatus=cache_status
@@ -271,8 +279,8 @@ def explanation(http_request: Request, request: ExplanationRequest) -> Explanati
         clear_prepare_cache()
         symbol = validate_symbol(request.symbol)
         end = request.asOf or date.today()
-        start = end - timedelta(days=365 * 10)
-        prices, data_source, cache_status = get_price_history(symbol, start, end)
+        start = end - timedelta(days=365 * 5)
+        prices, data_source, cache_status = get_price_history(symbol, start, end, allow_partial_cache=True)
         decision = evaluate_strategy(request.config.strategyType, request.config, prices)
         market_state = _market_state(prices, end)
         currency = _asset_currency(symbol)
@@ -302,8 +310,8 @@ def selection_explanation(http_request: Request, request: SelectionExplanationRe
         clear_prepare_cache()
         symbol = validate_symbol(request.symbol)
         end = request.asOf or date.today()
-        start = end - timedelta(days=365 * 10)
-        prices, data_source, cache_status = get_price_history(symbol, start, end)
+        start = end - timedelta(days=365 * 5)
+        prices, data_source, cache_status = get_price_history(symbol, start, end, allow_partial_cache=True)
         decision = evaluate_strategy(request.config.strategyType, request.config, prices)
         market_state = _market_state(prices, end)
         currency = _asset_currency(symbol)
@@ -335,8 +343,8 @@ def chat(http_request: Request, request: ChatRequest) -> ChatResponse:
         clear_prepare_cache()
         symbol = validate_symbol(request.symbol)
         end = request.asOf or date.today()
-        start = end - timedelta(days=365 * 10)
-        prices, data_source, cache_status = get_price_history(symbol, start, end)
+        start = end - timedelta(days=365 * 5)
+        prices, data_source, cache_status = get_price_history(symbol, start, end, allow_partial_cache=True)
         decision = evaluate_strategy(request.config.strategyType, request.config, prices)
         market_state = _market_state(prices, end)
         currency = _asset_currency(symbol)

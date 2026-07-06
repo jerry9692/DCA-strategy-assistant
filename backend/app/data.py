@@ -1,4 +1,6 @@
+import logging
 import os
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -7,7 +9,10 @@ import yfinance as yf
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from yfinance.exceptions import YFRateLimitError
 
+from app.eastmoney import download as _em_download
 from app.models import SUPPORTED_ASSETS
+
+logger = logging.getLogger(__name__)
 
 
 class PriceDataError(Exception):
@@ -185,7 +190,7 @@ def _save_prices(symbol: str, frame: pd.DataFrame) -> None:
         session.commit()
 
 
-def _download(symbol: str, start: date, end: date) -> pd.DataFrame:
+def _download_yfinance(symbol: str, start: date, end: date) -> pd.DataFrame:
     # yfinance end date is exclusive; add one day so requested end is included.
     # auto_adjust=True returns dividend-and-split adjusted close. That price
     # series is mathematically equivalent to "reinvest every cash dividend on
@@ -259,7 +264,12 @@ def _cache_range_text(frame: pd.DataFrame) -> str:
     return f"本地缓存范围为 {first} 至 {last}"
 
 
-def get_price_history(symbol: str, start: date | None = None, end: date | None = None) -> tuple[pd.DataFrame, str, str]:
+def get_price_history(
+    symbol: str,
+    start: date | None = None,
+    end: date | None = None,
+    allow_partial_cache: bool = False,
+) -> tuple[pd.DataFrame, str, str]:
     normalized = validate_symbol(symbol)
     final_end = end or date.today()
     final_start = start or (final_end - timedelta(days=365 * 10))
@@ -268,6 +278,22 @@ def get_price_history(symbol: str, start: date | None = None, end: date | None =
     if _cache_covers(cached, final_start, final_end):
         return cached, "Yahoo Finance cache", "cache-hit"
 
+    # If we allow partial cache and have at least ~1 year of data before
+    # end, return what we have. This covers rate-limited / offline
+    # scenarios where enough history exists for indicator warmup (SMA200
+    # needs ~1 year, 1 year gives comfortable margin).
+    if allow_partial_cache and not cached.empty:
+        cached_start = cached.index[0].date()
+        warmup_cutoff = final_end - timedelta(days=365)
+        if cached_start <= warmup_cutoff:
+            logger.info(
+                "partial cache for %s (%s to %s, requested %s to %s), using cached data",
+                normalized, cached_start, cached.index[-1].date(), final_start, final_end,
+            )
+            trimmed = cached.loc[cached.index <= pd.Timestamp(final_end)]
+            if not trimmed.empty:
+                return trimmed, "Yahoo Finance cache", "cache-partial"
+
     if _offline_mode():
         raise PriceDataError(
             f"当前为离线模式，且 {_cache_range_text(cached)}，无法覆盖所选区间。请导入更新的缓存补丁，或把回测日期调到缓存范围内。",
@@ -275,37 +301,91 @@ def get_price_history(symbol: str, start: date | None = None, end: date | None =
             retryable=False,
         )
 
+    # Step 1: 尝试东方财富（国内快速、稳定的主数据源）
     try:
-        downloaded = _download(normalized, final_start, final_end)
+        downloaded = _em_download(normalized, final_start, final_end)
         if not downloaded.empty:
             _save_prices(normalized, downloaded)
-            return downloaded, "Yahoo Finance", "fresh"
-        if not cached.empty:
-            raise PriceDataError(
-                f"Yahoo Finance returned no new price data, and {_cache_range_text(cached)}，无法覆盖所选区间。",
-                code="stale_cache",
-                retryable=True,
-            )
+            return downloaded, "东方财富", "fresh"
+        logger.info("eastmoney returned empty for %s, falling back to yfinance", normalized)
     except Exception as exc:
-        if isinstance(exc, PriceDataError):
-            raise
-        if isinstance(exc, YFRateLimitError):
+        logger.warning("eastmoney download failed for %s: %s, falling back to yfinance", normalized, exc)
+
+    # Step 2: 东财失败或空数据，回退 yfinance（保留原有重试逻辑）
+    downloaded: pd.DataFrame = pd.DataFrame(columns=["close"])
+    last_exc: Exception | None = None
+    for attempt in range(2):
+        try:
+            downloaded = _download_yfinance(normalized, final_start, final_end)
+            last_exc = None
+            break
+        except YFRateLimitError as exc:
+            last_exc = exc
+            break
+        except Exception as exc:
+            last_exc = exc
+            if attempt == 0:
+                logger.warning("yfinance download failed for %s (attempt 1), retrying: %s", normalized, exc)
+                time.sleep(1.5)
+            continue
+
+    if last_exc is not None:
+        # If partial cache is allowed and we have enough warmup data,
+        # fall back to cache instead of failing. This handles rate
+        # limiting and transient network errors gracefully for
+        # explanation/chat endpoints.
+        if allow_partial_cache and not cached.empty:
+            cached_start = cached.index[0].date()
+            warmup_cutoff = final_end - timedelta(days=365)
+            if cached_start <= warmup_cutoff:
+                logger.info(
+                    "download failed for %s (%s), falling back to partial cache (%s to %s)",
+                    normalized, last_exc, cached_start, cached.index[-1].date(),
+                )
+                trimmed = cached.loc[cached.index <= pd.Timestamp(final_end)]
+                if not trimmed.empty:
+                    return trimmed, "Yahoo Finance cache", "cache-partial"
+        if isinstance(last_exc, YFRateLimitError):
+            if not cached.empty:
+                raise PriceDataError(
+                    f"Yahoo Finance 当前限流，且 {_cache_range_text(cached)}，无法覆盖所选区间。请稍后重试，或把结束日期调到缓存范围内。",
+                    code="rate_limited",
+                    retryable=True,
+                ) from last_exc
             raise PriceDataError(
-                f"Yahoo Finance 当前限流，且 {_cache_range_text(cached)}，无法覆盖所选区间。请稍后重试，或把结束日期调到缓存范围内。",
+                "Yahoo Finance 当前限流，请稍后重试。",
                 code="rate_limited",
                 retryable=True,
-            ) from exc
+            ) from last_exc
         if not cached.empty:
             raise PriceDataError(
                 f"Yahoo Finance 数据获取失败，且 {_cache_range_text(cached)}，无法覆盖所选区间。请稍后重试，或把结束日期调到缓存范围内。",
                 code="stale_cache",
                 retryable=True,
-            ) from exc
+            ) from last_exc
         raise PriceDataError(
             "Unable to fetch Yahoo Finance data and no local cache is available. Check the network connection and retry.",
             code="network_unavailable",
             retryable=True,
-        ) from exc
+        ) from last_exc
+
+    if not downloaded.empty:
+        _save_prices(normalized, downloaded)
+        return downloaded, "Yahoo Finance", "fresh"
+    if not cached.empty:
+        # Download returned empty data. Same partial-cache fallback.
+        if allow_partial_cache:
+            cached_start = cached.index[0].date()
+            warmup_cutoff = final_end - timedelta(days=365)
+            if cached_start <= warmup_cutoff:
+                trimmed = cached.loc[cached.index <= pd.Timestamp(final_end)]
+                if not trimmed.empty:
+                    return trimmed, "Yahoo Finance cache", "cache-partial"
+        raise PriceDataError(
+            f"Yahoo Finance returned no new price data, and {_cache_range_text(cached)}，无法覆盖所选区间。",
+            code="stale_cache",
+            retryable=True,
+        )
 
     raise PriceDataError(
         f"Yahoo Finance returned no price data for {normalized}.",

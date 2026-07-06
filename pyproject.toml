@@ -2,6 +2,11 @@
 name = "dca-strategy-assistant"
 version = "0.4.0"
 requires-python = ">=3.10"
+dependencies = [
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "yfinance>=1.5.1",
+]
 
 [tool.ruff]
 target-version = "py310"

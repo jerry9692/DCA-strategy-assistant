@@ -17,28 +17,26 @@ const DEFAULT_LLM: StoredLlmSettings = {
   autoGenerate: true,
 };
 
-// API key at-rest encryption. We use a per-origin, per-browser random
-// key kept in sessionStorage — this is not a security boundary against
-// a determined attacker with XSS, but it raises the bar above a
-// trivially-scannable localStorage and stops a casual browser
-// extension or shared-screen glance from leaking the key. Operators
-// who need stronger guarantees should disable the "remember key"
-// feature (a future toggle) or rely on a server-side proxy.
+// API key at-rest obfuscation. We use a per-origin random key kept in
+// localStorage alongside the ciphertext. This is NOT a security boundary
+// against a determined attacker with XSS access — it exists solely to
+// prevent a casual glance at DevTools or a synced-tab backup from
+// revealing the plaintext key. Operators who need stronger guarantees
+// should use a server-side proxy.
 const KEY_OBFUSCATION_STORAGE = "dca:llm:obfuscation-key-v1";
 
 function getOrCreateObfuscationKey(): string {
   try {
-    const existing = window.sessionStorage.getItem(KEY_OBFUSCATION_STORAGE);
+    const existing = window.localStorage.getItem(KEY_OBFUSCATION_STORAGE);
     if (existing) return existing;
     const buf = new Uint8Array(32);
     window.crypto.getRandomValues(buf);
     const hex = Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
-    window.sessionStorage.setItem(KEY_OBFUSCATION_STORAGE, hex);
+    window.localStorage.setItem(KEY_OBFUSCATION_STORAGE, hex);
     return hex;
   } catch {
-    // sessionStorage disabled (private mode, etc.) — fall back to a
-    // process-stable sentinel so we still rotate when storage becomes
-    // available again.
+    // localStorage disabled (private mode, etc.) — fall back to a
+    // stable sentinel so at least the current session works.
     return "fallback-obfuscation-key";
   }
 }
@@ -52,6 +50,17 @@ function xorWithKey(plain: string, key: string): string {
   return out;
 }
 
+function looksLikePrintableAscii(s: string): boolean {
+  // Reject strings containing control characters or replacement chars
+  // that indicate a decode failure (wrong key -> binary garbage).
+  for (let i = 0; i < s.length; i += 1) {
+    const code = s.charCodeAt(i);
+    if (code < 32 && code !== 9 && code !== 10 && code !== 13) return false;
+    if (code === 0xFFFD) return false;
+  }
+  return true;
+}
+
 function encodeApiKey(plain: string): string {
   if (!plain) return "";
   const key = getOrCreateObfuscationKey();
@@ -61,14 +70,20 @@ function encodeApiKey(plain: string): string {
 function decodeApiKey(stored: string): string {
   if (!stored) return "";
   if (!stored.startsWith("enc:")) {
-    // Backwards-compatible: legacy plain key in localStorage. Read it
-    // once and return the value verbatim; the next save will encrypt it.
+    // Backwards-compatible: legacy plain key in localStorage. Return
+    // verbatim; the next save will re-encrypt it with the current key.
     return stored;
   }
   try {
     const key = getOrCreateObfuscationKey();
     const decoded = decodeURIComponent(escape(atob(stored.slice(4))));
-    return xorWithKey(decoded, key);
+    const result = xorWithKey(decoded, key);
+    // If the key was lost (e.g. storage cleared across sessions) and a
+    // new random key was generated, XOR with the wrong key produces
+    // binary garbage. Detect that and return "" so the user is prompted
+    // to re-enter instead of seeing mojibake.
+    if (!looksLikePrintableAscii(result)) return "";
+    return result;
   } catch {
     return "";
   }
