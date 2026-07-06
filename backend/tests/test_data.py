@@ -206,6 +206,48 @@ def test_fallback_to_yfinance_when_eastmoney_empty(monkeypatch):
     assert frame["close"].tolist() == [300.0]
 
 
+def test_fallback_to_yfinance_when_eastmoney_partial(monkeypatch):
+    """东财返回非空但不覆盖请求区间时（如 BND 东财历史起点晚），自动回退 yfinance。"""
+    em_partial = pd.DataFrame(
+        {"close": [300.0, 301.0]},
+        index=pd.to_datetime(["2024-01-02", "2024-01-03"]),
+    )
+    yf_full = pd.DataFrame(
+        {"close": [290.0, 295.0, 300.0, 301.0]},
+        index=pd.to_datetime(["2007-04-10", "2015-01-02", "2024-01-02", "2024-01-03"]),
+    )
+    monkeypatch.setattr("app.data._load_cached", lambda symbol, start, end: pd.DataFrame(columns=["close"]))
+    monkeypatch.setattr("app.data._em_download", lambda symbol, start, end: em_partial)
+    monkeypatch.setattr("app.data._download_yfinance", lambda symbol, start, end: yf_full)
+
+    frame, source, status = get_price_history("BND", date(2007, 4, 10), date(2024, 1, 5))
+
+    assert source == "Yahoo Finance"
+    assert status == "fresh"
+    assert len(frame) == 4
+
+
+def test_eastmoney_merges_with_cache_to_cover_range(monkeypatch):
+    """东财新数据补全缓存缺口后覆盖请求区间时，返回合并结果。"""
+    cached = pd.DataFrame(
+        {"close": [100.0, 101.0]},
+        index=pd.to_datetime(["2023-06-01", "2023-06-02"]),
+    )
+    em_new = pd.DataFrame(
+        {"close": [102.0, 103.0]},
+        index=pd.to_datetime(["2024-01-04", "2024-01-05"]),
+    )
+    monkeypatch.setattr("app.data._load_cached", lambda symbol, start, end: cached)
+    monkeypatch.setattr("app.data._em_download", lambda symbol, start, end: em_new)
+    monkeypatch.setattr("app.data._download_yfinance", lambda *a, **k: (_ for _ in ()).throw(AssertionError("yfinance should not be called")))
+
+    frame, source, status = get_price_history("QQQ", date(2023, 6, 1), date(2024, 1, 7))
+
+    assert source == "东方财富"
+    assert status == "fresh"
+    assert frame["close"].tolist() == [100.0, 101.0, 102.0, 103.0]
+
+
 def test_eastmoney_510050_uses_no_adjust():
     """510050 使用 fqt=0（不复权），避免东财前复权 bug 产生负数价格。"""
     from app.eastmoney import _EM_FQT

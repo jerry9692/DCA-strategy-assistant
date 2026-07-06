@@ -306,8 +306,26 @@ def get_price_history(
         downloaded = _em_download(normalized, final_start, final_end)
         if not downloaded.empty:
             _save_prices(normalized, downloaded)
-            return downloaded, "东方财富", "fresh"
-        logger.info("eastmoney returned empty for %s, falling back to yfinance", normalized)
+            # 合并缓存与新下载数据，检查是否覆盖请求区间。
+            # 东财对 BND/TLT/IEF/SMH 等美股 ETF 历史起点较晚（约 2016-2019），
+            # 可能只返回部分区间，此时需回退 yfinance 获取完整历史。
+            if not cached.empty:
+                merged = pd.concat([cached, downloaded]).sort_index()
+                merged = merged[~merged.index.duplicated(keep="last")]
+            else:
+                merged = downloaded
+            if _cache_covers(merged, final_start, final_end):
+                return merged, "东方财富", "fresh"
+            logger.info(
+                "eastmoney returned partial data for %s (covers %s to %s, requested %s to %s), falling back to yfinance",
+                normalized,
+                merged.index[0].date(),
+                merged.index[-1].date(),
+                final_start,
+                final_end,
+            )
+        else:
+            logger.info("eastmoney returned empty for %s, falling back to yfinance", normalized)
     except Exception as exc:
         logger.warning("eastmoney download failed for %s: %s, falling back to yfinance", normalized, exc)
 

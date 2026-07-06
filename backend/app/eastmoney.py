@@ -83,7 +83,7 @@ def download(symbol: str, start: date, end: date) -> pd.DataFrame:
         raw = resp.read()
         data = json.loads(raw)
 
-    klines = data.get("data", {}).get("klines", [])
+    klines = (data.get("data") or {}).get("klines", [])
     if not klines:
         logger.info("eastmoney: no klines returned for %s (%s ~ %s)", symbol, beg, end_str)
         return pd.DataFrame(columns=["close"])
