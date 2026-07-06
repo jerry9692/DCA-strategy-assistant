@@ -79,15 +79,15 @@ def _cors_origins() -> list[str]:
     Production deployments should set `DCA_ALLOWED_ORIGINS` to a
     comma-separated list of exact origins (e.g.
     `https://dca.example.com`). When unset, the dev defaults
-    (localhost:5173 / 127.0.0.1:5173) are used so a fresh checkout
+    (localhost:5180 / 127.0.0.1:5180) are used so a fresh checkout
     still works out of the box. SECURITY.md calls this out under
     "Security Best Practices for Operators".
     """
     raw = os.environ.get("DCA_ALLOWED_ORIGINS")
     if not raw:
-        return ["http://localhost:5173", "http://127.0.0.1:5173"]
+        return ["http://localhost:5180", "http://127.0.0.1:5180"]
     origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
-    return origins or ["http://localhost:5173", "http://127.0.0.1:5173"]
+    return origins or ["http://localhost:5180", "http://127.0.0.1:5180"]
 
 
 app.add_middleware(

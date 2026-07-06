@@ -79,14 +79,14 @@ if ($IncludeCache) {
 setlocal
 set DCA_OFFLINE_MODE=1
 set PYTHON=%~dp0runtime\python\python.exe
-set URL=http://127.0.0.1:8000
+set URL=http://127.0.0.1:8010
 if not exist "%PYTHON%" (
   echo Python runtime not found: %PYTHON%
   pause
   exit /b 1
 )
 start "" "%URL%"
-"%PYTHON%" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --app-dir "%~dp0backend"
+"%PYTHON%" -m uvicorn app.main:app --host 127.0.0.1 --port 8010 --app-dir "%~dp0backend"
 pause
 '@ | Set-Content -Path (Join-Path $OutputPath "start-offline.bat") -Encoding ASCII
 
@@ -106,7 +106,7 @@ pause
 # DCA Strategy Assistant 便携版
 
 1. 双击 `start-offline.bat` 启动。
-2. 浏览器会打开 `http://127.0.0.1:8000`。
+2. 浏览器会打开 `http://127.0.0.1:8010`。
 3. Python runtime 在 `runtime\python`，不会依赖打包机器上的绝对路径。
 4. 便携版默认离线模式，只使用 `backend\data\dca_assistant.sqlite`。
 5. 如果某个区间提示缓存不覆盖，把新的 `dca-cache-*.zip` 拖到 `import-cache.bat` 上导入。

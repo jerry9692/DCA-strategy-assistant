@@ -1,6 +1,6 @@
 param(
-    [int]$BackendPort = 8000,
-    [int]$FrontendPort = 5173,
+    [int]$BackendPort = 8010,
+    [int]$FrontendPort = 5180,
     [switch]$Install
 )
 
