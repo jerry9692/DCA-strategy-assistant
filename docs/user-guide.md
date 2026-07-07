@@ -1,4 +1,4 @@
-# 定投策略助手 — 操作手册 v0.4
+# 定投策略助手 — 操作手册 v0.5
 
 ## 这是什么
 
@@ -32,7 +32,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-跑起来后访问 `http://127.0.0.1:8000`。首次使用会自动从 Yahoo Finance 拉历史数据并缓存到 `backend/data/` 下的 SQLite 文件。
+跑起来后访问 `http://127.0.0.1:8000`。首次使用会自动从东方财富拉取历史数据（失败时回退到 Yahoo Finance）并缓存到 `backend/data/` 下的 SQLite 文件。
 
 **终端 2 — 启动前端**（需要 Node.js 18+）：
 
@@ -122,7 +122,7 @@ npm run dev
 
 ## 常见问题
 
-**数据一直加载不出来？** 检查网络能否访问 Yahoo Finance。如果拉取失败，后端会尝试用本地缓存。缓存文件在 `backend/data/dca_assistant.sqlite`，删掉它会强制重拉。
+**数据一直加载不出来？** 行情数据以东方财富为主数据源，Yahoo Finance 为备用。如果两个数据源都失败，后端会尝试用本地缓存（缓存末端距请求终点 7 天内仍返回）。检查网络能否访问 `push2his.eastmoney.com` 和 Yahoo Finance。缓存文件在 `backend/data/dca_assistant.sqlite`，删掉它会强制重拉。右上角的状态栏会显示当前数据来源（"东方财富" / "Yahoo Finance" / "东方财富缓存" / "Yahoo Finance 缓存" / "混合缓存"），便于排查。
 
 **参数调了没反应？** 前端有 0.45 秒的防抖，改完等半秒就会自动刷新。
 
@@ -134,7 +134,7 @@ npm run dev
 
 **费率/滑点在哪设？** 在顶部齿轮按钮的设置页。默认 0%，可以按你的交易环境设置交易费率和滑点率。回测时会按比例扣减买入金额并抬高执行价，这些默认交易假设会应用到所有策略。
 
-**回测里有股息吗？** 有，已经隐含。后端用 yfinance `auto_adjust=True` 拉数据，返回的"close"已经是按分红和拆股调整过的价格，等价于"分红当天按收盘价再投资"。所以你看到的收益率、年化、回撤数字里都已经包含了分红再投资的复利效应，不需要再单独加。后续如果要支持"分红留作现金"模式，会作为可切换的开关。
+**回测里有股息吗？** 有，已经隐含。所有标的历史价格统一使用前复权：东方财富 `fqt=1`，yfinance `auto_adjust=True`，二者基准一致。返回的"close"已经是按分红和拆股调整过的价格，等价于"分红当天按收盘价再投资"。所以你看到的收益率、年化、回撤数字里都已经包含了分红再投资的复利效应，不需要再单独加。后续如果要支持"分红留作现金"模式，会作为可切换的开关。
 
 **AI 解读怎么配置？** 在设置页的"AI 解读"里填入：
 - API Base URL：服务商地址（OpenAI 用 `https://api.openai.com/v1`，DeepSeek 用 `https://api.deepseek.com`）
@@ -143,5 +143,7 @@ npm run dev
 - 勾上"建议变化后自动生成解读"，每次切策略或调参都会自动刷新
 
 > **DeepSeek 用户注意**：旧版 `deepseek-chat` / `deepseek-reasoner` 模型名将于 2026-07-24 停用，届时将无法调用。推荐直接使用 `deepseek-v4-pro`（高能力）或 `deepseek-v4-flash`（低成本），二者均支持百万字上下文。
+
+> **推理模型注意**：如果你接入的是推理模型（如小米 `mimo-v2.5`、DeepSeek-R1 等），模型会先消耗 token 做内部推理（`reasoning_tokens`），剩余 token 才输出正式回答。当 `max_tokens` 太小时，可能出现"HTTP 200 但 content 为空"的情况（推理用完了全部 token 预算）。本工具已把 explanation 的 `max_tokens` 提到 1500、chat 提到 2000 以兼容主流推理模型。如果仍然遇到空解读，请在设置页换用更大的模型或非推理模型。
 
 解读只会用已经算好的指标来组织语言，不会自己编数字或预测未来。文案末尾自动追加免责声明。

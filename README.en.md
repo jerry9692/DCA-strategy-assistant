@@ -1,10 +1,10 @@
-# DCA Strategy Assistant v0.4
+# DCA Strategy Assistant v0.5
 
 [![CN](https://img.shields.io/badge/lang-%E4%B8%AD%E6%96%87-red)](README.md)
 
 A local web application for dynamic Dollar-Cost Averaging (DCA) investment research. Instead of investing the same amount every period, it uses 7 market-driven strategies to adjust your contribution based on current conditions — buy more when the market dips, less when it's overheated.
 
-Currently supports built-in US ETFs and a first batch of core China ETFs. US assets include broad-market, dividend/value, international, bond, commodity, and advanced/high-volatility ETFs; China assets currently include SSE 50, CSI 300, CSI 500, ChiNext, and STAR 50 ETF proxies. The UI separates assets by market before showing the filtered symbol list.
+Currently supports built-in US ETFs and a first batch of core China ETFs. US assets include broad-market, dividend/value, international, bond, commodity, and advanced/high-volatility ETFs; China assets currently include SSE 50, CSI 300, CSI 500, ChiNext, and STAR 50 ETF proxies. The UI separates assets by market before showing the filtered symbol list. Market data uses East Money as the primary data source, Yahoo Finance as fallback, with local SQLite caching.
 
 > **Disclaimer**: This tool is for research and decision support only. It does not auto-trade, does not connect to brokerage APIs, and does not constitute investment advice.
 
@@ -23,6 +23,16 @@ Currently supports built-in US ETFs and a first batch of core China ETFs. US ass
 Each strategy returns a recommended amount, multiplier, score, raw signal values, and human-readable reasons.
 
 Default dynamic bounds are intentionally mild: **0.8x minimum** and **1.2x maximum**. The tool is designed as disciplined DCA with small adjustments, not market-timing.
+
+## v0.5 Highlights
+
+- **Data source switched to East Money primary, Yahoo Finance fallback**: A-share / US ETFs prefer East Money's `push2his.eastmoney.com` endpoint, automatically falling back to yfinance on failure. When both sources fail, the local SQLite cache is used (cache is returned if its tail is within 7 days of the request end, avoiding empty data on holidays).
+- **East Money IPv6 connectivity fix**: The IPv6 endpoint of `push2his.eastmoney.com` suffered `RemoteDisconnected` on some domestic networks. `eastmoney.py` now forces IPv4, supports both HTTP/HTTPS, retries 3 times with exponential backoff (1.5s / 3s / 4.5s), and fixes the `_TIMEOOUT` typo.
+- **Unified forward-adjusted price baseline**: Removed the special `510050: 0` entry in `_EM_FQT`. All symbols now use `fqt=1` (forward-adjusted), consistent with yfinance's `auto_adjust=True`, resolving 5-15% historical price drift and chart jumps.
+- **Dirty data sanitization**: Added `_sanitize_prices` to drop ticks with `close <= 0` or single-day change > 80% (e.g. the 4 dirty QQQ cache rows that caused the 2024 chart plunge).
+- **Dynamic cache source labels**: Added `_cached_source_label` that inspects `PriceBar.source` to produce "East Money cache" / "Yahoo Finance cache" / "Mixed cache (East Money + Yahoo)", replacing the previously hardcoded "Yahoo Finance cache".
+- **Reasoning model compatibility**: Reasoning models like `mimo-v2.5` consume `reasoning_tokens` for internal chain-of-thought before emitting the final answer, so `max_tokens=400` produced empty `content`. Removed the `reasoning_content` fallback, raised explanation `max_tokens` from 400 to 1500 and chat `max_tokens` from 600 to 2000, and added an empty-content warning log.
+- **Metric card horizontal scroll fix**: Added `min-width: 0` to `.metrics-row` so the flex container can shrink and trigger overflow, changed `.metric-cell` to `flex: 1 1 138px; min-width: 138px`, removed `overflow: hidden` and `text-overflow: ellipsis`. Full amounts now display via pure horizontal scrolling.
 
 ## v0.3 Highlights
 
@@ -55,7 +65,7 @@ Default dynamic bounds are intentionally mild: **0.8x minimum** and **1.2x maxim
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Python 3.10+, FastAPI, pandas, numpy, yfinance, SQLModel (SQLite) |
+| Backend | Python 3.10+, FastAPI, pandas, numpy, East Money API (primary data source), yfinance (fallback), SQLModel (SQLite) |
 | Frontend | React 18, TypeScript, Vite, Apache ECharts |
 | Testing | pytest, Vitest |
 
@@ -92,7 +102,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-The API will be available at `http://127.0.0.1:8000`. On first request, historical price data is automatically fetched from Yahoo Finance and cached to `backend/data/dca_assistant.sqlite`.
+The API will be available at `http://127.0.0.1:8000`. On first request, historical price data is automatically fetched from East Money (falling back to Yahoo Finance on failure) and cached to `backend/data/dca_assistant.sqlite`.
 
 ### Tests
 
@@ -148,13 +158,14 @@ DCA-strategy-assistant/
 │   │   ├── backtester.py            # DCA backtesting engine
 │   │   ├── optimizer.py             # Parameter optimization engine
 │   │   ├── optimization_jobs.py     # Async optimization job management
-│   │   ├── explanations.py          # LLM-powered recommendation explanation
-│   │   └── data.py                  # yfinance data fetching + SQLite caching
+│   │   ├── explanations.py          # LLM-powered recommendation explanation (reasoning-model compatible)
+│   │   ├── eastmoney.py             # East Money data source (force IPv4 + retries)
+│   │   └── data.py                  # Dual-source data fetching (East Money + yfinance) + SQLite caching + sanitization
 │   ├── tests/
 │   │   ├── test_strategies.py       # Strategy and backtest tests
 │   │   ├── test_data.py             # Data fetching tests
 │   │   └── test_explanations.py     # LLM explanation tests
-│   ├── data/                        # SQLite cache & yfinance data
+│   ├── data/                        # SQLite cache (with source column labeling data origin)
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
@@ -183,12 +194,14 @@ DCA-strategy-assistant/
 
 ## Assumptions & Limitations
 
-- v0.4: Built-in ETF universe only. US ETFs use USD display; China ETFs use CNY display and Yahoo Finance provider symbols (`.SS` / `.SZ`) behind the scenes.
+- v0.5: Built-in ETF universe only. US ETFs use USD display; China ETFs use CNY display. Market data uses East Money as the primary source (A-shares via codes like `510050`, US ETFs via `QQQ.US`), with Yahoo Finance as fallback (A-shares via `.SS` / `.SZ` codes).
 - The grid strategy is "grid-weighted DCA" — it only adjusts buy amounts, no sell signals.
 - Backtesting uses a simple IRR bisection method for annualized return.
-- Price data is fetched from Yahoo Finance with `auto_adjust=True`, so historical close prices already reflect dividend and split adjustments. Backtest returns and drawdowns therefore implicitly assume cash dividends are reinvested on the ex-date at that day's close. There is no separate "hold dividends as cash" mode yet.
+- All symbols use unified forward-adjusted prices: East Money `fqt=1`, yfinance `auto_adjust=True`, both consistent. Backtest returns and drawdowns therefore implicitly assume cash dividends are reinvested on the ex-date at that day's close. There is no separate "hold dividends as cash" mode yet.
+- When both data sources fail, the local SQLite cache provides fault tolerance: cache is returned if its tail is within 7 days of the request end, avoiding empty backtest data on holidays or transient network outages.
 - Fee and slippage rates are exposed in the right-side parameter panel and applied during backtests.
 - Parameter optimization is historical multi-scenario validation only. It does not predict which parameters will be best in future markets.
+- AI explanation supports both regular chat models and reasoning models (e.g. `mimo-v2.5`) under the OpenAI-compatible protocol. Reasoning models consume tokens for internal chain-of-thought before emitting the final answer, so `max_tokens` has been raised to 1500/2000 to avoid empty content.
 
 ## License
 

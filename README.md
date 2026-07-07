@@ -1,10 +1,10 @@
-# DCA Strategy Assistant v0.4
+# DCA Strategy Assistant v0.5
 
 [![EN](https://img.shields.io/badge/lang-English-blue)](README.en.md)
 
 一个用于动态定投（DCA）策略研究的本地 Web 应用。不再每次都投相同金额，而是根据 7 种市场驱动的策略动态调整每期投入——市场跌得多就多买，涨得过热就少买。
 
-当前内置美股 ETF 和第一批 A 股核心 ETF。美股覆盖宽基、红利/价值、国际、债券、商品及高波动品种；A 股目前包括上证 50、沪深 300、中证 500、创业板、科创 50 指数 ETF。前端按市场分离后再展示标的列表。
+当前内置美股 ETF 和第一批 A 股核心 ETF。美股覆盖宽基、红利/价值、国际、债券、商品及高波动品种；A 股目前包括上证 50、沪深 300、中证 500、创业板、科创 50 指数 ETF。前端按市场分离后再展示标的列表。行情数据以东方财富为主数据源，Yahoo Finance 为备用，本地 SQLite 缓存。
 
 > **免责声明**：本工具仅用于研究和决策辅助，不自动下单，不连接券商 API，不构成投资建议。
 
@@ -23,6 +23,16 @@
 每种策略返回建议投入金额、倍率、评分、原始信号值和可读的理由说明。
 
 默认动态范围刻意收窄：**最低 0.8 倍，最高 1.2 倍**。定位是纪律性定投 + 小幅调整，而非择时交易。
+
+## v0.5 更新
+
+- **数据源切换为东方财富为主、Yahoo Finance 为备用**：A 股 / 美股 ETF 优先走东方财富 `push2his.eastmoney.com` 接口，失败时自动回退到 yfinance，双源都失败时使用本地 SQLite 缓存（缓存末端距请求终点 7 天内仍返回，避免节假日拉取空数据）。
+- **东方财富 IPv6 连接问题修复**：`push2his.eastmoney.com` 的 IPv6 端点在部分国内网络下出现 `RemoteDisconnected`。`eastmoney.py` 现强制 IPv4，HTTP/HTTPS 双协议，3 次指数退避重试（1.5s / 3s / 4.5s），并修复 `_TIMEOOUT` 拼写错误。
+- **统一前复权基准**：删除 `_EM_FQT` 中 `510050: 0` 的特殊配置，所有标的统一使用 `fqt=1`（前复权），与 yfinance 的 `auto_adjust=True` 保持一致，解决 5-15% 历史价格偏差和图表跳变。
+- **脏数据清洗**：新增 `_sanitize_prices` 函数，剔除 `close <= 0` 和单日涨跌幅 > 80% 的异常 tick（如 QQQ 2024 年初的 4 条脏缓存导致的图表骤降）。
+- **缓存来源标签动态化**：新增 `_cached_source_label`，根据 `PriceBar.source` 字段动态生成"东方财富缓存"/"Yahoo Finance 缓存"/"混合缓存(东方财富+Yahoo)"，替换原先硬编码的 "Yahoo Finance cache"。
+- **推理模型兼容**：`mimo-v2.5` 等推理模型先用 `reasoning_tokens` 做内部推理，剩余 token 才输出正式回答，导致 `max_tokens=400` 时 `content` 为空。撤销 `reasoning_content` 兜底，把 explanation 的 `max_tokens` 从 400 提到 1500，chat 的 `max_tokens` 从 600 提到 2000，并加空 content 的 warning 日志。
+- **指标卡横向滚动修复**：`.metrics-row` 增加 `min-width: 0` 允许 flex 容器收缩，`.metric-cell` 改为 `flex: 1 1 138px; min-width: 138px`，移除 `overflow: hidden` 和 `text-overflow: ellipsis`，纯横向滚动展示完整金额。
 
 ## v0.3 更新
 
@@ -55,7 +65,7 @@
 
 | 层级 | 技术 |
 |------|------|
-| 后端 | Python 3.10+, FastAPI, pandas, numpy, yfinance, SQLModel (SQLite) |
+| 后端 | Python 3.10+, FastAPI, pandas, numpy, 东方财富 API（主数据源）, yfinance（备用）, SQLModel (SQLite) |
 | 前端 | React 18, TypeScript, Vite, Apache ECharts |
 | 测试 | pytest, Vitest |
 
@@ -92,7 +102,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-API 运行在 `http://127.0.0.1:8000`。首次请求时自动从 Yahoo Finance 拉取历史价格并缓存到 `backend/data/dca_assistant.sqlite`。
+API 运行在 `http://127.0.0.1:8000`。首次请求时自动从东方财富拉取历史价格（失败时回退到 Yahoo Finance）并缓存到 `backend/data/dca_assistant.sqlite`。
 
 ### 运行测试
 
@@ -159,15 +169,16 @@ DCA-strategy-assistant/
 │   │   ├── backtester.py            # DCA 回测引擎（IRR 数值解）
 │   │   ├── optimizer.py             # 参数优化引擎
 │   │   ├── optimization_jobs.py     # 异步优化任务管理（CAS 状态机）
-│   │   ├── explanations.py          # LLM 解读模块（OpenAI 兼容）
+│   │   ├── explanations.py          # LLM 解读模块（OpenAI 兼容，推理模型兼容）
 │   │   ├── rate_limiter.py          # 滑动窗口限流（IP+key 复合 key）
 │   │   ├── simulation.py            # 蒙特卡洛模拟
-│   │   └── data.py                  # yfinance 数据获取 + SQLite 缓存
+│   │   ├── eastmoney.py             # 东方财富数据源（IPv4 强制 + 重试）
+│   │   └── data.py                  # 双源数据获取（东财 + yfinance）+ SQLite 缓存 + 清洗
 │   ├── tests/
 │   │   ├── test_strategies.py       # 策略与回测测试
 │   │   ├── test_data.py             # 数据获取测试
 │   │   └── test_explanations.py     # LLM 解读测试
-│   ├── data/                        # SQLite 缓存与 yfinance 数据
+│   ├── data/                        # SQLite 缓存（含 source 字段标记来源）
 │   ├── export_openapi.py            # 重新导出 openapi.json
 │   └── requirements.txt
 ├── frontend/
@@ -215,12 +226,14 @@ DCA-strategy-assistant/
 
 ## 假设与限制
 
-- v0.4：仅限内置 ETF。美股 ETF 用美元展示；A 股 ETF 用人民币展示，底层通过 Yahoo Finance `.SS` / `.SZ` 代码获取数据。
+- v0.5：仅限内置 ETF。美股 ETF 用美元展示；A 股 ETF 用人民币展示，行情数据以东方财富为主数据源（A 股直接用 `510050` 等代码，美股用 `QQQ.US` 等代码），Yahoo Finance 为备用（A 股用 `.SS` / `.SZ` 代码）。
 - 网格策略是"网格加权 DCA"——仅调整买入金额，不含卖出信号。
 - 回测使用简单的 IRR 二分法计算年化收益率。
-- 价格数据以 `auto_adjust=True` 从 Yahoo Finance 获取，历史收盘价已反映分红和拆股调整。因此回测收益率和回撤已隐含分红再投资（在除权日以当日收盘价再投资）。暂不支持"分红留作现金"模式。
+- 所有标的历史价格统一使用前复权：东方财富 `fqt=1`，yfinance `auto_adjust=True`，二者基准一致。回测收益率和回撤已隐含分红再投资（在除权日以当日收盘价再投资）。暂不支持"分红留作现金"模式。
+- 双源失败时使用本地 SQLite 缓存容错：缓存末端距请求终点 7 天内仍返回缓存数据，避免节假日或临时网络故障导致回测空数据。
 - 费率和滑点参数在右侧参数面板中可配置，回测时按比例扣减买入金额并抬高执行价。
 - 参数优化仅为历史多场景验证，不预测未来最优参数。
+- AI 解读兼容 OpenAI 兼容协议下的常规聊天模型和推理模型（如 `mimo-v2.5`）。推理模型会先消耗 token 做内部推理，再输出正式回答，因此 `max_tokens` 已提高到 1500/2000 以避免空 content。
 
 ## 许可证
 
