@@ -599,12 +599,28 @@ h1, h2, h3, h4, p {
   overflow-y: visible;
   scrollbar-width: thin;
   flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.metrics-row::-webkit-scrollbar {
+  height: 6px;
+}
+
+.metrics-row::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.metrics-row::-webkit-scrollbar-thumb {
+  background: var(--border-hairline);
+  border-radius: 3px;
 }
 
 .metric-cell {
-  flex: 1 1 0;
-  min-width: 118px;
-  padding: 0 var(--space-4);
+  flex: 1 1 138px;
+  min-width: 138px;
+  padding: 0 var(--space-3);
   display: flex;
   flex-direction: column;
   gap: 4px;

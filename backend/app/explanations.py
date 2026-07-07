@@ -17,11 +17,14 @@ Security notes:
 
 from __future__ import annotations
 
+import logging
 import re
 
 import httpx
 
 from app.data import PriceDataError
+
+logger = logging.getLogger(__name__)
 from app.models import (
     ChatRequest,
     ExplanationRequest,
@@ -258,7 +261,7 @@ def request_explanation(
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
-    return _call_chat_api(settings, messages, max_tokens=400, timeout=timeout)
+    return _call_chat_api(settings, messages, max_tokens=1500, timeout=timeout)
 
 
 def _call_chat_api(
@@ -311,6 +314,13 @@ def _call_chat_api(
 
     text = (content or "").strip()
     if not text:
+        logger.warning(
+            "llm returned empty content: status=%s model=%s choices=%s usage=%s",
+            response.status_code,
+            data.get("model") if isinstance(data, dict) else None,
+            len(data.get("choices", [])) if isinstance(data, dict) else 0,
+            data.get("usage") if isinstance(data, dict) else None,
+        )
         raise PriceDataError("AI 服务返回了空解读，请重试。", code="llm_empty", retryable=True)
     return _apply_guardrail(text)
 
@@ -364,7 +374,7 @@ def answer_question(
     for msg in request.history:
         messages.append({"role": msg.role, "content": msg.content})
     messages.append({"role": "user", "content": request.question})
-    return _call_chat_api(request.llm, messages, max_tokens=600)
+    return _call_chat_api(request.llm, messages, max_tokens=2000)
 
 
 def explain_decision(
