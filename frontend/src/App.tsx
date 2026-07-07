@@ -51,7 +51,7 @@ export function App() {
   const [configDrawerOpen, setConfigDrawerOpen] = React.useState(false);
   const [settingsDrawerOpen, setSettingsDrawerOpen] = React.useState(false);
   const [inspectorCollapsed, setInspectorCollapsed] = React.useState(() => {
-    if (typeof window !== "undefined") return window.innerWidth <= 1100;
+    if (typeof window !== "undefined") return window.innerWidth <= 1024;
     return false;
   });
   const [fullscreenChart, setFullscreenChart] = React.useState<ChartTab | null>(null);
@@ -154,7 +154,7 @@ export function App() {
   // flips the state when it would actually change so we don't churn
   // unrelated renders. Threshold matches the initial-mount check.
   React.useEffect(() => {
-    const shouldCollapse = window.innerWidth <= 1100;
+    const shouldCollapse = window.innerWidth <= 1024;
     setInspectorCollapsed((current) => (current === shouldCollapse ? current : shouldCollapse));
   }, [viewportSize.w]);
 
@@ -187,6 +187,16 @@ export function App() {
 
   const charts = useChartOptions(state.result, state.selectedStrategy, state.strategyNameByType, state.darkMode);
   const moneySymbol = currencySymbol(state.activeAsset?.currency);
+
+  const isMobile = viewportSize.w <= 768;
+  const chartHeight = React.useMemo(() => {
+    if (isMobile) return Math.max(240, Math.min(320, viewportSize.h * 0.35));
+    return activeView === "performance" ? 440 : 360;
+  }, [isMobile, viewportSize.h, activeView]);
+  const comparisonChartHeight = React.useMemo(() => {
+    if (isMobile) return Math.max(260, Math.min(340, viewportSize.h * 0.38));
+    return 420;
+  }, [isMobile, viewportSize.h]);
   const monteCarloYearsLabel = React.useMemo(() => {
     const start = new Date(`${state.startDate}T00:00:00`);
     const end = new Date(`${state.endDate}T00:00:00`);
@@ -708,7 +718,7 @@ export function App() {
                     {charts.rollingWindowYears ? ` 当前窗口 ${charts.rollingWindowYears} 年。` : ""}
                   </p>
                 )}
-                {renderChart(activeChartTab, activeView === "performance" ? 440 : 360)}
+                {renderChart(activeChartTab, chartHeight)}
                 {activeChartTab === "showdown" && comparisonTable}
               </div>
             </div>
@@ -759,7 +769,7 @@ export function App() {
                 >
                   <Maximize2 size={14} />
                 </button>
-                <ChartWrapper option={charts.showdownOption} height={420} />
+                <ChartWrapper option={charts.showdownOption} height={comparisonChartHeight} />
                 {comparisonTable}
               </div>
             </div>

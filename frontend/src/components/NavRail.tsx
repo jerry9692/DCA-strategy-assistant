@@ -73,18 +73,22 @@ export function NavRail({ activeView, onViewChange, onConfigOpen, onSettingsOpen
           key={item.view}
           className={`nav-rail__item ${activeView === item.view ? "active" : ""}`}
           onClick={() => onViewChange(item.view)}
+          aria-label={item.label}
         >
           {item.icon}
+          <span className="nav-rail__label">{item.label}</span>
           <span className="nav-rail__tooltip">{item.label}</span>
         </button>
       ))}
       <div className="nav-rail__spacer" />
-      <button className="nav-rail__item" onClick={onConfigOpen}>
+      <button className="nav-rail__item" onClick={onConfigOpen} aria-label="配置">
         {ICONS.config}
+        <span className="nav-rail__label">配置</span>
         <span className="nav-rail__tooltip">配置</span>
       </button>
-      <button className="nav-rail__item" onClick={onSettingsOpen}>
+      <button className="nav-rail__item" onClick={onSettingsOpen} aria-label="设置">
         {ICONS.settings}
+        <span className="nav-rail__label">设置</span>
         <span className="nav-rail__tooltip">设置</span>
       </button>
     </nav>
