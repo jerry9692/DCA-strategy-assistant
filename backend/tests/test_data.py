@@ -164,7 +164,10 @@ def test_eastmoney_download_success(monkeypatch):
     monkeypatch.setattr("app.data._load_cached", lambda symbol, start, end: pd.DataFrame(columns=["close"]))
     monkeypatch.setattr("app.data._em_download", lambda symbol, start, end: em_data)
     # yfinance 不应被调用
-    monkeypatch.setattr("app.data._download_yfinance", lambda *a, **k: (_ for _ in ()).throw(AssertionError("yfinance should not be called")))
+    monkeypatch.setattr(
+        "app.data._download_yfinance",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("yfinance should not be called")),
+    )
 
     frame, source, status = get_price_history("QQQ", date(2024, 1, 1), date(2024, 1, 5))
 
@@ -180,7 +183,9 @@ def test_fallback_to_yfinance_when_eastmoney_fails(monkeypatch):
         index=pd.to_datetime(["2024-01-02", "2024-01-03"]),
     )
     monkeypatch.setattr("app.data._load_cached", lambda symbol, start, end: pd.DataFrame(columns=["close"]))
-    monkeypatch.setattr("app.data._em_download", lambda symbol, start, end: (_ for _ in ()).throw(RuntimeError("network error")))
+    monkeypatch.setattr(
+        "app.data._em_download", lambda symbol, start, end: (_ for _ in ()).throw(RuntimeError("network error"))
+    )
     monkeypatch.setattr("app.data._download_yfinance", lambda symbol, start, end: yf_data)
 
     frame, source, status = get_price_history("QQQ", date(2024, 1, 1), date(2024, 1, 5))
@@ -239,7 +244,10 @@ def test_eastmoney_merges_with_cache_to_cover_range(monkeypatch):
     )
     monkeypatch.setattr("app.data._load_cached", lambda symbol, start, end: cached)
     monkeypatch.setattr("app.data._em_download", lambda symbol, start, end: em_new)
-    monkeypatch.setattr("app.data._download_yfinance", lambda *a, **k: (_ for _ in ()).throw(AssertionError("yfinance should not be called")))
+    monkeypatch.setattr(
+        "app.data._download_yfinance",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("yfinance should not be called")),
+    )
 
     frame, source, status = get_price_history("QQQ", date(2023, 6, 1), date(2024, 1, 7))
 
