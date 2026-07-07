@@ -45,13 +45,13 @@ RUN mkdir -p /app/backend/data && \
     chown -R dca:dca /app
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8010
 
 # Liveness probe — /api/health is cheap (no yfinance, no backtest) and
 # is safe to call before the SPA mount resolves.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD python -c "import sys, urllib.request; \
-        sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3).status == 200 else 1)"
+  CMD python -c "import sys, urllib.request; \
+      sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8010/api/health', timeout=3).status == 200 else 1)"
 
 # Drop root. The entrypoint below re-chowns the (potentially mounted)
 # data directory before starting uvicorn so the runtime user can write
@@ -59,4 +59,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
 USER dca
 
 # Run uvicorn serving both API and static files
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "backend"]
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8010", "--app-dir", "backend"]

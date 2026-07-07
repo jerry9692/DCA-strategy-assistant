@@ -2,7 +2,7 @@ services:
   app:
     build: .
     ports:
-      - "8000:8000"
+      - "8010:8010"
     volumes:
       - dca-data:/app/backend/data
     # env_file loads DCA_ALLOWED_ORIGINS, DCA_LLM_ALLOW_PRIVATE, etc.
