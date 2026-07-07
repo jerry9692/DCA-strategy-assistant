@@ -3,6 +3,8 @@
 # --- Stage 1: Build frontend ---
 FROM node:20-alpine AS frontend-build
 WORKDIR /app/frontend
+# 国内 npm 镜像加速（淘宝源）
+RUN npm config set registry https://registry.npmmirror.com
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
@@ -11,6 +13,10 @@ RUN npm run build
 # --- Stage 2: Backend + serve frontend static ---
 FROM python:3.12-slim AS runtime
 WORKDIR /app
+
+# 国内 PyPI 镜像加速（清华源）
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
+    pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn
 
 # Install backend dependencies
 COPY backend/requirements.txt ./
