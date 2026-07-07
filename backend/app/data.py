@@ -84,10 +84,7 @@ def _load_cached(symbol: str, start: date, end: date) -> pd.DataFrame:
 def _cached_source_label(symbol: str) -> str:
     """Return a human-readable label for the data source of cached bars."""
     with Session(engine) as session:
-        rows = session.exec(
-            select(PriceBar.source)
-            .where(PriceBar.symbol == symbol)
-        ).all()
+        rows = session.exec(select(PriceBar.source).where(PriceBar.symbol == symbol)).all()
     if not rows:
         return "本地缓存"
     sources = set(rows)
@@ -331,7 +328,11 @@ def get_price_history(
         if cached_start <= warmup_cutoff:
             logger.info(
                 "partial cache for %s (%s to %s, requested %s to %s), using cached data",
-                normalized, cached_start, cached.index[-1].date(), final_start, final_end,
+                normalized,
+                cached_start,
+                cached.index[-1].date(),
+                final_start,
+                final_end,
             )
             trimmed = cached.loc[cached.index <= pd.Timestamp(final_end)]
             if not trimmed.empty:
@@ -414,7 +415,9 @@ def get_price_history(
         if cached_last >= final_end - timedelta(days=7):
             logger.info(
                 "all downloads failed/partial for %s but cache is recent (%s, requested end %s), using cache",
-                normalized, cached_last, final_end,
+                normalized,
+                cached_last,
+                final_end,
             )
             # downloaded 已经是与缓存合并后的结果（如果有下载数据），直接使用
             if not downloaded.empty:
@@ -430,7 +433,9 @@ def get_price_history(
             if dl_last >= final_end - timedelta(days=7):
                 logger.info(
                     "yfinance failed for %s but partial download covers up to %s (end %s), using partial data",
-                    normalized, dl_last, final_end,
+                    normalized,
+                    dl_last,
+                    final_end,
                 )
                 src = "东方财富(部分)" if not em_partial.empty else "Yahoo Finance(部分)"
                 return downloaded, src, "cache-partial"
@@ -447,7 +452,10 @@ def get_price_history(
             if cached_start <= warmup_cutoff:
                 logger.info(
                     "download failed for %s (%s), falling back to partial cache (%s to %s)",
-                    normalized, last_exc, cached_start, cached.index[-1].date(),
+                    normalized,
+                    last_exc,
+                    cached_start,
+                    cached.index[-1].date(),
                 )
                 trimmed = cached.loc[cached.index <= pd.Timestamp(final_end)]
                 if not trimmed.empty:

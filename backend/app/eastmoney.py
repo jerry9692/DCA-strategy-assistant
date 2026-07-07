@@ -19,13 +19,36 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 _EM_MARKET_CODE: dict[str, int] = {
-    "QQQ": 105, "VXUS": 105, "BND": 105, "TLT": 105, "IEF": 105,
-    "SOXX": 105, "SMH": 105, "TQQQ": 105, "IBIT": 105,
-    "SPY": 107, "VOO": 107, "VTI": 107, "DIA": 107, "IWM": 107,
-    "SCHD": 107, "VYM": 107, "VTV": 107, "VUG": 107, "VEA": 107,
-    "VWO": 107, "AGG": 107, "GLD": 107, "XLK": 107, "QLD": 107,
-    "UPRO": 107, "SSO": 107,
-    "510050": 1, "510300": 1, "510500": 1, "588000": 1,
+    "QQQ": 105,
+    "VXUS": 105,
+    "BND": 105,
+    "TLT": 105,
+    "IEF": 105,
+    "SOXX": 105,
+    "SMH": 105,
+    "TQQQ": 105,
+    "IBIT": 105,
+    "SPY": 107,
+    "VOO": 107,
+    "VTI": 107,
+    "DIA": 107,
+    "IWM": 107,
+    "SCHD": 107,
+    "VYM": 107,
+    "VTV": 107,
+    "VUG": 107,
+    "VEA": 107,
+    "VWO": 107,
+    "AGG": 107,
+    "GLD": 107,
+    "XLK": 107,
+    "QLD": 107,
+    "UPRO": 107,
+    "SSO": 107,
+    "510050": 1,
+    "510300": 1,
+    "510500": 1,
+    "588000": 1,
     "159915": 0,
 }
 
@@ -40,6 +63,7 @@ _RETRY_DELAY = 1.5
 def _ipv4_getaddrinfo(original):
     def wrapper(host, port, family=0, type=0, proto=0, flags=0):
         return original(host, port, socket.AF_INET, type, proto, flags)
+
     return wrapper
 
 
@@ -52,8 +76,8 @@ def _fetch_url(url: str, timeout: int = _TIMEOUT) -> bytes:
     """
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/125.0.0.0 Safari/537.36",
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/125.0.0.0 Safari/537.36",
         "Referer": "https://quote.eastmoney.com/",
         "Accept": "*/*",
         "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
@@ -89,7 +113,7 @@ def download(symbol: str, start: date, end: date) -> pd.DataFrame:
         logger.warning("eastmoney: symbol %s not in market code map", symbol)
         return pd.DataFrame(columns=["close"])
 
-    fqt = _EM_FQT.get(symbol, _DEFAULT_FQT)
+    fqt = _DEFAULT_FQT
     secid = f"{market}.{symbol}"
     beg = start.strftime("%Y%m%d")
     end_str = (end + timedelta(days=1)).strftime("%Y%m%d")

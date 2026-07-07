@@ -23,8 +23,6 @@ import re
 import httpx
 
 from app.data import PriceDataError
-
-logger = logging.getLogger(__name__)
 from app.models import (
     ChatRequest,
     ExplanationRequest,
@@ -33,6 +31,8 @@ from app.models import (
     SelectionExplanationRequest,
     StrategyDecision,
 )
+
+logger = logging.getLogger(__name__)
 
 # Appended to every explanation so the model output can't be mistaken
 # for personalized financial advice.
