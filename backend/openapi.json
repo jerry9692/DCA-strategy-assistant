@@ -298,45 +298,6 @@
         }
       }
     },
-    "/api/stress-tests/run": {
-      "post": {
-        "summary": "Stress Test",
-        "description": "Run a single-path stress test (What-if) on the current strategy.\n\nThe user picks a price-path shape (one-time / gradual / v-shape)\nand a total % change. The backend generates that deterministic\nfuture path, appends it to the historical price series, and runs\nthe full backtester on the combined series so the strategy's\nindicators react to the simulated crash. The response carries the\nfuture-segment buy plan, max floating loss, and a comparison with\nfixed DCA and lump sum. This is a what-if scenario, not a forecast.",
-        "operationId": "stress_test_api_stress_tests_run_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StressTestRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StressTestResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/optimizations/run": {
       "post": {
         "summary": "Optimization",
@@ -510,6 +471,45 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BacktestResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stress-tests/run": {
+      "post": {
+        "summary": "Stress Test",
+        "description": "Run a single-path stress test (What-if) on the current strategy.\n\nThe user picks a price-path shape (one-time / gradual / v-shape)\nand a total % change. The backend generates that deterministic\nfuture path, appends it to the historical price series, and runs\nthe full backtester on the combined series so the strategy's\nindicators react to the simulated crash. The response carries the\nfuture-segment buy plan, max floating loss, and a comparison with\nfixed DCA and lump sum. This is a what-if scenario, not a forecast.",
+        "operationId": "stress_test_api_stress_tests_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StressTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StressTestResponse"
                 }
               }
             }

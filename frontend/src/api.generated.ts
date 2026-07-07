@@ -209,34 +209,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/stress-tests/run": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Stress Test
-         * @description Run a single-path stress test (What-if) on the current strategy.
-         *
-         *     The user picks a price-path shape (one-time / gradual / v-shape)
-         *     and a total % change. The backend generates that deterministic
-         *     future path, appends it to the historical price series, and runs
-         *     the full backtester on the combined series so the strategy's
-         *     indicators react to the simulated crash. The response carries the
-         *     future-segment buy plan, max floating loss, and a comparison with
-         *     fixed DCA and lump sum. This is a what-if scenario, not a forecast.
-         */
-        post: operations["stress_test_api_stress_tests_run_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/optimizations/run": {
         parameters: {
             query?: never;
@@ -300,6 +272,34 @@ export interface paths {
         put?: never;
         /** Backtest */
         post: operations["backtest_api_backtests_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stress-tests/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stress Test
+         * @description Run a single-path stress test (What-if) on the current strategy.
+         *
+         *     The user picks a price-path shape (one-time / gradual / v-shape)
+         *     and a total % change. The backend generates that deterministic
+         *     future path, appends it to the historical price series, and runs
+         *     the full backtester on the combined series so the strategy's
+         *     indicators react to the simulated crash. The response carries the
+         *     future-segment buy plan, max floating loss, and a comparison with
+         *     fixed DCA and lump sum. This is a what-if scenario, not a forecast.
+         */
+        post: operations["stress_test_api_stress_tests_run_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1366,39 +1366,6 @@ export interface operations {
             };
         };
     };
-    stress_test_api_stress_tests_run_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StressTestRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StressTestResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     optimization_api_optimizations_run_post: {
         parameters: {
             query?: never;
@@ -1547,6 +1514,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BacktestResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stress_test_api_stress_tests_run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StressTestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StressTestResponse"];
                 };
             };
             /** @description Validation Error */
