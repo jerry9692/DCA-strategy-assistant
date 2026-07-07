@@ -74,20 +74,20 @@ _start_time = monotonic()
 
 
 def _cors_origins() -> list[str]:
-    """Resolve allowed CORS origins from env, with a dev fallback.
+    """Resolve allowed CORS origins from env, with a permissive fallback.
 
-    Production deployments should set `DCA_ALLOWED_ORIGINS` to a
-    comma-separated list of exact origins (e.g.
-    `https://dca.example.com`). When unset, the dev defaults
-    (localhost:5180 / 127.0.0.1:5180) are used so a fresh checkout
-    still works out of the box. SECURITY.md calls this out under
+    Defaults to "*" (allow all origins) so a fresh checkout or Docker
+    deploy works out of the box. For production with a known domain,
+    set `DCA_ALLOWED_ORIGINS` to a comma-separated list of exact
+    origins (e.g. `https://dca.example.com`) for tighter security.
+    SECURITY.md calls this out under
     "Security Best Practices for Operators".
     """
     raw = os.environ.get("DCA_ALLOWED_ORIGINS")
     if not raw:
-        return ["http://localhost:5180", "http://127.0.0.1:5180"]
+        return ["*"]
     origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
-    return origins or ["http://localhost:5180", "http://127.0.0.1:5180"]
+    return origins or ["*"]
 
 
 app.add_middleware(
