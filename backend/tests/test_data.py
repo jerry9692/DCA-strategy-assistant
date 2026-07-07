@@ -256,8 +256,8 @@ def test_eastmoney_merges_with_cache_to_cover_range(monkeypatch):
     assert frame["close"].tolist() == [100.0, 101.0, 102.0, 103.0]
 
 
-def test_eastmoney_510050_uses_no_adjust():
-    """510050 使用 fqt=0（不复权），避免东财前复权 bug 产生负数价格。"""
-    from app.eastmoney import _EM_FQT
+def test_eastmoney_all_symbols_use_forward_adjust():
+    """所有标的统一使用 fqt=1（前复权），与 yfinance auto_adjust=True 保持一致。"""
+    from app.eastmoney import _DEFAULT_FQT
 
-    assert _EM_FQT["510050"] == 0
+    assert _DEFAULT_FQT == 1
