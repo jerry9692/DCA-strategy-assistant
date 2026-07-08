@@ -6,6 +6,8 @@ export const SETTINGS_KEY = "dca-assistant-settings-v4";
 // shareable URL — an API key in a query string would leak the moment a
 // user copies the link. localStorage only.
 export const LLM_SETTINGS_KEY = "dca-assistant-llm-v1";
+// "local" = credentials in localStorage (per-browser); "server" = shared config on NAS
+export const LLM_SOURCE_KEY = "dca-assistant-llm-source-v1";
 
 export const DEFAULT_APP_DEFAULTS: AppDefaults = {
   baseAmount: 100,

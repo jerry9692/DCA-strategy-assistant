@@ -45,7 +45,57 @@ class PriceBar(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class ServerLlmConfig(SQLModel, table=True):
+    """Server-side LLM configuration for shared deployments (e.g. NAS).
+
+    When a user sets the frontend to "server mode", the backend loads
+    credentials from this table instead of expecting them per-request.
+    This lets all users on the same deployment share one API key
+    without it ever being exposed to the browser.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    base_url: str = "https://api.openai.com/v1"
+    model: str = "gpt-4o-mini"
+    api_key: str = ""
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 SQLModel.metadata.create_all(engine)
+
+
+def get_server_llm_config() -> ServerLlmConfig | None:
+    """Return the single server-side LLM config row, or None."""
+    with Session(engine) as session:
+        return session.exec(select(ServerLlmConfig)).first()
+
+
+def save_server_llm_config(base_url: str, model: str, api_key: str) -> ServerLlmConfig:
+    """Upsert the server-side LLM config (single row)."""
+    with Session(engine) as session:
+        row = session.exec(select(ServerLlmConfig)).first()
+        if row is None:
+            row = ServerLlmConfig(base_url=base_url, model=model, api_key=api_key)
+            session.add(row)
+        else:
+            row.base_url = base_url
+            row.model = model
+            row.api_key = api_key
+            row.updated_at = datetime.now(timezone.utc)
+        session.commit()
+        session.refresh(row)
+        return row
+
+
+def delete_server_llm_config() -> bool:
+    """Delete the server-side LLM config. Returns True if a row was deleted."""
+    with Session(engine) as session:
+        row = session.exec(select(ServerLlmConfig)).first()
+        if row is None:
+            return False
+        session.delete(row)
+        session.commit()
+        return True
 
 
 def validate_symbol(symbol: str) -> str:

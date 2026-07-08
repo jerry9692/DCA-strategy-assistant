@@ -47,6 +47,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/llm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get_Llm_Config */
+        get: operations["get_llm_config_api_settings_llm_get"];
+        /** Put_Llm_Config */
+        put: operations["put_llm_config_api_settings_llm_put"];
+        post?: never;
+        /** Delete_Llm_Config */
+        delete: operations["delete_llm_config_api_settings_llm_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/{symbol}/range": {
         parameters: {
             query?: never;
@@ -575,6 +594,38 @@ export interface components {
         };
         /** LlmSettings */
         LlmSettings: {
+            /**
+             * Baseurl
+             * @default https://api.openai.com/v1
+             */
+            baseUrl: string;
+            /**
+             * Model
+             * @default gpt-4o-mini
+             */
+            model: string;
+            /**
+             * Apikey
+             * @default
+             */
+            apiKey: string;
+            /**
+             * Useserverconfig
+             * @default false
+             */
+            useServerConfig: boolean;
+        };
+        /** ServerLlmConfigResponse */
+        ServerLlmConfigResponse: {
+            /** Baseurl */
+            baseUrl: string;
+            /** Model */
+            model: string;
+            /** Configured */
+            configured: boolean;
+        };
+        /** ServerLlmConfigUpdate */
+        ServerLlmConfigUpdate: {
             /**
              * Baseurl
              * @default https://api.openai.com/v1
@@ -1146,6 +1197,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Asset"][];
+                };
+            };
+        };
+    };
+    get_llm_config_api_settings_llm_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerLlmConfigResponse"];
+                };
+            };
+        };
+    };
+    put_llm_config_api_settings_llm_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServerLlmConfigUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerLlmConfigResponse"];
+                };
+            };
+        };
+    };
+    delete_llm_config_api_settings_llm_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };

@@ -14,6 +14,7 @@ from sqlmodel import Session, func, select
 
 from app.backtester import DcaBacktester, rolling_annualized_returns, rolling_lump_sum_annualized_returns
 from app.data import PriceBar, PriceDataError, engine, get_available_range, get_price_history, validate_symbol
+from app.data import delete_server_llm_config, get_server_llm_config, save_server_llm_config
 from app.explanations import answer_question, explain_decision, explain_selection
 from app.models import (
     SUPPORTED_ASSETS,
@@ -28,6 +29,7 @@ from app.models import (
     ExplanationRequest,
     ExplanationResponse,
     HealthResponse,
+    LlmSettings,
     MarketState,
     MonteCarloRequest,
     MonteCarloResponse,
@@ -41,6 +43,8 @@ from app.models import (
     RollingPerformancePoint,
     SelectionExplanationRequest,
     SelectionExplanationResponse,
+    ServerLlmConfigResponse,
+    ServerLlmConfigUpdate,
     StrategyComparison,
     StrategyConfig,
     StrategyDefinitionsResponse,
@@ -268,17 +272,80 @@ def _asset_currency(symbol: str) -> str:
     return "$"
 
 
+def _resolve_llm(llm: LlmSettings) -> LlmSettings:
+    """If useServerConfig is True, load credentials from the server DB.
+
+    Returns a new LlmSettings with the server's baseUrl/model/apiKey.
+    Raises PriceDataError if server config is not set up.
+    """
+    if not llm.useServerConfig:
+        return llm
+    config = get_server_llm_config()
+    if config is None or not config.api_key:
+        raise PriceDataError(
+            "服务端未配置 AI，请在设置中先保存服务端配置。",
+            code="llm_not_configured",
+            retryable=False,
+        )
+    return LlmSettings(
+        baseUrl=config.base_url,
+        model=config.model,
+        apiKey=config.api_key,
+        # Keep useServerConfig=True so the SSRF validator is skipped —
+        # the operator's config is already trusted, and they may be
+        # running a local LLM proxy (e.g. Ollama on 127.0.0.1).
+        useServerConfig=True,
+    )
+
+
+@app.get("/api/settings/llm", response_model=ServerLlmConfigResponse)
+def get_llm_config() -> ServerLlmConfigResponse:
+    """Return the server-side LLM config (without the API key)."""
+    config = get_server_llm_config()
+    if config is None:
+        return ServerLlmConfigResponse(
+            baseUrl="https://api.openai.com/v1",
+            model="gpt-4o-mini",
+            configured=False,
+        )
+    return ServerLlmConfigResponse(
+        baseUrl=config.base_url,
+        model=config.model,
+        configured=bool(config.api_key),
+    )
+
+
+@app.put("/api/settings/llm", response_model=ServerLlmConfigResponse)
+def put_llm_config(update: ServerLlmConfigUpdate) -> ServerLlmConfigResponse:
+    """Save or update the server-side LLM config."""
+    config = save_server_llm_config(update.baseUrl, update.model, update.apiKey)
+    return ServerLlmConfigResponse(
+        baseUrl=config.base_url,
+        model=config.model,
+        configured=True,
+    )
+
+
+@app.delete("/api/settings/llm")
+def delete_llm_config() -> dict:
+    """Delete the server-side LLM config."""
+    deleted = delete_server_llm_config()
+    return {"deleted": deleted}
+
+
 @app.post("/api/explanations/run", response_model=ExplanationResponse)
 def explanation(http_request: Request, request: ExplanationRequest) -> ExplanationResponse:
     """Generate a plain-language explanation of the current
     recommendation via the user's OpenAI-compatible LLM.
 
-    The API key in request.llm is forwarded to the provider for this
-    single call only — never persisted, never logged. See
-    explanations.py for the request construction.
+    When request.llm.useServerConfig is True, credentials are loaded
+    from the server DB instead of the request body. Otherwise the
+    API key in request.llm is forwarded to the provider for this
+    single call only — never persisted, never logged.
     """
     try:
-        _enforce_chat_rate_limit(http_request, request.llm.apiKey)
+        resolved_llm = _resolve_llm(request.llm)
+        _enforce_chat_rate_limit(http_request, resolved_llm.apiKey)
         clear_prepare_cache()
         symbol = validate_symbol(request.symbol)
         end = request.asOf or date.today()
@@ -287,12 +354,15 @@ def explanation(http_request: Request, request: ExplanationRequest) -> Explanati
         decision = evaluate_strategy(request.config.strategyType, request.config, prices)
         market_state = _market_state(prices, end)
         currency = _asset_currency(symbol)
-        text = explain_decision(request.model_copy(update={"symbol": symbol}), decision, market_state, currency)
+        text = explain_decision(
+            request.model_copy(update={"symbol": symbol, "llm": resolved_llm}),
+            decision, market_state, currency,
+        )
         return ExplanationResponse(
             symbol=symbol,
             decision=decision,
             explanation=text,
-            model=request.llm.model,
+            model=resolved_llm.model,
             dataSource=data_source,
             cacheStatus=cache_status,
         )
@@ -309,7 +379,8 @@ def selection_explanation(http_request: Request, request: SelectionExplanationRe
     the same per-request forwarding rules as /api/explanations/run.
     """
     try:
-        _enforce_chat_rate_limit(http_request, request.llm.apiKey)
+        resolved_llm = _resolve_llm(request.llm)
+        _enforce_chat_rate_limit(http_request, resolved_llm.apiKey)
         clear_prepare_cache()
         symbol = validate_symbol(request.symbol)
         end = request.asOf or date.today()
@@ -318,12 +389,15 @@ def selection_explanation(http_request: Request, request: SelectionExplanationRe
         decision = evaluate_strategy(request.config.strategyType, request.config, prices)
         market_state = _market_state(prices, end)
         currency = _asset_currency(symbol)
-        text = explain_selection(request.model_copy(update={"symbol": symbol}), decision, market_state, currency)
+        text = explain_selection(
+            request.model_copy(update={"symbol": symbol, "llm": resolved_llm}),
+            decision, market_state, currency,
+        )
         return SelectionExplanationResponse(
             symbol=symbol,
             selectedText=request.selectedText,
             explanation=text,
-            model=request.llm.model,
+            model=resolved_llm.model,
             dataSource=data_source,
             cacheStatus=cache_status,
         )
@@ -342,7 +416,8 @@ def chat(http_request: Request, request: ChatRequest) -> ChatResponse:
     /api/explanations/run.
     """
     try:
-        _enforce_chat_rate_limit(http_request, request.llm.apiKey)
+        resolved_llm = _resolve_llm(request.llm)
+        _enforce_chat_rate_limit(http_request, resolved_llm.apiKey)
         clear_prepare_cache()
         symbol = validate_symbol(request.symbol)
         end = request.asOf or date.today()
@@ -351,11 +426,14 @@ def chat(http_request: Request, request: ChatRequest) -> ChatResponse:
         decision = evaluate_strategy(request.config.strategyType, request.config, prices)
         market_state = _market_state(prices, end)
         currency = _asset_currency(symbol)
-        text = answer_question(request.model_copy(update={"symbol": symbol}), decision, market_state, currency)
+        text = answer_question(
+            request.model_copy(update={"symbol": symbol, "llm": resolved_llm}),
+            decision, market_state, currency,
+        )
         return ChatResponse(
             symbol=symbol,
             answer=text,
-            model=request.llm.model,
+            model=resolved_llm.model,
             dataSource=data_source,
             cacheStatus=cache_status,
         )

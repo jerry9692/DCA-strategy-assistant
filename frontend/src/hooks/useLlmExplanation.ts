@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { ChatMessage, ChatResponse, ExplanationResponse, LlmSettings, StrategyConfigPayload, UiError } from "../types";
-import { API_BASE, LLM_SETTINGS_KEY } from "../constants";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ChatMessage, ChatResponse, ExplanationResponse, LlmSettings, LlmSource, ServerLlmConfigResponse, ServerLlmConfigUpdate, StrategyConfigPayload, UiError } from "../types";
+import { API_BASE, LLM_SETTINGS_KEY, LLM_SOURCE_KEY } from "../constants";
 import { readJson, toUiError } from "../api";
 
 type StoredLlmSettings = {
@@ -129,6 +129,17 @@ type SelectionExplanationResponse = {
 
 export function useLlmExplanation(inputs: ExplanationInputs | null) {
   const [llm, setLlm] = useState<StoredLlmSettings>(() => readStoredLlm());
+  const [source, setSource] = useState<LlmSource>(() => {
+    try {
+      const saved = window.localStorage.getItem(LLM_SOURCE_KEY);
+      return saved === "server" ? "server" : "local";
+    } catch {
+      return "local";
+    }
+  });
+  const [serverConfig, setServerConfig] = useState<ServerLlmConfigResponse | null>(null);
+  const [serverConfigLoading, setServerConfigLoading] = useState(false);
+  const [serverConfigError, setServerConfigError] = useState<UiError | null>(null);
   const [explanation, setExplanation] = useState<string | null>(null);
   const [explanationModel, setExplanationModel] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -139,7 +150,59 @@ export function useLlmExplanation(inputs: ExplanationInputs | null) {
   const [selectionLoading, setSelectionLoading] = useState(false);
   const [selectionError, setSelectionError] = useState<UiError | null>(null);
 
-  const enabled = llm.apiKey.trim().length > 0;
+  const isServerMode = source === "server";
+  const localEnabled = llm.apiKey.trim().length > 0;
+  const serverEnabled = serverConfig?.configured === true;
+  const enabled = isServerMode ? serverEnabled : localEnabled;
+
+  // Persist source mode to localStorage
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LLM_SOURCE_KEY, source);
+    } catch { /* ignore */ }
+  }, [source]);
+
+  // Fetch server config when entering server mode
+  const fetchServerConfig = useCallback(() => {
+    setServerConfigLoading(true);
+    setServerConfigError(null);
+    fetch(`${API_BASE}/api/settings/llm`)
+      .then(readJson<ServerLlmConfigResponse>)
+      .then(setServerConfig)
+      .catch((err) => setServerConfigError(toUiError(err)))
+      .finally(() => setServerConfigLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (isServerMode) fetchServerConfig();
+  }, [isServerMode, fetchServerConfig]);
+
+  // Save server-side config
+  const saveServerConfig = useCallback((update: ServerLlmConfigUpdate) => {
+    setServerConfigLoading(true);
+    setServerConfigError(null);
+    fetch(`${API_BASE}/api/settings/llm`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(update),
+    })
+      .then(readJson<ServerLlmConfigResponse>)
+      .then(setServerConfig)
+      .catch((err) => setServerConfigError(toUiError(err)))
+      .finally(() => setServerConfigLoading(false));
+  }, []);
+
+  // Delete server-side config
+  const deleteServerConfig = useCallback(() => {
+    setServerConfigLoading(true);
+    setServerConfigError(null);
+    fetch(`${API_BASE}/api/settings/llm`, { method: "DELETE" })
+      .then(() => {
+        setServerConfig({ baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini", configured: false });
+      })
+      .catch((err) => setServerConfigError(toUiError(err)))
+      .finally(() => setServerConfigLoading(false));
+  }, []);
 
   // Persist credentials to localStorage. The key is obfuscated before
   // being written so a casual read of devtools doesn't reveal the
@@ -157,8 +220,10 @@ export function useLlmExplanation(inputs: ExplanationInputs | null) {
   }, [llm]);
 
   const payloadSettings = useMemo<LlmSettings>(
-    () => ({ baseUrl: llm.baseUrl.trim(), model: llm.model.trim(), apiKey: llm.apiKey.trim() }),
-    [llm.baseUrl, llm.model, llm.apiKey],
+    () => isServerMode
+      ? { baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini", apiKey: "", useServerConfig: true }
+      : { baseUrl: llm.baseUrl.trim(), model: llm.model.trim(), apiKey: llm.apiKey.trim(), useServerConfig: false },
+    [isServerMode, llm.baseUrl, llm.model, llm.apiKey],
   );
 
   // Auto-generate an explanation whenever the decision changes, as long
@@ -353,6 +418,14 @@ export function useLlmExplanation(inputs: ExplanationInputs | null) {
     setLlm,
     enabled,
     canExplain,
+    source,
+    setSource,
+    serverConfig,
+    serverConfigLoading,
+    serverConfigError,
+    saveServerConfig,
+    deleteServerConfig,
+    refreshServerConfig: fetchServerConfig,
     explanation,
     explanationModel,
     explanationLoading: loading,

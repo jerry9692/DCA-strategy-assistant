@@ -437,9 +437,15 @@ class LlmSettings(BaseModel):
     # to the provider for a single request and never persisted or
     # logged server-side (see explanations.py). baseUrl defaults to
     # OpenAI; DeepSeek / Moonshot / Zhipu etc. work by overriding it.
+    #
+    # When useServerConfig is True, the backend ignores baseUrl/model/
+    # apiKey here and loads credentials from its own SQLite config
+    # instead (see data.ServerLlmConfig). This is used for shared
+    # deployments (e.g. NAS) where all users share one key.
     baseUrl: str = Field(default="https://api.openai.com/v1")
     model: str = Field(default="gpt-4o-mini", min_length=1)
-    apiKey: str = Field(min_length=1)
+    apiKey: str = Field(default="")
+    useServerConfig: bool = False
 
     @model_validator(mode="after")
     def _normalize_base_url(self) -> "LlmSettings":
@@ -469,7 +475,14 @@ class LlmSettings(BaseModel):
         3. By default, also block loopback and RFC1918 addresses. Set
            `DCA_LLM_ALLOW_PRIVATE=1` to permit local LLM proxies such
            as Ollama in controlled environments.
+
+        When useServerConfig is True the actual baseUrl comes from the
+        server's own DB (set by the operator), so SSRF validation here
+        is skipped — the dummy baseUrl in the request is irrelevant.
         """
+        if self.useServerConfig:
+            return self
+
         from urllib.parse import urlparse
 
         parsed = urlparse(self.baseUrl)
@@ -594,6 +607,27 @@ class ChatResponse(BaseModel):
     model: str
     dataSource: str
     cacheStatus: str
+
+
+class ServerLlmConfigResponse(BaseModel):
+    """Returned to the frontend — never includes the API key."""
+    baseUrl: str
+    model: str
+    configured: bool
+
+
+class ServerLlmConfigUpdate(BaseModel):
+    """Used to save server-side LLM config via PUT /api/settings/llm."""
+    baseUrl: str = Field(default="https://api.openai.com/v1")
+    model: str = Field(default="gpt-4o-mini", min_length=1)
+    apiKey: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _normalize_base_url(self) -> "ServerLlmConfigUpdate":
+        self.baseUrl = self.baseUrl.strip().rstrip("/")
+        if not self.baseUrl.startswith(("http://", "https://")):
+            raise ValueError("baseUrl must start with http:// or https://.")
+        return self
 
 
 class OptimizationRequest(BaseModel):

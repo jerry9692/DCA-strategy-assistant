@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, EyeOff, KeyRound, Percent, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react";
+import { Check, Eye, EyeOff, KeyRound, Percent, Server, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react";
 import type { useBacktest } from "../hooks/useBacktest";
 import type { useLlmExplanation } from "../hooks/useLlmExplanation";
 import type { Frequency } from "../types";
@@ -34,6 +34,16 @@ export function SettingsDrawer({
   const currentBaseUrl = llmState.llm.baseUrl.trim();
   const baseUrlChanged =
     currentBaseUrl.length > 0 && currentBaseUrl !== confirmedBaseUrl;
+
+  // Server config form state
+  const [serverBaseUrl, setServerBaseUrl] = useState("https://api.openai.com/v1");
+  const [serverModel, setServerModel] = useState("gpt-4o-mini");
+  const [serverApiKey, setServerApiKey] = useState("");
+  const [showServerApiKey, setShowServerApiKey] = useState(false);
+
+  const isServerMode = llmState.source === "server";
+  const serverConfigured = llmState.serverConfig?.configured === true;
+
   return (
     <>
       <div className={`drawer-overlay ${open ? "open" : ""}`} onClick={onClose} />
@@ -48,77 +58,194 @@ export function SettingsDrawer({
         <div className="settings-drawer__body">
           <section className="settings-section">
             <div className="settings-section__title"><Sparkles size={16} />AI 解读</div>
-            <label className="llm-field">
-              API Base URL
-              <input
-                type="text"
-                value={llmState.llm.baseUrl}
-                placeholder="https://api.openai.com/v1"
-                onChange={(event) => llmState.setLlm((current) => ({ ...current, baseUrl: event.target.value }))}
-              />
-            </label>
-            <label className="llm-field">
-              模型
-              <input
-                type="text"
-                value={llmState.llm.model}
-                placeholder="gpt-4o-mini"
-                onChange={(event) => llmState.setLlm((current) => ({ ...current, model: event.target.value }))}
-              />
-            </label>
-            <label className="llm-field">
-              API Key
-              <div className="llm-key-row">
-                <input
-                  type={showApiKey ? "text" : "password"}
-                  value={llmState.llm.apiKey}
-                  placeholder="sk-..."
-                  autoComplete="off"
-                  spellCheck={false}
-                  onChange={(event) => llmState.setLlm((current) => ({ ...current, apiKey: event.target.value }))}
-                />
+
+            {/* Mode toggle */}
+            <div className="llm-mode-toggle">
+              <button
+                type="button"
+                className={`llm-mode-btn ${!isServerMode ? "active" : ""}`}
+                onClick={() => llmState.setSource("local")}
+              >
+                <KeyRound size={14} />本机配置
+              </button>
+              <button
+                type="button"
+                className={`llm-mode-btn ${isServerMode ? "active" : ""}`}
+                onClick={() => llmState.setSource("server")}
+              >
+                <Server size={14} />服务端配置
+              </button>
+            </div>
+
+            {!isServerMode ? (
+              <>
+                <label className="llm-field">
+                  API Base URL
+                  <input
+                    type="text"
+                    value={llmState.llm.baseUrl}
+                    placeholder="https://api.openai.com/v1"
+                    onChange={(event) => llmState.setLlm((current) => ({ ...current, baseUrl: event.target.value }))}
+                  />
+                </label>
+                <label className="llm-field">
+                  模型
+                  <input
+                    type="text"
+                    value={llmState.llm.model}
+                    placeholder="gpt-4o-mini"
+                    onChange={(event) => llmState.setLlm((current) => ({ ...current, model: event.target.value }))}
+                  />
+                </label>
+                <label className="llm-field">
+                  API Key
+                  <div className="llm-key-row">
+                    <input
+                      type={showApiKey ? "text" : "password"}
+                      value={llmState.llm.apiKey}
+                      placeholder="sk-..."
+                      autoComplete="off"
+                      spellCheck={false}
+                      onChange={(event) => llmState.setLlm((current) => ({ ...current, apiKey: event.target.value }))}
+                    />
+                    <button
+                      type="button"
+                      className="icon-button"
+                      onClick={() => setShowApiKey((v) => !v)}
+                      title={showApiKey ? "隐藏 Key" : "显示 Key"}
+                      aria-label={showApiKey ? "隐藏 API Key" : "显示 API Key"}
+                      aria-pressed={showApiKey}
+                    >
+                      {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </label>
+                {baseUrlChanged && (
+                  <div className="settings-hint settings-hint--warn" role="alert">
+                    <KeyRound size={14} />
+                    将把您的 API Key 发送到 <code>{currentBaseUrl}</code>。请确认这是您信任的地址。
+                    <button
+                      type="button"
+                      className="link-action"
+                      onClick={() => setConfirmedBaseUrl(currentBaseUrl)}
+                    >
+                      我已知晓
+                    </button>
+                  </div>
+                )}
+                <label className="llm-toggle">
+                  <input
+                    type="checkbox"
+                    checked={llmState.llm.autoGenerate}
+                    onChange={(event) => llmState.setLlm((current) => ({ ...current, autoGenerate: event.target.checked }))}
+                  />
+                  <span>建议变化后自动生成解读</span>
+                </label>
                 <button
                   type="button"
-                  className="icon-button"
-                  onClick={() => setShowApiKey((v) => !v)}
-                  title={showApiKey ? "隐藏 Key" : "显示 Key"}
-                  aria-label={showApiKey ? "隐藏 API Key" : "显示 API Key"}
-                  aria-pressed={showApiKey}
+                  className="secondary-action settings-inline-action"
+                  onClick={() => llmState.setLlm((current) => ({ ...current, apiKey: "" }))}
+                  disabled={!llmState.llm.apiKey}
                 >
-                  {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                  <Trash2 size={15} />清空 Key
                 </button>
-              </div>
-            </label>
-            {baseUrlChanged && (
-              <div className="settings-hint settings-hint--warn" role="alert">
-                <KeyRound size={14} />
-                将把您的 API Key 发送到 <code>{currentBaseUrl}</code>。请确认这是您信任的地址。
+                <span className="settings-hint"><KeyRound size={14} />Key 仅保存在本机浏览器，不写入分享链接。</span>
+              </>
+            ) : (
+              <>
+                {serverConfigured ? (
+                  <div className="settings-hint settings-hint--ok">
+                    <Check size={14} />
+                    服务端已配置 AI（模型 {llmState.serverConfig?.model || "gpt-4o-mini"}）。所有访问此地址的用户均可直接使用。
+                  </div>
+                ) : (
+                  <div className="settings-hint settings-hint--warn">
+                    <KeyRound size={14} />
+                    服务端尚未配置 AI，请在下方填写并保存。
+                  </div>
+                )}
+                <label className="llm-field">
+                  API Base URL
+                  <input
+                    type="text"
+                    value={serverBaseUrl}
+                    placeholder="https://api.openai.com/v1"
+                    onChange={(event) => setServerBaseUrl(event.target.value)}
+                  />
+                </label>
+                <label className="llm-field">
+                  模型
+                  <input
+                    type="text"
+                    value={serverModel}
+                    placeholder="gpt-4o-mini"
+                    onChange={(event) => setServerModel(event.target.value)}
+                  />
+                </label>
+                <label className="llm-field">
+                  API Key
+                  <div className="llm-key-row">
+                    <input
+                      type={showServerApiKey ? "text" : "password"}
+                      value={serverApiKey}
+                      placeholder="sk-..."
+                      autoComplete="off"
+                      spellCheck={false}
+                      onChange={(event) => setServerApiKey(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="icon-button"
+                      onClick={() => setShowServerApiKey((v) => !v)}
+                      title={showServerApiKey ? "隐藏 Key" : "显示 Key"}
+                      aria-label={showServerApiKey ? "隐藏 API Key" : "显示 API Key"}
+                      aria-pressed={showServerApiKey}
+                    >
+                      {showServerApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </label>
                 <button
                   type="button"
-                  className="link-action"
-                  onClick={() => setConfirmedBaseUrl(currentBaseUrl)}
+                  className="secondary-action settings-inline-action"
+                  disabled={!serverApiKey.trim() || llmState.serverConfigLoading}
+                  onClick={() => {
+                    llmState.saveServerConfig({
+                      baseUrl: serverBaseUrl.trim() || "https://api.openai.com/v1",
+                      model: serverModel.trim() || "gpt-4o-mini",
+                      apiKey: serverApiKey.trim(),
+                    });
+                    setServerApiKey("");
+                  }}
                 >
-                  我已知晓
+                  {llmState.serverConfigLoading ? "保存中…" : "保存到服务器"}
                 </button>
-              </div>
+                {serverConfigured && (
+                  <button
+                    type="button"
+                    className="secondary-action settings-inline-action"
+                    disabled={llmState.serverConfigLoading}
+                    onClick={() => llmState.deleteServerConfig()}
+                  >
+                    <Trash2 size={15} />清除服务端配置
+                  </button>
+                )}
+                <label className="llm-toggle">
+                  <input
+                    type="checkbox"
+                    checked={llmState.llm.autoGenerate}
+                    onChange={(event) => llmState.setLlm((current) => ({ ...current, autoGenerate: event.target.checked }))}
+                  />
+                  <span>建议变化后自动生成解读</span>
+                </label>
+                <span className="settings-hint"><Server size={14} />配置保存在服务器端，所有用户共享。API Key 不暴露给浏览器。</span>
+                {llmState.serverConfigError && (
+                  <div className="settings-hint settings-hint--warn" role="alert">
+                    {llmState.serverConfigError.message}
+                  </div>
+                )}
+              </>
             )}
-            <label className="llm-toggle">
-              <input
-                type="checkbox"
-                checked={llmState.llm.autoGenerate}
-                onChange={(event) => llmState.setLlm((current) => ({ ...current, autoGenerate: event.target.checked }))}
-              />
-              <span>建议变化后自动生成解读</span>
-            </label>
-            <button
-              type="button"
-              className="secondary-action settings-inline-action"
-              onClick={() => llmState.setLlm((current) => ({ ...current, apiKey: "" }))}
-              disabled={!llmState.llm.apiKey}
-            >
-              <Trash2 size={15} />清空 Key
-            </button>
-            <span className="settings-hint"><KeyRound size={14} />Key 仅保存到本机浏览器 localStorage，不写入分享链接。</span>
           </section>
 
           <section className="settings-section">
