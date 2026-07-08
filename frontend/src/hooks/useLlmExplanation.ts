@@ -212,13 +212,17 @@ export function useLlmExplanation(inputs: ExplanationInputs | null) {
 
   // Auto-enable server mode if an admin has configured shared AI and
   // the user hasn't picked a mode yet (and has no local key of their own).
+  // Resolves needsAutoDetect to false regardless of outcome so we don't
+  // keep re-probing on every render.
   useEffect(() => {
     if (!needsAutoDetect) return;
+    // Wait until the probe settles (either we have a config or an error)
+    if (!serverConfig && !serverConfigError) return;
     if (serverConfig?.configured && !localEnabled) {
       setSourceInternal("server");
-      setNeedsAutoDetect(false);
     }
-  }, [needsAutoDetect, serverConfig, localEnabled]);
+    setNeedsAutoDetect(false);
+  }, [needsAutoDetect, serverConfig, serverConfigError, localEnabled]);
 
   // Save server-side config
   const saveServerConfig = useCallback((update: ServerLlmConfigUpdate) => {
