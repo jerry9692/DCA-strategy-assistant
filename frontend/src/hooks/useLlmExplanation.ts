@@ -129,7 +129,7 @@ type SelectionExplanationResponse = {
 
 export function useLlmExplanation(inputs: ExplanationInputs | null) {
   const [llm, setLlm] = useState<StoredLlmSettings>(() => readStoredLlm());
-  const [source, setSource] = useState<LlmSource>(() => {
+  const [source, setSourceInternal] = useState<LlmSource>(() => {
     try {
       const saved = window.localStorage.getItem(LLM_SOURCE_KEY);
       return saved === "server" ? "server" : "local";
@@ -137,6 +137,22 @@ export function useLlmExplanation(inputs: ExplanationInputs | null) {
       return "local";
     }
   });
+  // On a fresh browser with no saved mode preference, we probe the
+  // server once: if an admin has already configured shared AI, we
+  // auto-enable server mode so new users get AI out of the box without
+  // having to open Settings. Once the user explicitly picks a mode
+  // (or we finish a successful auto-detect), this flips to false.
+  const [needsAutoDetect, setNeedsAutoDetect] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem(LLM_SOURCE_KEY) === null;
+    } catch {
+      return true;
+    }
+  });
+  const setSource = useCallback((next: LlmSource) => {
+    setNeedsAutoDetect(false);
+    setSourceInternal(next);
+  }, []);
   const [adminToken, setAdminTokenState] = useState<string>(() => {
     try {
       return window.localStorage.getItem(ADMIN_TOKEN_KEY) || "";
@@ -191,8 +207,18 @@ export function useLlmExplanation(inputs: ExplanationInputs | null) {
   }, []);
 
   useEffect(() => {
-    if (isServerMode) fetchServerConfig();
-  }, [isServerMode, fetchServerConfig]);
+    if (isServerMode || needsAutoDetect) fetchServerConfig();
+  }, [isServerMode, needsAutoDetect, fetchServerConfig]);
+
+  // Auto-enable server mode if an admin has configured shared AI and
+  // the user hasn't picked a mode yet (and has no local key of their own).
+  useEffect(() => {
+    if (!needsAutoDetect) return;
+    if (serverConfig?.configured && !localEnabled) {
+      setSourceInternal("server");
+      setNeedsAutoDetect(false);
+    }
+  }, [needsAutoDetect, serverConfig, localEnabled]);
 
   // Save server-side config
   const saveServerConfig = useCallback((update: ServerLlmConfigUpdate) => {
