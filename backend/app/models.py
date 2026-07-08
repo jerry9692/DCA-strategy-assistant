@@ -617,10 +617,14 @@ class ServerLlmConfigResponse(BaseModel):
 
 
 class ServerLlmConfigUpdate(BaseModel):
-    """Used to save server-side LLM config via PUT /api/settings/llm."""
+    """Used to save server-side LLM config via PUT /api/settings/llm.
+
+    If apiKey is empty and a config already exists, the existing key is
+    preserved (so an admin can update baseUrl/model without re-entering it).
+    """
     baseUrl: str = Field(default="https://api.openai.com/v1")
     model: str = Field(default="gpt-4o-mini", min_length=1)
-    apiKey: str = Field(min_length=1)
+    apiKey: str = Field(default="")
 
     @model_validator(mode="after")
     def _normalize_base_url(self) -> "ServerLlmConfigUpdate":

@@ -71,16 +71,24 @@ def get_server_llm_config() -> ServerLlmConfig | None:
 
 
 def save_server_llm_config(base_url: str, model: str, api_key: str) -> ServerLlmConfig:
-    """Upsert the server-side LLM config (single row)."""
+    """Upsert the server-side LLM config (single row).
+
+    If api_key is empty and a row already exists, the existing key is
+    preserved — this lets an admin update baseUrl/model without
+    re-entering the key every time.
+    """
     with Session(engine) as session:
         row = session.exec(select(ServerLlmConfig)).first()
         if row is None:
+            if not api_key:
+                api_key = ""
             row = ServerLlmConfig(base_url=base_url, model=model, api_key=api_key)
             session.add(row)
         else:
             row.base_url = base_url
             row.model = model
-            row.api_key = api_key
+            if api_key:
+                row.api_key = api_key
             row.updated_at = datetime.now(timezone.utc)
         session.commit()
         session.refresh(row)

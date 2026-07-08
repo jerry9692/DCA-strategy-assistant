@@ -8,6 +8,8 @@ export const SETTINGS_KEY = "dca-assistant-settings-v4";
 export const LLM_SETTINGS_KEY = "dca-assistant-llm-v1";
 // "local" = credentials in localStorage (per-browser); "server" = shared config on NAS
 export const LLM_SOURCE_KEY = "dca-assistant-llm-source-v1";
+// Admin token for server config endpoints (stored in localStorage, sent as X-Admin-Token)
+export const ADMIN_TOKEN_KEY = "dca-assistant-admin-token-v1";
 
 export const DEFAULT_APP_DEFAULTS: AppDefaults = {
   baseAmount: 100,

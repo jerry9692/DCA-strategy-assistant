@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatMessage, ChatResponse, ExplanationResponse, LlmSettings, LlmSource, ServerLlmConfigResponse, ServerLlmConfigUpdate, StrategyConfigPayload, UiError } from "../types";
-import { API_BASE, LLM_SETTINGS_KEY, LLM_SOURCE_KEY } from "../constants";
+import { API_BASE, ADMIN_TOKEN_KEY, LLM_SETTINGS_KEY, LLM_SOURCE_KEY } from "../constants";
 import { readJson, toUiError } from "../api";
 
 type StoredLlmSettings = {
@@ -137,6 +137,23 @@ export function useLlmExplanation(inputs: ExplanationInputs | null) {
       return "local";
     }
   });
+  const [adminToken, setAdminTokenState] = useState<string>(() => {
+    try {
+      return window.localStorage.getItem(ADMIN_TOKEN_KEY) || "";
+    } catch {
+      return "";
+    }
+  });
+  const setAdminToken = useCallback((token: string) => {
+    setAdminTokenState(token);
+    try {
+      if (token) {
+        window.localStorage.setItem(ADMIN_TOKEN_KEY, token);
+      } else {
+        window.localStorage.removeItem(ADMIN_TOKEN_KEY);
+      }
+    } catch { /* ignore */ }
+  }, []);
   const [serverConfig, setServerConfig] = useState<ServerLlmConfigResponse | null>(null);
   const [serverConfigLoading, setServerConfigLoading] = useState(false);
   const [serverConfigError, setServerConfigError] = useState<UiError | null>(null);
@@ -181,28 +198,36 @@ export function useLlmExplanation(inputs: ExplanationInputs | null) {
   const saveServerConfig = useCallback((update: ServerLlmConfigUpdate) => {
     setServerConfigLoading(true);
     setServerConfigError(null);
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (adminToken) headers["X-Admin-Token"] = adminToken;
     fetch(`${API_BASE}/api/settings/llm`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(update),
     })
-      .then(readJson<ServerLlmConfigResponse>)
+      .then((res) => {
+        if (!res.ok) return readJson(res).then((err) => Promise.reject(err));
+        return readJson<ServerLlmConfigResponse>(res);
+      })
       .then(setServerConfig)
       .catch((err) => setServerConfigError(toUiError(err)))
       .finally(() => setServerConfigLoading(false));
-  }, []);
+  }, [adminToken]);
 
   // Delete server-side config
   const deleteServerConfig = useCallback(() => {
     setServerConfigLoading(true);
     setServerConfigError(null);
-    fetch(`${API_BASE}/api/settings/llm`, { method: "DELETE" })
-      .then(() => {
+    const headers: Record<string, string> = {};
+    if (adminToken) headers["X-Admin-Token"] = adminToken;
+    fetch(`${API_BASE}/api/settings/llm`, { method: "DELETE", headers })
+      .then((res) => {
+        if (!res.ok) return readJson(res).then((err) => Promise.reject(err));
         setServerConfig({ baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini", configured: false });
       })
       .catch((err) => setServerConfigError(toUiError(err)))
       .finally(() => setServerConfigLoading(false));
-  }, []);
+  }, [adminToken]);
 
   // Persist credentials to localStorage. The key is obfuscated before
   // being written so a casual read of devtools doesn't reveal the
@@ -420,6 +445,8 @@ export function useLlmExplanation(inputs: ExplanationInputs | null) {
     canExplain,
     source,
     setSource,
+    adminToken,
+    setAdminToken,
     serverConfig,
     serverConfigLoading,
     serverConfigError,

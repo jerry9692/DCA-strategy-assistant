@@ -1,4 +1,5 @@
 import asyncio
+import hmac
 import logging
 import os
 from datetime import date, timedelta
@@ -272,6 +273,23 @@ def _asset_currency(symbol: str) -> str:
     return "$"
 
 
+def _require_admin_token(request: Request) -> None:
+    """Validate the admin token for server-config write endpoints.
+
+    If DCA_ADMIN_TOKEN is set in the environment, the request must carry
+    a matching X-Admin-Token header. If the env var is unset, the endpoint
+    is open (backwards-compatible for single-user / LAN-trusted deployments).
+
+    Returns None on success, raises HTTPException(403) on failure.
+    """
+    expected = os.environ.get("DCA_ADMIN_TOKEN", "").strip()
+    if not expected:
+        return
+    provided = request.headers.get("X-Admin-Token", "").strip()
+    if not provided or not hmac.compare_digest(provided, expected):
+        raise HTTPException(status_code=403, detail={"message": "需要管理员口令才能修改服务端配置。", "code": "admin_required", "retryable": False})
+
+
 def _resolve_llm(llm: LlmSettings) -> LlmSettings:
     """If useServerConfig is True, load credentials from the server DB.
 
@@ -316,19 +334,24 @@ def get_llm_config() -> ServerLlmConfigResponse:
 
 
 @app.put("/api/settings/llm", response_model=ServerLlmConfigResponse)
-def put_llm_config(update: ServerLlmConfigUpdate) -> ServerLlmConfigResponse:
-    """Save or update the server-side LLM config."""
-    config = save_server_llm_config(update.baseUrl, update.model, update.apiKey)
+def put_llm_config(http_request: Request, update: ServerLlmConfigUpdate) -> ServerLlmConfigResponse:
+    """Save or update the server-side LLM config. Requires admin token if DCA_ADMIN_TOKEN is set."""
+    _require_admin_token(http_request)
+    existing = get_server_llm_config()
+    if existing is None and not update.apiKey.strip():
+        raise HTTPException(status_code=400, detail={"message": "首次保存服务端配置必须填写 API Key。", "code": "api_key_required", "retryable": False})
+    config = save_server_llm_config(update.baseUrl, update.model, update.apiKey.strip())
     return ServerLlmConfigResponse(
         baseUrl=config.base_url,
         model=config.model,
-        configured=True,
+        configured=bool(config.api_key),
     )
 
 
 @app.delete("/api/settings/llm")
-def delete_llm_config() -> dict:
-    """Delete the server-side LLM config."""
+def delete_llm_config(http_request: Request) -> dict:
+    """Delete the server-side LLM config. Requires admin token if DCA_ADMIN_TOKEN is set."""
+    _require_admin_token(http_request)
     deleted = delete_server_llm_config()
     return {"deleted": deleted}
 

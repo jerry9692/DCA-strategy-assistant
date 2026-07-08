@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Check, Eye, EyeOff, KeyRound, Percent, Server, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Eye, EyeOff, KeyRound, Lock, Percent, Server, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react";
 import type { useBacktest } from "../hooks/useBacktest";
 import type { useLlmExplanation } from "../hooks/useLlmExplanation";
 import type { Frequency } from "../types";
@@ -40,9 +40,18 @@ export function SettingsDrawer({
   const [serverModel, setServerModel] = useState("gpt-4o-mini");
   const [serverApiKey, setServerApiKey] = useState("");
   const [showServerApiKey, setShowServerApiKey] = useState(false);
+  const [showAdminToken, setShowAdminToken] = useState(false);
 
   const isServerMode = llmState.source === "server";
   const serverConfigured = llmState.serverConfig?.configured === true;
+
+  // Pre-fill server form fields when config is fetched
+  useEffect(() => {
+    if (llmState.serverConfig && isServerMode) {
+      setServerBaseUrl(llmState.serverConfig.baseUrl);
+      setServerModel(llmState.serverConfig.model);
+    }
+  }, [llmState.serverConfig, isServerMode]);
 
   return (
     <>
@@ -183,12 +192,12 @@ export function SettingsDrawer({
                   />
                 </label>
                 <label className="llm-field">
-                  API Key
+                  API Key {serverConfigured ? <em style={{ fontWeight: 400, color: "var(--text-tertiary)" }}>（留空则保留原 Key）</em> : ""}
                   <div className="llm-key-row">
                     <input
                       type={showServerApiKey ? "text" : "password"}
                       value={serverApiKey}
-                      placeholder="sk-..."
+                      placeholder={serverConfigured ? "留空不修改" : "sk-..."}
                       autoComplete="off"
                       spellCheck={false}
                       onChange={(event) => setServerApiKey(event.target.value)}
@@ -205,10 +214,33 @@ export function SettingsDrawer({
                     </button>
                   </div>
                 </label>
+                <label className="llm-field">
+                  管理员口令 <em style={{ fontWeight: 400, color: "var(--text-tertiary)" }}>（如已设置 DCA_ADMIN_TOKEN）</em>
+                  <div className="llm-key-row">
+                    <input
+                      type={showAdminToken ? "text" : "password"}
+                      value={llmState.adminToken}
+                      placeholder="未设置则留空"
+                      autoComplete="off"
+                      spellCheck={false}
+                      onChange={(event) => llmState.setAdminToken(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="icon-button"
+                      onClick={() => setShowAdminToken((v) => !v)}
+                      title={showAdminToken ? "隐藏口令" : "显示口令"}
+                      aria-label={showAdminToken ? "隐藏管理员口令" : "显示管理员口令"}
+                      aria-pressed={showAdminToken}
+                    >
+                      {showAdminToken ? <EyeOff size={15} /> : <Lock size={15} />}
+                    </button>
+                  </div>
+                </label>
                 <button
                   type="button"
                   className="secondary-action settings-inline-action"
-                  disabled={!serverApiKey.trim() || llmState.serverConfigLoading}
+                  disabled={llmState.serverConfigLoading || (!serverConfigured && !serverApiKey.trim())}
                   onClick={() => {
                     llmState.saveServerConfig({
                       baseUrl: serverBaseUrl.trim() || "https://api.openai.com/v1",
@@ -218,7 +250,7 @@ export function SettingsDrawer({
                     setServerApiKey("");
                   }}
                 >
-                  {llmState.serverConfigLoading ? "保存中…" : "保存到服务器"}
+                  {llmState.serverConfigLoading ? "保存中…" : (serverConfigured ? "更新配置" : "保存到服务器")}
                 </button>
                 {serverConfigured && (
                   <button

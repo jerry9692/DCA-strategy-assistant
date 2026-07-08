@@ -13,7 +13,7 @@ export async function readJson<T>(res: Response): Promise<T> {
   if (!contentType.includes("application/json")) {
     const snippet = text.slice(0, 200);
     if (text.startsWith("<!DOCTYPE") || text.startsWith("<html")) {
-      throw { message: `后端服务未就绪（收到 HTML 页面而非 JSON 数据）。请确认后端服务已启动且端口 8000 可访问。`, code: "backend_unavailable", retryable: true, snippet };
+      throw { message: `后端服务未就绪（收到 HTML 页面而非 JSON 数据）。请确认后端服务已启动且端口 8010 可访问。`, code: "backend_unavailable", retryable: true, snippet };
     }
     throw { message: `后端返回了非 JSON 响应 (${contentType || "未知类型"})，请检查后端服务。`, code: "bad_response", retryable: true, snippet };
   }
