@@ -611,6 +611,7 @@ class ChatResponse(BaseModel):
 
 class ServerLlmConfigResponse(BaseModel):
     """Returned to the frontend — never includes the API key."""
+
     baseUrl: str
     model: str
     configured: bool
@@ -622,6 +623,7 @@ class ServerLlmConfigUpdate(BaseModel):
     If apiKey is empty and a config already exists, the existing key is
     preserved (so an admin can update baseUrl/model without re-entering it).
     """
+
     baseUrl: str = Field(default="https://api.openai.com/v1")
     model: str = Field(default="gpt-4o-mini", min_length=1)
     apiKey: str = Field(default="")

@@ -296,7 +296,10 @@ def _require_admin_token(request: Request) -> None:
         return
     provided = request.headers.get("X-Admin-Token", "").strip()
     if not provided or not hmac.compare_digest(provided, expected):
-        raise HTTPException(status_code=403, detail={"message": "需要管理员口令才能修改服务端配置。", "code": "admin_required", "retryable": False})
+        raise HTTPException(
+            status_code=403,
+            detail={"message": "需要管理员口令才能修改服务端配置。", "code": "admin_required", "retryable": False},
+        )
 
 
 def _resolve_llm(llm: LlmSettings) -> LlmSettings:
@@ -348,7 +351,10 @@ def put_llm_config(http_request: Request, update: ServerLlmConfigUpdate) -> Serv
     _require_admin_token(http_request)
     existing = get_server_llm_config()
     if existing is None and not update.apiKey.strip():
-        raise HTTPException(status_code=400, detail={"message": "首次保存服务端配置必须填写 API Key。", "code": "api_key_required", "retryable": False})
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "首次保存服务端配置必须填写 API Key。", "code": "api_key_required", "retryable": False},
+        )
     config = save_server_llm_config(update.baseUrl, update.model, update.apiKey.strip())
     return ServerLlmConfigResponse(
         baseUrl=config.base_url,
@@ -388,7 +394,9 @@ def explanation(http_request: Request, request: ExplanationRequest) -> Explanati
         currency = _asset_currency(symbol)
         text = explain_decision(
             request.model_copy(update={"symbol": symbol, "llm": resolved_llm}),
-            decision, market_state, currency,
+            decision,
+            market_state,
+            currency,
         )
         return ExplanationResponse(
             symbol=symbol,
@@ -423,7 +431,9 @@ def selection_explanation(http_request: Request, request: SelectionExplanationRe
         currency = _asset_currency(symbol)
         text = explain_selection(
             request.model_copy(update={"symbol": symbol, "llm": resolved_llm}),
-            decision, market_state, currency,
+            decision,
+            market_state,
+            currency,
         )
         return SelectionExplanationResponse(
             symbol=symbol,
@@ -460,7 +470,9 @@ def chat(http_request: Request, request: ChatRequest) -> ChatResponse:
         currency = _asset_currency(symbol)
         text = answer_question(
             request.model_copy(update={"symbol": symbol, "llm": resolved_llm}),
-            decision, market_state, currency,
+            decision,
+            market_state,
+            currency,
         )
         return ChatResponse(
             symbol=symbol,
