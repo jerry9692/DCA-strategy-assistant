@@ -142,10 +142,85 @@
         }
       }
     },
+    "/api/settings/llm": {
+      "get": {
+        "summary": "Get Llm Config",
+        "description": "Return the server-side LLM config (without the API key).",
+        "operationId": "get_llm_config_api_settings_llm_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerLlmConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Put Llm Config",
+        "description": "Save or update the server-side LLM config. Requires admin token if DCA_ADMIN_TOKEN is set.",
+        "operationId": "put_llm_config_api_settings_llm_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServerLlmConfigUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerLlmConfigResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Llm Config",
+        "description": "Delete the server-side LLM config. Requires admin token if DCA_ADMIN_TOKEN is set.",
+        "operationId": "delete_llm_config_api_settings_llm_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Delete Llm Config Api Settings Llm Delete"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/explanations/run": {
       "post": {
         "summary": "Explanation",
-        "description": "Generate a plain-language explanation of the current\nrecommendation via the user's OpenAI-compatible LLM.\n\nThe API key in request.llm is forwarded to the provider for this\nsingle call only — never persisted, never logged. See\nexplanations.py for the request construction.",
+        "description": "Generate a plain-language explanation of the current\nrecommendation via the user's OpenAI-compatible LLM.\n\nWhen request.llm.useServerConfig is True, credentials are loaded\nfrom the server DB instead of the request body. Otherwise the\nAPI key in request.llm is forwarded to the provider for this\nsingle call only — never persisted, never logged.",
         "operationId": "explanation_api_explanations_run_post",
         "requestBody": {
           "content": {
@@ -1226,14 +1301,16 @@
           },
           "apiKey": {
             "type": "string",
-            "minLength": 1,
-            "title": "Apikey"
+            "title": "Apikey",
+            "default": ""
+          },
+          "useServerConfig": {
+            "type": "boolean",
+            "title": "Useserverconfig",
+            "default": false
           }
         },
         "type": "object",
-        "required": [
-          "apiKey"
-        ],
         "title": "LlmSettings"
       },
       "MarketState": {
@@ -2126,6 +2203,53 @@
           "cacheStatus"
         ],
         "title": "SelectionExplanationResponse"
+      },
+      "ServerLlmConfigResponse": {
+        "properties": {
+          "baseUrl": {
+            "type": "string",
+            "title": "Baseurl"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          }
+        },
+        "type": "object",
+        "required": [
+          "baseUrl",
+          "model",
+          "configured"
+        ],
+        "title": "ServerLlmConfigResponse",
+        "description": "Returned to the frontend — never includes the API key."
+      },
+      "ServerLlmConfigUpdate": {
+        "properties": {
+          "baseUrl": {
+            "type": "string",
+            "title": "Baseurl",
+            "default": "https://api.openai.com/v1"
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Model",
+            "default": "gpt-4o-mini"
+          },
+          "apiKey": {
+            "type": "string",
+            "title": "Apikey",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "ServerLlmConfigUpdate",
+        "description": "Used to save server-side LLM config via PUT /api/settings/llm.\n\nIf apiKey is empty and a config already exists, the existing key is\npreserved (so an admin can update baseUrl/model without re-entering it)."
       },
       "StrategyComparison": {
         "properties": {

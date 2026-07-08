@@ -14,8 +14,17 @@ from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, func, select
 
 from app.backtester import DcaBacktester, rolling_annualized_returns, rolling_lump_sum_annualized_returns
-from app.data import PriceBar, PriceDataError, engine, get_available_range, get_price_history, validate_symbol
-from app.data import delete_server_llm_config, get_server_llm_config, save_server_llm_config
+from app.data import (
+    PriceBar,
+    PriceDataError,
+    delete_server_llm_config,
+    engine,
+    get_available_range,
+    get_price_history,
+    get_server_llm_config,
+    save_server_llm_config,
+    validate_symbol,
+)
 from app.explanations import answer_question, explain_decision, explain_selection
 from app.models import (
     SUPPORTED_ASSETS,

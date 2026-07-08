@@ -47,25 +47,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/settings/llm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get_Llm_Config */
-        get: operations["get_llm_config_api_settings_llm_get"];
-        /** Put_Llm_Config */
-        put: operations["put_llm_config_api_settings_llm_put"];
-        post?: never;
-        /** Delete_Llm_Config */
-        delete: operations["delete_llm_config_api_settings_llm_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/assets/{symbol}/range": {
         parameters: {
             query?: never;
@@ -125,6 +106,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/llm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Llm Config
+         * @description Return the server-side LLM config (without the API key).
+         */
+        get: operations["get_llm_config_api_settings_llm_get"];
+        /**
+         * Put Llm Config
+         * @description Save or update the server-side LLM config. Requires admin token if DCA_ADMIN_TOKEN is set.
+         */
+        put: operations["put_llm_config_api_settings_llm_put"];
+        post?: never;
+        /**
+         * Delete Llm Config
+         * @description Delete the server-side LLM config. Requires admin token if DCA_ADMIN_TOKEN is set.
+         */
+        delete: operations["delete_llm_config_api_settings_llm_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/explanations/run": {
         parameters: {
             query?: never;
@@ -139,9 +148,10 @@ export interface paths {
          * @description Generate a plain-language explanation of the current
          *     recommendation via the user's OpenAI-compatible LLM.
          *
-         *     The API key in request.llm is forwarded to the provider for this
-         *     single call only — never persisted, never logged. See
-         *     explanations.py for the request construction.
+         *     When request.llm.useServerConfig is True, credentials are loaded
+         *     from the server DB instead of the request body. Otherwise the
+         *     API key in request.llm is forwarded to the provider for this
+         *     single call only — never persisted, never logged.
          */
         post: operations["explanation_api_explanations_run_post"];
         delete?: never;
@@ -615,30 +625,6 @@ export interface components {
              */
             useServerConfig: boolean;
         };
-        /** ServerLlmConfigResponse */
-        ServerLlmConfigResponse: {
-            /** Baseurl */
-            baseUrl: string;
-            /** Model */
-            model: string;
-            /** Configured */
-            configured: boolean;
-        };
-        /** ServerLlmConfigUpdate */
-        ServerLlmConfigUpdate: {
-            /**
-             * Baseurl
-             * @default https://api.openai.com/v1
-             */
-            baseUrl: string;
-            /**
-             * Model
-             * @default gpt-4o-mini
-             */
-            model: string;
-            /** Apikey */
-            apiKey: string;
-        };
         /** MarketState */
         MarketState: {
             /** Label */
@@ -956,6 +942,42 @@ export interface components {
             /** Cachestatus */
             cacheStatus: string;
         };
+        /**
+         * ServerLlmConfigResponse
+         * @description Returned to the frontend — never includes the API key.
+         */
+        ServerLlmConfigResponse: {
+            /** Baseurl */
+            baseUrl: string;
+            /** Model */
+            model: string;
+            /** Configured */
+            configured: boolean;
+        };
+        /**
+         * ServerLlmConfigUpdate
+         * @description Used to save server-side LLM config via PUT /api/settings/llm.
+         *
+         *     If apiKey is empty and a config already exists, the existing key is
+         *     preserved (so an admin can update baseUrl/model without re-entering it).
+         */
+        ServerLlmConfigUpdate: {
+            /**
+             * Baseurl
+             * @default https://api.openai.com/v1
+             */
+            baseUrl: string;
+            /**
+             * Model
+             * @default gpt-4o-mini
+             */
+            model: string;
+            /**
+             * Apikey
+             * @default
+             */
+            apiKey: string;
+        };
         /** StrategyComparison */
         StrategyComparison: {
             /** Strategytype */
@@ -1201,70 +1223,6 @@ export interface operations {
             };
         };
     };
-    get_llm_config_api_settings_llm_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ServerLlmConfigResponse"];
-                };
-            };
-        };
-    };
-    put_llm_config_api_settings_llm_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ServerLlmConfigUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ServerLlmConfigResponse"];
-                };
-            };
-        };
-    };
-    delete_llm_config_api_settings_llm_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
     asset_range_api_assets__symbol__range_get: {
         parameters: {
             query?: never;
@@ -1345,6 +1303,81 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_llm_config_api_settings_llm_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerLlmConfigResponse"];
+                };
+            };
+        };
+    };
+    put_llm_config_api_settings_llm_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServerLlmConfigUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerLlmConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_llm_config_api_settings_llm_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
